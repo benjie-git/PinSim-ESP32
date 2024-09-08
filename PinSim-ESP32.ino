@@ -1,12 +1,15 @@
 /*
-    PinSim Controller v20200517
+    PinSim-ESP32 Controller
+    Octopilot Electronics
+
+    Based on the excellent PinSim Controller v20200517
     Controller for PC Pinball games
     https://www.youtube.com/watch?v=18EcIxywXHg
     
     Based on the excellent MSF_FightStick XINPUT project by Zack "Reaper" Littell
     https://github.com/zlittell/MSF-XINPUT
     
-    Uses the Teensy-LC
+    Uses the ESP32-S3, as built into the PinSim-ESP32 PCB
 
     IMPORTANT PLUNGER NOTE:
     You MUST calibrate the plunger range at least once by holding down "A"
@@ -14,17 +17,47 @@
     pull the plunger all the way out and release it all the way back in. The LED1 should
     flash again, and normal operation resumes. The setting is saved between power cycles.
 
-    If you're not using a plunger, ground Pin 15.
+    If you're not using a plunger, ground the PLUNGE pin.
 */
 
-//Includes
-#include <Wire.h>
+
+#include <Arduino.h>
+#include "Button2.h"
+#include "Average.h"
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
-#include <Bounce.h>
-#include "xinput.h"
-#include <Average.h>
-#include <EEPROMex.h>
+#include <Preferences.h>
+#include <BleGamepad.h>
+
+
+/*
+
+EEPROM ==> Preferences
+
+Preferences preferences;
+preferences.begin("PinSimESP32", false); 
+  preferences.putUInt("counter", counter);
+  unsigned int counter = preferences.getUInt("counter", 0);  // With default value 0
+
+*/
+
+/* Button2: https://github.com/LennartHennigs/Button2
+
+Button2 button;
+button.begin(BUTTON_PIN);
+button.isPressed();   // or button.wasPressed();
+
+*/
+
+/*
+BLE-Gamepad: https://github.com/lemmingDev/ESP32-BLE-Gamepad
+
+BleGamepad bleGamepad;
+    bleGamepad.begin();
+        bleGamepad.press(BUTTON_5);
+        bleGamepad.release(BUTTON_5);
+
+*/
 
 int numSamples = 20;
 Average<int> ave(numSamples);
@@ -65,34 +98,40 @@ int16_t distanceBuffer = 0;
 float zeroX = 0;
 float zeroY = 0;
 
-////Pin Declarations
-#define pinDpadL 0  //Left on DPAD
-#define pinDpadR 1  //Right on DPAD
-#define pinDpadU 2  //Up on DPAD
-#define pinDpadD 3  //Down on DPAD
-#define pinB1 4  //Button 1 (A) 
-#define pinB2 5  //Button 2 (B) 
-#define pinB3 6  //Button 3 (X) 
-#define pinB4 7  //Button 4 (Y) 
-#define pinLB 8  //Button 5 (LB)
-#define pinRB 9  //Button 6 (RB) 
-#define pinXB 10  //XBOX Guide Button
-#define pinBK 11  //Button 7 (Back)
-#define pinST 12  //Button 8 (Start)
-#define pinLT 13  //Left Analog Trigger
-#define pinRT 14  //Right Analog Trigger
-#define pinPlunger 15 //IR distance for plunger
-#define pinLED1 16  //Onboard LED 1
-#define pinLED2 17  //Onboard LED 2
-#define rumbleSmall 20 // Large Rumble Motor
-#define rumbleLarge 22 // Large Rumble Motor
-#define pinB9 21 //Button 9 (L3)
-#define pinB10 23 //Button 10 (R3)
+// Pin Declarations
+#define pinLED1         1  // Onboard LED 1
+#define pinLED2         2  // Onboard LED 2
+#define pinACC_SCL      3  // Accelerometer SCL pin
+#define pinRT           4  // Right Analog Trigger
+#define pinPlunger      5  // IR distance for plunger
+#define pinLEDg         6  // PCB LED GREEN
+#define pinLEDr         7  // PCB LED RED
+#define rumbleSmall     8  // Large Rumble Motor
+#define pinACC_SDA      9  // Accelerometer SDA pin
+#define rumbleLarge    10  // Large Rumble Motor
+#define pinDpadD       12  // Down on DPAD
+#define pinDpadU       14  // Up on DPAD
+#define pinB1          15  // Button 1 (A)
+#define pinB2          16  // Button 2 (B)
+#define pinB3          17  // Button 3 (X)
+#define pinB4          18  // Button 4 (Y)
+#define pinDpadL       38  // Left on DPAD
+#define pinST          39  // Button 8 (Start)
+#define pinBK          40  // Button 7 (Back)
+#define pinXB          41  // XBOX Guide Button
+#define pinLT          42  // Left Analog Trigger
+#define pinDpadR       48  // Right on DPAD
 
-#define NUMBUTTONS 17  //Number of all buttons
-#define MILLIDEBOUNCE 20  //Debounce time in milliseconds
+// Exposed GPIOs: 47, 21, 13, 11
+#define pinB9          47  // Button 9 (L3)
+#define pinB10         21  // Button 10 (R3)
+#define pinLB          13  // Button 5 (LB)
+#define pinRB          11  // Button 6 (RB) 
 
-//Position of a button in the button status array
+#define NUMBUTTONS     17  // Number of all buttons
+#define MILLIDEBOUNCE  20  // Debounce time in milliseconds
+
+// Position of a button in the button status array
 #define POSUP 0
 #define POSDN 1
 #define POSLT 2
@@ -115,15 +154,15 @@ float zeroY = 0;
 uint8_t leftTrigger = 0;
 uint8_t rightTrigger = 0;
 
-//Global Variables
-byte buttonStatus[NUMBUTTONS];  //array Holds a "Snapshot" of the button status to parse and manipulate
+// Global Variables
+byte buttonStatus[NUMBUTTONS];  // array Holds a "Snapshot" of the button status to parse and manipulate
 
-//LED Toggle Tracking Global Variables
+// LED Toggle Tracking Global Variables
 uint8_t LEDState = LOW;	//used to set the pin for the LED
 uint32_t previousMS = 0; //used to store the last time LED was updated
 uint8_t LEDtracker = 0;	//used as an index to step through a pattern on interval
 
-//LED Patterns
+// LED Patterns
 uint8_t patternAllOff[10] = {0,0,0,0,0,0,0,0,0,0};
 uint8_t patternBlinkRotate[10] = {1,0,1,0,1,0,1,0,1,0};
 uint8_t patternPlayer1[10] = {1,0,0,0,0,0,0,0,0,0};
@@ -131,10 +170,10 @@ uint8_t patternPlayer2[10] = {1,0,1,0,0,0,0,0,0,0};
 uint8_t patternPlayer3[10] = {1,0,1,0,1,0,0,0,0,0};
 uint8_t patternPlayer4[10] = {1,0,1,0,1,0,1,0,0,0};
 
-//Variable to hold the current pattern selected by the host
+// Variable to hold the current pattern selected by the host
 uint8_t patternCurrent[10] = {0,0,0,0,0,0,0,0,0,0};
 
-//Setup Button Debouncing
+// Setup Button Debouncing
 Bounce dpadUP = Bounce(pinDpadU, MILLIDEBOUNCE);
 Bounce dpadDOWN = Bounce(pinDpadD, MILLIDEBOUNCE);
 Bounce dpadLEFT = Bounce(pinDpadL, MILLIDEBOUNCE);
@@ -153,14 +192,14 @@ Bounce buttonXBOX = Bounce(pinXB, MILLIDEBOUNCE);
 Bounce button9 = Bounce(pinB9, MILLIDEBOUNCE);
 Bounce button10 = Bounce(pinB10, MILLIDEBOUNCE);
 
-//Initiate the xinput class and setup the LED pin
+// Initiate the xinput class and setup the LED pin
 XINPUT controller(LED_ENABLED, pinLED1);
 
-//void Configure Inputs and Outputs
+// Configure Inputs and Outputs
 void setupPins()
 {
-    //Configure the direction of the pins
-    //All inputs with internal pullups enabled
+    // Configure the direction of the pins
+    // All inputs with internal pullups enabled
     pinMode(pinDpadU, INPUT_PULLUP);
     pinMode(pinDpadD, INPUT_PULLUP);
     pinMode(pinDpadL, INPUT_PULLUP);
@@ -178,21 +217,29 @@ void setupPins()
     pinMode(pinXB, INPUT_PULLUP);
     pinMode(pinLED1, OUTPUT);
     pinMode(pinLED2, OUTPUT);
-    //Set the LED to low to make sure it is off
+    pinMode(pinLEDg, OUTPUT);
+    pinMode(pinLEDr, OUTPUT);
+
+    // Set the LED to low to make sure it is off
     digitalWrite(pinLED1, LOW);
-    //Set the LED to high to turn it on
+    digitalWrite(pinLEDg, LOW);
+    
+    // Set the LED to high to turn it on
     digitalWrite(pinLED2, HIGH);
-    //Rumble
+    digitalWrite(pinLEDr, HIGH);
+    
+    // Rumble
     pinMode(rumbleSmall, OUTPUT);
     pinMode(rumbleLarge, OUTPUT);
-    //L3 & R3
+    
+    // L3 & R3
     pinMode(pinB9, INPUT_PULLUP);
     pinMode(pinB10, INPUT_PULLUP);    
 }
 
-//Update the debounced button statuses
-//We are looking for falling edges since the boards are built
-//for common ground sticks
+// Update the debounced button statuses
+// We are looking for falling edges since the boards are built
+// for common ground sticks
 void buttonUpdate()
 {
   if (dpadUP.update()) {buttonStatus[POSUP] = dpadUP.fallingEdge();}
