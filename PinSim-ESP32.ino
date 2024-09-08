@@ -22,6 +22,7 @@
 
 
 #include <Arduino.h>
+#include <Wire.h>
 #include "Button2.h"
 #include "Average.h"
 #include <Adafruit_Sensor.h>
@@ -30,24 +31,20 @@
 #include <BleGamepad.h>
 
 
-/*
+// GLOBAL CONFIGURATION VARIABLES
+// configure these
+boolean flipperL1R1 = true; //
+boolean fourFlipperButtons = false; // FLIP_L & FLIP_R map to L1/R1 and pins 13 & 14 map to analog L2/R2 100%
+boolean doubleContactFlippers = false; // FLIP_L & FLIP_R map to analog L2/R2 10% and pins 13 & 14 map to L2/R2 100% 
+boolean analogFlippers = false; // use analog flipper buttons
+boolean leftStickJoy = false; // joystick moves left analog stick instead of D-pad
+boolean accelerometerEnabled = true;
+boolean accelerometerCalibrated = false;
+boolean plungerEnabled = true;
+int16_t nudgeMultiplier = 9000; // accelerometer multiplier (higher = more sensitive)
+int16_t plungeTrigger = 60; // threshold to trigger a plunge (lower = more sensitive)
+int16_t fourButtonModeThreshold = 250; // ms that pins 13/14 need to close WITHOUT FLIP_L/FLIP_R closing to trigger four flipper button mode.
 
-EEPROM ==> Preferences
-
-Preferences preferences;
-preferences.begin("PinSimESP32", false); 
-  preferences.putUInt("counter", counter);
-  unsigned int counter = preferences.getUInt("counter", 0);  // With default value 0
-
-*/
-
-/* Button2: https://github.com/LennartHennigs/Button2
-
-Button2 button;
-button.begin(BUTTON_PIN);
-button.isPressed();   // or button.wasPressed();
-
-*/
 
 /*
 BLE-Gamepad: https://github.com/lemmingDev/ESP32-BLE-Gamepad
@@ -59,28 +56,19 @@ BleGamepad bleGamepad;
 
 */
 
+/*
+  Store settings to EEPROM using preferences storage name: PinSimESP32
+  Fields: int plungerMin, int plungerMax
+  TODO: Add field: bool useBLE (act as a wired or bluetooth controller)
+*/
+Preferences preferences;
+
 int numSamples = 20;
 Average<int> ave(numSamples);
 
 /* Assign a unique ID to this sensor at the same time */
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
-// GLOBAL VARIABLES
-// configure these
-boolean flipperL1R1 = true; //
-boolean fourFlipperButtons = false; // FLIP_L & FLIP_R map to L1/R1 and pins 13 & 14 map to analog L2/R2 100%
-boolean doubleContactFlippers = false; // FLIP_L & FLIP_R map to analog L2/R2 10% and pins 13 & 14 map to L2/R2 100% 
-boolean analogFlippers = false; // use analog flipper buttons
-boolean leftStickJoy = false; // joystick moves left analog stick instead of D-pad
-boolean accelerometerEnabled = true;
-boolean accelerometerCalibrated = false;
-boolean plungerEnabled = true;
-boolean currentlyPlunging = false;
-int16_t nudgeMultiplier = 9000; // accelerometer multiplier (higher = more sensitive)
-int16_t plungeTrigger = 60; // threshold to trigger a plunge (lower = more sensitive)
-int16_t fourButtonModeThreshold = 250; // ms that pins 13/14 need to close WITHOUT FLIP_L/FLIP_R closing to trigger four flipper button mode.
-
-// probably leave these alone
 long fourButtonModeTriggeredLB = 0; // these two vars are used to check for 4 flipper buttons
 long fourButtonModeTriggeredRB = 0;
 int16_t zeroValue = 0; // xbox 360 value for neutral analog stick
@@ -91,12 +79,14 @@ int16_t plungerMax = 550; // max plunger analog sensor value
 int16_t plungerMaxDistance = 0; // sensor value converted to actual distance
 int16_t plungerMinDistance = 0;
 uint32_t plungerReportTime = 0;
+boolean currentlyPlunging = false;
 uint32_t tiltEnableTime = 0;
 int16_t lastReading = 0;
 int16_t lastDistance = 0;
 int16_t distanceBuffer = 0;
 float zeroX = 0;
 float zeroY = 0;
+
 
 // Pin Declarations
 #define pinLED1         1  // Onboard LED 1
@@ -121,15 +111,12 @@ float zeroY = 0;
 #define pinXB          41  // XBOX Guide Button
 #define pinLT          42  // Left Analog Trigger
 #define pinDpadR       48  // Right on DPAD
+#define pinB9          47  // Button 9 (L3)   -- Exposed in GPIO header
+#define pinB10         21  // Button 10 (R3)  -- Exposed in GPIO header
+#define pinLB          13  // Button 5 (LB)   -- Exposed in GPIO header
+#define pinRB          11  // Button 6 (RB)   -- Exposed in GPIO header
+#define NUMBUTTONS     17  // Total number of buttons
 
-// Exposed GPIOs: 47, 21, 13, 11
-#define pinB9          47  // Button 9 (L3)
-#define pinB10         21  // Button 10 (R3)
-#define pinLB          13  // Button 5 (LB)
-#define pinRB          11  // Button 6 (RB) 
-
-#define NUMBUTTONS     17  // Number of all buttons
-#define MILLIDEBOUNCE  20  // Debounce time in milliseconds
 
 // Position of a button in the button status array
 #define POSUP 0
@@ -150,11 +137,15 @@ float zeroY = 0;
 #define POSB9 15
 #define POSB10 16
 
+
+// Debounce time in milliseconds
+#define MILLIDEBOUNCE  20
+
+
 // Dual flippers
 uint8_t leftTrigger = 0;
 uint8_t rightTrigger = 0;
 
-// Global Variables
 byte buttonStatus[NUMBUTTONS];  // array Holds a "Snapshot" of the button status to parse and manipulate
 
 // LED Toggle Tracking Global Variables
@@ -174,26 +165,27 @@ uint8_t patternPlayer4[10] = {1,0,1,0,1,0,1,0,0,0};
 uint8_t patternCurrent[10] = {0,0,0,0,0,0,0,0,0,0};
 
 // Setup Button Debouncing
-Bounce dpadUP = Bounce(pinDpadU, MILLIDEBOUNCE);
-Bounce dpadDOWN = Bounce(pinDpadD, MILLIDEBOUNCE);
-Bounce dpadLEFT = Bounce(pinDpadL, MILLIDEBOUNCE);
-Bounce dpadRIGHT = Bounce(pinDpadR, MILLIDEBOUNCE);
-Bounce button1 = Bounce(pinB1, MILLIDEBOUNCE);
-Bounce button2 = Bounce(pinB2, MILLIDEBOUNCE);
-Bounce button3 = Bounce(pinB3, MILLIDEBOUNCE);
-Bounce button4 = Bounce(pinB4, MILLIDEBOUNCE);
-Bounce buttonLB = Bounce(pinLB, MILLIDEBOUNCE);
-Bounce buttonRB = Bounce(pinRB, MILLIDEBOUNCE);
-Bounce buttonLT = Bounce(pinLT, MILLIDEBOUNCE);
-Bounce buttonRT = Bounce(pinRT, MILLIDEBOUNCE);
-Bounce buttonSTART = Bounce(pinST, MILLIDEBOUNCE);
-Bounce buttonBACK = Bounce(pinBK, MILLIDEBOUNCE);
-Bounce buttonXBOX = Bounce(pinXB, MILLIDEBOUNCE);
-Bounce button9 = Bounce(pinB9, MILLIDEBOUNCE);
-Bounce button10 = Bounce(pinB10, MILLIDEBOUNCE);
+Button2 dpadUP =      Button2(pinDpadU);
+Button2 dpadDOWN =    Button2(pinDpadD);
+Button2 dpadLEFT =    Button2(pinDpadL);
+Button2 dpadRIGHT =   Button2(pinDpadR);
+Button2 button1 =     Button2(pinB1);
+Button2 button2 =     Button2(pinB2);
+Button2 button3 =     Button2(pinB3);
+Button2 button4 =     Button2(pinB4);
+Button2 buttonLB =    Button2(pinLB);
+Button2 buttonRB =    Button2(pinRB);
+Button2 buttonLT =    Button2(pinLT);
+Button2 buttonRT =    Button2(pinRT);
+Button2 buttonSTART = Button2(pinST);
+Button2 buttonBACK =  Button2(pinBK);
+Button2 buttonXBOX =  Button2(pinXB);
+Button2 button9 =     Button2(pinB9);
+Button2 button10 =    Button2(pinB10);
 
 // Initiate the xinput class and setup the LED pin
 XINPUT controller(LED_ENABLED, pinLED1);
+
 
 // Configure Inputs and Outputs
 void setupPins()
@@ -220,6 +212,25 @@ void setupPins()
     pinMode(pinLEDg, OUTPUT);
     pinMode(pinLEDr, OUTPUT);
 
+    // Set button timeouts
+    dpadUP.setDebounceTime(MILLIDEBOUNCE);
+    dpadDOWN.setDebounceTime(MILLIDEBOUNCE);
+    dpadLEFT.setDebounceTime(MILLIDEBOUNCE);
+    dpadRIGHT.setDebounceTime(MILLIDEBOUNCE);
+    button1.setDebounceTime(MILLIDEBOUNCE);
+    button2.setDebounceTime(MILLIDEBOUNCE);
+    button3.setDebounceTime(MILLIDEBOUNCE);
+    button4.setDebounceTime(MILLIDEBOUNCE);
+    buttonLB.setDebounceTime(MILLIDEBOUNCE);
+    buttonRB.setDebounceTime(MILLIDEBOUNCE);
+    buttonLT.setDebounceTime(MILLIDEBOUNCE);
+    buttonRT.setDebounceTime(MILLIDEBOUNCE);
+    buttonSTART.setDebounceTime(MILLIDEBOUNCE);
+    buttonBACK.setDebounceTime(MILLIDEBOUNCE);
+    buttonXBOX.setDebounceTime(MILLIDEBOUNCE);
+    button9.setDebounceTime(MILLIDEBOUNCE);
+    button10.setDebounceTime(MILLIDEBOUNCE);
+
     // Set the LED to low to make sure it is off
     digitalWrite(pinLED1, LOW);
     digitalWrite(pinLEDg, LOW);
@@ -234,34 +245,37 @@ void setupPins()
     
     // L3 & R3
     pinMode(pinB9, INPUT_PULLUP);
-    pinMode(pinB10, INPUT_PULLUP);    
+    pinMode(pinB10, INPUT_PULLUP);
+
+    // IO 3, 9 are CLK, DATA for accel
+
 }
+
 
 // Update the debounced button statuses
-// We are looking for falling edges since the boards are built
-// for common ground sticks
 void buttonUpdate()
 {
-  if (dpadUP.update()) {buttonStatus[POSUP] = dpadUP.fallingEdge();}
-  if (dpadDOWN.update()) {buttonStatus[POSDN] = dpadDOWN.fallingEdge();}
-  if (dpadLEFT.update()) {buttonStatus[POSLT] = dpadLEFT.fallingEdge();}
-  if (dpadRIGHT.update()) {buttonStatus[POSRT] = dpadRIGHT.fallingEdge();}
-  if (button1.update()) {buttonStatus[POSB1] = button1.fallingEdge();}
-  if (button2.update()) {buttonStatus[POSB2] = button2.fallingEdge();}
-  if (button3.update()) {buttonStatus[POSB3] = button3.fallingEdge();}
-  if (button4.update()) {buttonStatus[POSB4] = button4.fallingEdge();}
-  if (buttonLB.update()) {buttonStatus[POSL1] = buttonLB.fallingEdge();}
-  if (buttonRB.update()) {buttonStatus[POSR1] = buttonRB.fallingEdge();}
-  if (buttonLT.update()) {buttonStatus[POSL2] = buttonLT.fallingEdge();}
-  if (buttonRT.update()) {buttonStatus[POSR2] = buttonRT.fallingEdge();}
-  if (buttonSTART.update()) {buttonStatus[POSST] = buttonSTART.fallingEdge();}
-  if (buttonBACK.update()) {buttonStatus[POSBK] = buttonBACK.fallingEdge();}
-  if (buttonXBOX.update()) {buttonStatus[POSXB] = buttonXBOX.fallingEdge();}
-  if (button9.update()) {buttonStatus[POSB9] = button9.fallingEdge();}
-  if (button10.update()) {buttonStatus[POSB10] = button10.fallingEdge();}
+  // TODO: Switch to using button event handlers
+  buttonStatus[POSUP] =  dpadUP.isPressed();
+  buttonStatus[POSDN] =  dpadDOWN.isPressed();
+  buttonStatus[POSLT] =  dpadLEFT.isPressed();
+  buttonStatus[POSRT] =  dpadRIGHT.isPressed();
+  buttonStatus[POSB1] =  button1.isPressed();
+  buttonStatus[POSB2] =  button2.isPressed();
+  buttonStatus[POSB3] =  button3.isPressed();
+  buttonStatus[POSB4] =  button4.isPressed();
+  buttonStatus[POSL1] =  buttonLB.isPressed();
+  buttonStatus[POSR1] =  buttonRB.isPressed();
+  buttonStatus[POSL2] =  buttonLT.isPressed();
+  buttonStatus[POSR2] =  buttonRT.isPressed();
+  buttonStatus[POSST] =  buttonSTART.isPressed();
+  buttonStatus[POSBK] =  buttonBACK.isPressed();
+  buttonStatus[POSXB] =  buttonXBOX.isPressed();
+  buttonStatus[POSB9] =  button9.isPressed();
+  buttonStatus[POSB10] = button10.isPressed();
 }
 
-//ProcessInputs
+// ProcessInputs
 void processInputs()
 {
   if (leftStickJoy)
@@ -273,7 +287,7 @@ void processInputs()
   }
   else
   {
-    //Update the DPAD
+    // Update the DPAD
     controller.dpadUpdate(buttonStatus[POSUP], buttonStatus[POSDN], buttonStatus[POSLT], buttonStatus[POSRT]);
   }
 
@@ -299,7 +313,7 @@ void processInputs()
     flipperL1R1 = false;
   }
   
-  //Buttons
+  // Buttons
   if (buttonStatus[POSB1]) {controller.buttonUpdate(BUTTON_A, 1);}
   else  {controller.buttonUpdate(BUTTON_A, 0);}
   if (buttonStatus[POSB2]) {controller.buttonUpdate(BUTTON_B, 1);}
@@ -425,15 +439,15 @@ void processInputs()
     controller.triggerUpdate(leftTrigger, rightTrigger);
   }
 
-  //Middle Buttons
+  // Middle Buttons
   if (buttonStatus[POSST]&&buttonStatus[POSBK]){controller.buttonUpdate(BUTTON_LOGO, 1);}
   else if (buttonStatus[POSST]){controller.buttonUpdate(BUTTON_START, 1);}
   else if (buttonStatus[POSBK]){controller.buttonUpdate(BUTTON_BACK, 1);}
   else if (buttonStatus[POSXB]){controller.buttonUpdate(BUTTON_LOGO, 1);}
   else {controller.buttonUpdate(BUTTON_LOGO, 0); controller.buttonUpdate(BUTTON_START, 0); controller.buttonUpdate(BUTTON_BACK, 0);}
 
-  //Experimental Analog Input
-  //Analog flippers
+  // Experimental Analog Input
+  // Analog flippers
   if (analogFlippers)
   {
     uint8_t leftTrigger = map(analogRead(pinLT), 0, 512, 0, 255);
@@ -441,7 +455,7 @@ void processInputs()
     controller.triggerUpdate(leftTrigger, rightTrigger);
   }
   
-  //Tilt
+  // Tilt
   if (accelerometerEnabled && !leftStickJoy)
   {
     /* Get a new sensor event */ 
@@ -555,7 +569,7 @@ void processInputs()
   analogWrite(rumbleSmall, controller.rumbleValues[1]);
   analogWrite(rumbleLarge, controller.rumbleValues[0]);
 
-  // Duplicate rumble signals on both motors (causes unacceptable current draw)
+//  // Duplicate rumble signals on both motors (causes unacceptable current draw)
 //  if (controller.rumbleValues[0] > 0 && controller.rumbleValues[1] == 0x00)
 //  {
 //    analogWrite(rumbleSmall, controller.rumbleValues[0]);
@@ -591,6 +605,7 @@ uint16_t getPlungerAverage()
   return averageReading;
 }
 
+
 void getPlungerMax()
 {
   flashStartButton();
@@ -619,11 +634,14 @@ void getPlungerMax()
     }
     lastReading = reading;
     averageReading = ave.mean();
-    if (averageReading > plungerMax) plungerMax = averageReading;
+    if (averageReading > plungerMax) 
+    {
+      plungerMax = averageReading;
+    }
   }
 
-  EEPROM.writeInt(0,plungerMax);
-  EEPROM.writeInt(10,plungerMin);
+  preferences.putInt("plungerMin", plungerMin);
+  preferences.putInt("plungerMax", plungerMax);
   flashStartButton();
 }
 
@@ -651,9 +669,12 @@ void flashStartButton()
   }
 }
 
-//Setup
+
 void setup() 
 {
+  preferences.begin("PinSimESP32", false);
+  TwoWire.setPins(pinACC_SDA, pinACC_SCL);
+
   setupPins();
   delay(500);
   
@@ -703,12 +724,7 @@ void setup()
   
   if (accelerometerEnabled)
   {
-    /* Set the range to whatever is appropriate for your project */
-    // accel.setRange(ADXL345_RANGE_16_G);
-    // accel.setRange(ADXL345_RANGE_8_G);
-    // accel.setRange(ADXL345_RANGE_4_G);
     accel.setRange(ADXL345_RANGE_2_G);
-    
     delay(2500); // time to lower the cabinet lid
     sensors_event_t event; 
     accel.getEvent(&event);
@@ -721,12 +737,12 @@ void setup()
   plungerMin = getPlungerAverage();
   if (plungerEnabled) 
   {
-    plungerMax = EEPROM.readInt(0);
-    plungerMin = EEPROM.readInt(10);
+    plungerMin = preferences.getInt("plungerMin", 0);  // With default value 0
+    plungerMax = preferences.getInt("plungerMax", 0);  // With default value 0
   }
   else plungerMin = getPlungerAverage();
 
-  // to calibrate, hold A or START when plugging in the Teensy LC
+  // to calibrate, hold A or START when powering up the PinSim ESP32 board
   if (digitalRead(pinB1) == LOW) getPlungerMax();
   else if (digitalRead(pinST) == LOW) getPlungerMax();
 
@@ -739,20 +755,21 @@ void setup()
   }
 }
 
+
 void loop() 
 {
-  //Poll Buttons
+  // Poll Buttons
   buttonUpdate();
   
-  //Process all inputs and load up the usbData registers correctly
+  // Process all inputs and load up the usbData registers correctly
   processInputs();
 
-  //Update the LED display
+  // Update the LED display
   controller.LEDUpdate();
 
-  //Send data
+  // Send controller data
   controller.sendXinput();
 
-  //Receive data
+  // Receive controller data
   controller.receiveXinput();
 }
