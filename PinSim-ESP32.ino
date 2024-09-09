@@ -206,8 +206,6 @@ void setupPins()
   pinMode(rumbleSmall, OUTPUT);
   pinMode(rumbleLarge, OUTPUT);
 
-  pinMode(LED_BUILTIN, OUTPUT);
-
   // Set button timeouts
   dpadUP.setDebounceTime(MILLIDEBOUNCE);
   dpadDOWN.setDebounceTime(MILLIDEBOUNCE);
@@ -230,13 +228,14 @@ void setupPins()
   // Set the LED to low to make sure it is off
   digitalWrite(pinLED1, LOW);
   digitalWrite(pinLEDg, LOW);
-  digitalWrite(LED_BUILTIN, LOW);
+
+  // Disable bright neopixel on ESP32-S3 Dev Board
+  // pinMode(LED_BUILTIN, OUTPUT);
+  // digitalWrite(LED_BUILTIN, LOW);
 
   // Set the LED to high to turn it on
   digitalWrite(pinLED2, HIGH);
   digitalWrite(pinLEDr, HIGH);
-
-  // Rumble
 
   // Set up DATA and CLK pins for the Acceleromter I2C interface
   if (accelerometerEnabled) {
