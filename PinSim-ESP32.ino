@@ -41,9 +41,9 @@ boolean fourFlipperButtons = false;     // FLIP_L & FLIP_R map to L1/R1 and pins
 boolean doubleContactFlippers = false;  // FLIP_L & FLIP_R map to analog L2/R2 10% and pins 13 & 14 map to L2/R2 100%
 boolean analogFlippers = false;         // use analog flipper buttons
 boolean leftStickJoy = false;           // joystick moves left analog stick instead of D-pad
-boolean accelerometerEnabled = false;
+boolean accelerometerEnabled = true;
 boolean accelerometerCalibrated = false;
-boolean plungerEnabled = false;
+boolean plungerEnabled = true;
 int16_t nudgeMultiplier = 9000;         // accelerometer multiplier (higher = more sensitive)
 int16_t plungeTrigger = 60;             // threshold to trigger a plunge (lower = more sensitive)
 int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITHOUT FLIP_L/FLIP_R closing to trigger four flipper button mode.
