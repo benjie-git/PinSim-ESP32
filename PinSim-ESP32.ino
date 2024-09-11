@@ -18,14 +18,25 @@
     flash again, and normal operation resumes. The setting is saved between power cycles.
 
     If you're not using a plunger, ground the PLUNGE pin.
+
+    Requires installing the following libraries from the Library Manager:
+    - Adafruit ADXL345  (pulls in Adafruit BusIO, and Adafruit Unified Sensor)
+    - Button2
+    - Callback
+    - NimBLE-Arduino
+    
+    And also these libraries from downloaded zip files (Sketch menu -> Include Library -> Add .ZIP library)
+    - Average - https://github.com/MajenkoLibraries/Average
+    - BleCompositeHID - https://github.com/Mystfit/ESP32-BLE-CompositeHID
+
 */
 
 #include <Arduino.h>
-#include <Wire.h>
 #include <Preferences.h>
 #include <Button2.h>
 #include <Average.h>
 
+#include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
 
@@ -317,10 +328,8 @@ void getPlungerMax()
 // Handle Vibrate/Rumble events
 void OnVibrateEvent(XboxGamepadOutputReportData data)
 {
-  // analogWrite(rumbleSmall, data.weakMotorMagnitude);
-  // analogWrite(rumbleLarge, data.strongMotorMagnitude);
-  digitalWrite(rumbleSmall, data.weakMotorMagnitude);
-  digitalWrite(rumbleLarge, data.strongMotorMagnitude);
+  analogWrite(rumbleSmall, data.weakMotorMagnitude);
+  analogWrite(rumbleLarge, data.strongMotorMagnitude);
 }
 
 
