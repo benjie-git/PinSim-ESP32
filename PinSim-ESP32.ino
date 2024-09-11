@@ -348,16 +348,31 @@ void setup()
   preferences.begin("PinSimESP32", false);
 
   setupPins();
-  delay(500);
+
+  for (int i=0; i < 100; i++) {
+    delay(5);
+    buttonUpdate();
+  }
 
   // rumble test (hold Left Flipper on boot)
-  if (digitalRead(pinLB) == LOW) {
-    digitalWrite(rumbleSmall, 1);
-    delay(500);
-    digitalWrite(rumbleSmall, 0);
-    digitalWrite(rumbleLarge, 1);
-    delay(500);
-    digitalWrite(rumbleLarge, 0);
+  if (buttonStatus[POSL1]) {
+    for (int i=0; i < 256; i++) {
+      analogWrite(rumbleSmall, i);
+      delay(10);
+    }
+    for (int i=255; i >= 0; i--) {
+      analogWrite(rumbleSmall, i);
+      delay(10);
+    }
+  
+    for (int i=0; i < 256; i++) {
+      analogWrite(rumbleLarge, i);
+      delay(10);
+    }
+    for (int i=255; i >= 0; i--) {
+      analogWrite(rumbleLarge, i);
+      delay(10);
+    }
   }
 
   // Hold Right Flipper on boot to disable accelerometer
@@ -389,7 +404,10 @@ void setup()
   if (plungerEnabled) {
     plungerMin = preferences.getInt("plungerMin", 0);  // With default value 0
     plungerMax = preferences.getInt("plungerMax", 0);  // With default value 0
-  } else plungerMin = getPlungerAverage();
+  } 
+  else {
+    plungerMin = getPlungerAverage();
+  }
 
   // to calibrate, hold A or START when powering up the PinSim ESP32 board
   if (digitalRead(pinB1) == LOW) getPlungerMax();
@@ -466,7 +484,8 @@ void processInputs()
     int leftStickY = buttonStatus[POSDN] * -30000 + buttonStatus[POSUP] * 30000;
     gamepad->setLeftThumb(leftStickX, leftStickY);
     gamepad->releaseDPad();
-  } else {
+  } 
+  else {
     // Update the DPAD
     uint8_t direction = NONE;
     if (buttonStatus[POSUP]) direction |= NORTH;
@@ -480,7 +499,8 @@ void processInputs()
   // If Xbox "Back" and joystick Down pressed, map joystick to D-pad
   if (leftStickJoy && buttonStatus[POSDN] && buttonStatus[POSBK]) {
     leftStickJoy = false;
-  } else if (!leftStickJoy && buttonStatus[POSUP] && buttonStatus[POSBK]) {
+  } 
+  else if (!leftStickJoy && buttonStatus[POSUP] && buttonStatus[POSBK]) {
     leftStickJoy = true;
   }
 
@@ -488,7 +508,8 @@ void processInputs()
   // If Xbox "Back" and joystick Right pressed, use analog L2 & R2
   if (!flipperL1R1 && buttonStatus[POSLT] && buttonStatus[POSBK]) {
     flipperL1R1 = true;
-  } else if (flipperL1R1 && buttonStatus[POSRT] && buttonStatus[POSBK]) {
+  }
+  else if (flipperL1R1 && buttonStatus[POSRT] && buttonStatus[POSBK]) {
     flipperL1R1 = false;
   }
 
@@ -535,7 +556,8 @@ void processInputs()
       long currentTime = millis();
       if (fourButtonModeTriggeredLB == 0) {
         fourButtonModeTriggeredLB = currentTime;
-      } else if (currentTime > fourButtonModeTriggeredLB + fourButtonModeThreshold) {
+      }
+      else if (currentTime > fourButtonModeTriggeredLB + fourButtonModeThreshold) {
         flipperL1R1 = true;
         fourFlipperButtons = true;
         doubleContactFlippers = false;
@@ -549,7 +571,8 @@ void processInputs()
       long currentTime = millis();
       if (fourButtonModeTriggeredRB == 0) {
         fourButtonModeTriggeredRB = currentTime;
-      } else if (currentTime > fourButtonModeTriggeredRB + fourButtonModeThreshold) {
+      }
+      else if (currentTime > fourButtonModeTriggeredRB + fourButtonModeThreshold) {
         flipperL1R1 = true;
         fourFlipperButtons = true;
         doubleContactFlippers = false;
@@ -561,8 +584,8 @@ void processInputs()
   }
 
   // Bumpers
-  // Standard mode: FLIP_L and FLIP_R map to L1/R1, and optionally GPIO 13 & 14 map to L2/R2
   if (flipperL1R1) {
+    // Standard mode: FLIP_L and FLIP_R map to L1/R1, and optionally GPIO 13 & 14 map to L2/R2
     uint8_t leftTrigger = 0;
     uint8_t rightTrigger = 0;
     if (buttonStatus[POSL1]) gamepad->press(XBOX_BUTTON_LB);
@@ -577,9 +600,8 @@ void processInputs()
     gamepad->setLeftTrigger(leftTrigger);
     gamepad->setRightTrigger(rightTrigger);
   }
-
-  // L2/R2 Flippers (standard mode swapped)
   else if (!flipperL1R1 && !doubleContactFlippers) {
+    // L2/R2 Flippers (standard mode swapped)
     uint8_t leftTrigger = 0;
     uint8_t rightTrigger = 0;
     if (buttonStatus[POSL2]) gamepad->press(XBOX_BUTTON_LB);
@@ -594,9 +616,8 @@ void processInputs()
     gamepad->setLeftTrigger(leftTrigger);
     gamepad->setRightTrigger(rightTrigger);
   }
-
-  // Double Contact Flippers
   else if (!flipperL1R1 && doubleContactFlippers) {
+    // Double Contact Flippers
     uint8_t leftTrigger = 0;
     uint8_t rightTrigger = 0;
     if (buttonStatus[POSL1] && buttonStatus[POSL2]) {
@@ -623,13 +644,17 @@ void processInputs()
 
   if (buttonStatus[POSST] && buttonStatus[POSBK]) {
     gamepad->press(XBOX_BUTTON_HOME);
-  } else if (buttonStatus[POSST]) {
+  }
+  else if (buttonStatus[POSST]) {
     gamepad->press(XBOX_BUTTON_START);
-  } else if (buttonStatus[POSBK]) {
+  }
+  else if (buttonStatus[POSBK]) {
     gamepad->press(XBOX_BUTTON_SELECT);
-  } else if (buttonStatus[POSXB]) {
+  }
+  else if (buttonStatus[POSXB]) {
     gamepad->press(XBOX_BUTTON_HOME);
-  } else {
+  }
+  else {
     gamepad->release(XBOX_BUTTON_HOME);
     gamepad->release(XBOX_BUTTON_START);
     gamepad->release(XBOX_BUTTON_SELECT);
@@ -693,8 +718,8 @@ void processInputs()
       int16_t currentDistance = readingToDistance(averageReading);
       distanceBuffer = currentDistance;
 
-      // if plunger is pulled
       if (currentDistance + 50 < plungerMaxDistance && currentDistance > plungerMinDistance + 50) {
+        // if plunger is pulled
         currentlyPlunging = true;
         // Attempt to detect plunge
         int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance, plungeTrigger / 2, plungeTrigger);
@@ -716,27 +741,27 @@ void processInputs()
         // Disable accelerometer while plunging and for 1 second afterwards.
         if (currentDistance < plungerMaxDistance - 50) tiltEnableTime = millis() + 1000;
       }
-
-      // cap max
       else if (currentDistance <= plungerMinDistance + 50) {
+        // cap max
         currentlyPlunging = true;
         gamepad->setRightThumb(0, -32760);
         distanceBuffer = plungerMinDistance;
         tiltEnableTime = millis() + 1000;
       }
-
-      // cap min
       else if (currentDistance > plungerMaxDistance) {
+        // cap min
         currentlyPlunging = false;
         distanceBuffer = plungerMaxDistance;
       }
-
-      else if (currentlyPlunging) currentlyPlunging = false;
+      else if (currentlyPlunging) {
+        currentlyPlunging = false;
+      }
     }
 
     if (currentlyPlunging) {
       gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, -32760));
-    } else {
+    }
+    else {
       gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, -32760));
     }
   }
