@@ -1,5 +1,13 @@
 # PinSim
-XInput Game Controller for PC Pinball Games
+
+## ESP32-based port of PinSim
+
+I created this port due to the lack of availability of the Teensy 3.1 dev boards required for the old PinSim project.
+I have also designed an updated, drop-in replacement for the old PCB.  The new one comes assembled with surface mount 
+parts including an ESP32-S3, a USB-C connector, and the accelerometer.
+
+
+## XInput Game Controller for PC Pinball Games
 
 Based on the excellent [MSF_FightStick XINPUT](https://github.com/zlittell/MSF-XINPUT) project by Zack "Reaper" Littell
 
