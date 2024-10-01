@@ -81,7 +81,7 @@ Average<int> ave(numSamples);
 // Assign a unique ID to this sensor at the same time
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
-BleCompositeHID compositeHID("PinSim ESP32 XInput Controller", "Octopilot Electronics", 100);
+BleCompositeHID compositeHID("PinSimESP32 XInput Controller", "Octopilot Electronics", 100);
 XboxGamepadDevice* gamepad;
 
 long fourButtonModeTriggeredLB = 0;  // these two vars are used to check for 4 flipper buttons
@@ -332,13 +332,28 @@ void OnVibrateEvent(XboxGamepadOutputReportData data) {
 
 
 void setup() {
-  XboxOneSControllerDeviceConfiguration* config = new XboxOneSControllerDeviceConfiguration();
-  // XboxSeriesXControllerDeviceConfiguration* config = new XboxSeriesXControllerDeviceConfiguration();
-  BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
-  gamepad = new XboxGamepadDevice(config);
-
   Serial.begin(115200);
-  Serial.println("PinSim ESP32 Starting up");
+  Serial.println("\n\nPinSim ESP32 Starting up");
+
+  XboxOneSControllerDeviceConfiguration* config = new XboxOneSControllerDeviceConfiguration();
+  Serial.println("Acting as an XboxOneSController");
+  BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
+  hostConfig.setVid(0x5E04);
+  hostConfig.setPid(0xFD02);
+
+  // XboxSeriesXControllerDeviceConfiguration* config = new XboxSeriesXControllerDeviceConfiguration();
+  // Serial.println("Acting as an XboxSeriesXController");
+  // BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
+  // hostConfig.setVid(0x5E04);
+  // hostConfig.setPid(0x130B);
+
+  Serial.println("Using VID source: " + String(hostConfig.getVidSource(), HEX));
+  Serial.println("Using VID: " + String(hostConfig.getVid(), HEX));
+  Serial.println("Using PID: " + String(hostConfig.getPid(), HEX));
+  Serial.println("Using GUID version: " + String(hostConfig.getGuidVersion(), HEX));
+  Serial.println("Using serial number: " + String(hostConfig.getSerialNumber()));
+
+  gamepad = new XboxGamepadDevice(config);
 
   // Set up vibration event handler
   FunctionSlot<XboxGamepadOutputReportData> vibrationSlot(OnVibrateEvent);
@@ -462,10 +477,10 @@ void buttonUpdate() {
   buttonStatus[POSB2] = button2.isPressed();
   buttonStatus[POSB3] = button3.isPressed();
   buttonStatus[POSB4] = button4.isPressed();
-  buttonStatus[POSL1] = buttonLB.isPressed();
-  buttonStatus[POSR1] = buttonRB.isPressed();
-  buttonStatus[POSL2] = buttonLT.isPressed();
-  buttonStatus[POSR2] = buttonRT.isPressed();
+  buttonStatus[POSL1] = buttonLT.isPressed();
+  buttonStatus[POSR1] = buttonRT.isPressed();
+  buttonStatus[POSL2] = buttonLB.isPressed();
+  buttonStatus[POSR2] = buttonRB.isPressed();
   buttonStatus[POSST] = buttonSTART.isPressed();
   buttonStatus[POSBK] = buttonBACK.isPressed();
   buttonStatus[POSXB] = buttonXBOX.isPressed();
@@ -551,10 +566,10 @@ void processInputs() {
   else gamepad->release(XBOX_BUTTON_X);
   if (buttonStatus[POSB4]) gamepad->press(XBOX_BUTTON_Y);
   else gamepad->release(XBOX_BUTTON_Y);
-  if (buttonStatus[POSB9]) gamepad->press(XBOX_BUTTON_LS);
-  else gamepad->release(XBOX_BUTTON_LS);
-  if (buttonStatus[POSB10]) gamepad->press(XBOX_BUTTON_RS);
-  else gamepad->release(XBOX_BUTTON_RS);
+  // if (buttonStatus[POSB9]) gamepad->press(XBOX_BUTTON_LS);
+  // else gamepad->release(XBOX_BUTTON_LS);
+  // if (buttonStatus[POSB10]) gamepad->press(XBOX_BUTTON_RS);
+  // else gamepad->release(XBOX_BUTTON_RS);
 
   // If BACK and Left Flipper pressed simultaneously, set new plunger dead zone
   // Compensates for games where the in-game plunger doesn't begin pulling back until
@@ -681,6 +696,8 @@ void processInputs() {
     pressHome(1);
   } else if (buttonStatus[POSST]) {
     gamepad->press(XBOX_BUTTON_START);
+    gamepad->press(XBOX_BUTTON_LS);
+    gamepad->press(XBOX_BUTTON_RS);
   } else if (buttonStatus[POSBK]) {
     gamepad->press(XBOX_BUTTON_SELECT);
   } else if (buttonStatus[POSXB]) {
@@ -688,6 +705,8 @@ void processInputs() {
   } else {
     pressHome(0);
     gamepad->release(XBOX_BUTTON_START);
+    gamepad->release(XBOX_BUTTON_LS);
+    gamepad->release(XBOX_BUTTON_RS);
     gamepad->release(XBOX_BUTTON_SELECT);
   }
 
