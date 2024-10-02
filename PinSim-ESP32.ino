@@ -6,7 +6,7 @@
     Controller for PC Pinball games
     https://www.youtube.com/watch?v=18EcIxywXHg
     
-    Based on the excellent MSF_FightStick XINPUT project by Zack "Reaper" Littell
+    Which was based on the excellent MSF_FightStick XINPUT project by Zack "Reaper" Littell
     https://github.com/zlittell/MSF-XINPUT
     
     Uses the ESP32-S3, as built into the PinSim-ESP32 PCB
@@ -56,6 +56,9 @@
 // Send Start button immediately on press, but after holding for DELAY_L3R3 ms, also start sending L3 and R3 together, to activate the controller on a Quest.
 #define DELAY_HOME 2000
 #define DELAY_L3R3 3000
+
+// Set to 1 to be a OneS, or 0 to be a SeriesX
+#define ACT_AS_XboxOneS 0
 
 
 // GLOBAL CONFIGURATION VARIABLES
@@ -348,17 +351,19 @@ void setup() {
   Serial.begin(115200);
   Serial.println("\n\nPinSim ESP32 Starting up");
 
+#if ACT_AS_XboxOneS == 1
   XboxOneSControllerDeviceConfiguration* config = new XboxOneSControllerDeviceConfiguration();
   Serial.println("Acting as an XboxOneSController");
   BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
   hostConfig.setVid(0x5E04);
   hostConfig.setPid(0xFD02);
-
-  // XboxSeriesXControllerDeviceConfiguration* config = new XboxSeriesXControllerDeviceConfiguration();
-  // Serial.println("Acting as an XboxSeriesXController");
-  // BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
-  // hostConfig.setVid(0x5E04);
-  // hostConfig.setPid(0x130B);
+#else
+  XboxSeriesXControllerDeviceConfiguration* config = new XboxSeriesXControllerDeviceConfiguration();
+  Serial.println("Acting as an XboxSeriesXController");
+  BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
+  hostConfig.setVid(0x5E04);
+  hostConfig.setPid(0x130B);
+#endif
 
   Serial.println("Using VID source: " + String(hostConfig.getVidSource(), HEX));
   Serial.println("Using VID: " + String(hostConfig.getVid(), HEX));
@@ -764,10 +769,6 @@ void processInputs() {
 
     int32_t accX = event.acceleration.x * nudgeMultiplier * -1;
     int32_t accY = event.acceleration.y * nudgeMultiplier * -1;
-    if      (accX < XBOX_STICK_MIN) accX = XBOX_STICK_MIN;
-    else if (accX > XBOX_STICK_MAX) accX = XBOX_STICK_MAX;
-    if      (accY < XBOX_STICK_MIN) accY = XBOX_STICK_MIN;
-    else if (accY > XBOX_STICK_MAX) accY = XBOX_STICK_MAX;
 
     // Zero accelerometer when START is first pressed (PinSim Yellow Start Button)
     if (buttonStatus[POSST] && !accelerometerCalibrated) {
@@ -784,7 +785,13 @@ void processInputs() {
     }
 
     if (millis() > tiltEnableTime) {
-      gamepad->setLeftThumb(accX-zeroX, accY-zeroY);
+      accX -= zeroX;
+      accY -= zeroY;
+      if      (accX < XBOX_STICK_MIN) accX = XBOX_STICK_MIN;
+      else if (accX > XBOX_STICK_MAX) accX = XBOX_STICK_MAX;
+      if      (accY < XBOX_STICK_MIN) accY = XBOX_STICK_MIN;
+      else if (accY > XBOX_STICK_MAX) accY = XBOX_STICK_MAX;
+      gamepad->setLeftThumb(accX, accY);
     }
   }
 
