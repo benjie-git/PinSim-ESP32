@@ -47,13 +47,15 @@
 
 
 // LED Brightness for the Red and Green LEDs onboard the PCB.  255 is full, 5 is dim, 0 disables them.
-#define PCB_LED_BRIGHTNESS 5
+#define PCB_LED_BRIGHTNESS 6
 
 // Button debounce time in milliseconds
 #define MILLIDEBOUNCE 20
 
 // Require holding the home button for DELAY_HOME milliseconds to activate it, to avoid disruptive, accidental home button presses.
-#define DELAY_HOME 1500
+// Send Start button immediately on press, but after holding for DELAY_L3R3 ms, also start sending L3 and R3 together, to activate the controller on a Quest.
+#define DELAY_HOME 2000
+#define DELAY_L3R3 3000
 
 
 // GLOBAL CONFIGURATION VARIABLES
@@ -104,8 +106,8 @@ float zeroY = 0;
 
 
 // Pin Declarations
-#define pinLED1 1       // Onboard LED 1
-#define pinLED2 2       // Onboard LED 2
+#define pinLED1 2       // Onboard LED 1
+#define pinLED2 1       // Onboard LED 2
 #define pinACC_SCL 3    // Accelerometer SCL pin
 #define pinRT 4         // Right Flipper
 #define pinPlunger 5    // IR distance for plunger
@@ -240,14 +242,14 @@ void setupPins() {
 
   // Set the LED to low to make sure it is off
   digitalWrite(pinLED1, LOW);
-  analogWrite(pinLEDg, 0);
+  analogWrite(pinLEDg, LOW);
 
   // Disable bright neopixel on ESP32-S3 Dev Board
   // pinMode(LED_BUILTIN, OUTPUT);
   // digitalWrite(LED_BUILTIN, LOW);
 
   // Set the LED to high to turn it on
-  digitalWrite(pinLED2, HIGH);
+  digitalWrite(pinLED2, LOW);
   analogWrite(pinLEDr, PCB_LED_BRIGHTNESS);
 
   // Set up DATA and CLK pins for the Acceleromter I2C interface
@@ -291,10 +293,17 @@ uint16_t getPlungerAverage() {
 
 
 void getPlungerMax() {
+  Serial.println("Plunger calibration: starting...");
+
   flashStartButton();
   plungerMin = getPlungerAverage();
+  Serial.println("Plunger calibration: recorded min.");
+
   plungerMax = plungerMin + 1;
   int averageReading = ave.mean();
+
+  Serial.println("Plunger calibration: pull plunger back to record max...");
+
   while (averageReading < plungerMin + 100) {
     // wait for the plunger to be pulled
     int reading = analogRead(pinPlunger);
@@ -318,8 +327,12 @@ void getPlungerMax() {
     }
   }
 
+  Serial.println("Plunger calibration: recorded max.");
+
   preferences.putInt("plungerMin", plungerMin);
   preferences.putInt("plungerMax", plungerMax);
+  Serial.println("Plunger calibration: calibration data stored to flash.");
+  
   flashStartButton();
 }
 
@@ -424,24 +437,20 @@ void setup() {
   // plunger setup
   plungerMin = getPlungerAverage();
   if (plungerEnabled) {
-    plungerMin = preferences.getInt("plungerMin", 200);  // With default value
-    plungerMax = preferences.getInt("plungerMax", 550);  // With default value
-  } else {
-    plungerMin = getPlungerAverage();
-  }
+    plungerMin = preferences.getInt("plungerMin", 0);  // With default value
+    plungerMax = preferences.getInt("plungerMax", 0);  // With default value
 
-  // to calibrate, hold A or START when powering up the PinSim ESP32 board
-  if (digitalRead(pinB1) == LOW) {
-    Serial.println("A Button down at start - Begin Plunger Calibration");
-    getPlungerMax();
-  }
-  else if (digitalRead(pinST) == LOW) {
-    Serial.println("Start Button down at start - Begin Plunger Calibration");
-    getPlungerMax();
-  }
+    // to calibrate, hold A or START when powering up the PinSim ESP32 board
+    if (digitalRead(pinB1) == LOW) {
+      Serial.println("A Button down at start - Begin Plunger Calibration");
+      getPlungerMax();
+    }
+    else if (digitalRead(pinST) == LOW) {
+      Serial.println("Start Button down at start - Begin Plunger Calibration");
+      getPlungerMax();
+    }
 
-  // linear conversions
-  if (plungerEnabled) {
+    // linear conversions
     plungerMaxDistance = readingToDistance(plungerMin);
     plungerMinDistance = readingToDistance(plungerMax);
     lastDistance = plungerMaxDistance;
@@ -502,6 +511,7 @@ void deadZoneCompensation() {
 
 
 // Process Home button press delay
+// Wait until DELAY_HOME ms after button inisially pressed to start sending the button press
 void pressHome(bool isPressed) {
   static int wasPressed = 0;  // 0 = was up, 1 = was waiting, 2 = was pressed
   static long lastPress = 0;
@@ -524,6 +534,34 @@ void pressHome(bool isPressed) {
   }
 }
 
+
+// Process Start button press delay
+// Send the Start button immediately, but after DELAY_L3R3, also start sending L3 and R3
+void pressStart(bool isPressed) {
+  static int wasPressed = 0;  // 0 = was up, 1 = was waiting, 2 = was pressed
+  static long lastPress = 0;
+  long currentTime = millis();
+
+  if (wasPressed == 0 && isPressed) {
+    gamepad->press(XBOX_BUTTON_START);
+    lastPress = currentTime;
+    wasPressed = 1;
+  }
+  else if (wasPressed == 1 && isPressed) {
+    long currentTime = millis();
+    if (currentTime > lastPress + DELAY_L3R3) {
+      gamepad->press(XBOX_BUTTON_LS);
+      gamepad->press(XBOX_BUTTON_RS);
+      wasPressed = 2;
+    }
+  }
+  else if (wasPressed != 0 && !isPressed) {
+    gamepad->release(XBOX_BUTTON_START);
+    gamepad->release(XBOX_BUTTON_LS);
+    gamepad->release(XBOX_BUTTON_RS);
+    wasPressed = 0;
+  }
+}
 
 // ProcessInputs
 void processInputs() {
@@ -566,10 +604,13 @@ void processInputs() {
   else gamepad->release(XBOX_BUTTON_X);
   if (buttonStatus[POSB4]) gamepad->press(XBOX_BUTTON_Y);
   else gamepad->release(XBOX_BUTTON_Y);
-  // if (buttonStatus[POSB9]) gamepad->press(XBOX_BUTTON_LS);
-  // else gamepad->release(XBOX_BUTTON_LS);
-  // if (buttonStatus[POSB10]) gamepad->press(XBOX_BUTTON_RS);
-  // else gamepad->release(XBOX_BUTTON_RS);
+
+  if (!buttonStatus[POSST]) {
+    if (buttonStatus[POSB9]) gamepad->press(XBOX_BUTTON_LS);
+    else gamepad->release(XBOX_BUTTON_LS);
+    if (buttonStatus[POSB10]) gamepad->press(XBOX_BUTTON_RS);
+    else gamepad->release(XBOX_BUTTON_RS);
+  }
 
   // If BACK and Left Flipper pressed simultaneously, set new plunger dead zone
   // Compensates for games where the in-game plunger doesn't begin pulling back until
@@ -683,30 +724,26 @@ void processInputs() {
     gamepad->setRightTrigger(rightTrigger);
   }
 
-  // Middle Buttons
-
-  // if (buttonStatus[POSL2]) {
-  //   gamepad->press(XBOX_BUTTON_LB);
-  // }
-  // else {
-  //   gamepad->release(XBOX_BUTTON_LB);
-  // }
-
+  // Middle Buttons: Start, Select, Home
   if (buttonStatus[POSST] && buttonStatus[POSBK]) {
+    pressStart(0);
+    gamepad->release(XBOX_BUTTON_SELECT);
     pressHome(1);
   } else if (buttonStatus[POSST]) {
-    gamepad->press(XBOX_BUTTON_START);
-    gamepad->press(XBOX_BUTTON_LS);
-    gamepad->press(XBOX_BUTTON_RS);
+    pressHome(0);
+    gamepad->release(XBOX_BUTTON_SELECT);
+    pressStart(1);
   } else if (buttonStatus[POSBK]) {
+    pressHome(0);
+    pressStart(0);
     gamepad->press(XBOX_BUTTON_SELECT);
   } else if (buttonStatus[POSXB]) {
+    pressStart(0);
+    gamepad->release(XBOX_BUTTON_SELECT);
     pressHome(1);
   } else {
     pressHome(0);
-    gamepad->release(XBOX_BUTTON_START);
-    gamepad->release(XBOX_BUTTON_LS);
-    gamepad->release(XBOX_BUTTON_RS);
+    pressStart(0);
     gamepad->release(XBOX_BUTTON_SELECT);
   }
 
@@ -747,7 +784,7 @@ void processInputs() {
     }
 
     if (millis() > tiltEnableTime) {
-      gamepad->setLeftThumb(accX, accY);
+      gamepad->setLeftThumb(accX-zeroX, accY-zeroY);
     }
   }
 
@@ -825,22 +862,40 @@ void processInputs() {
 }
 
 
+void ledUpdate()
+{
+  if (compositeHID.isConnected()) {
+    // Connected!  So LED On Solid
+    analogWrite(pinLEDg, PCB_LED_BRIGHTNESS);
+    digitalWrite(pinLED1, HIGH);
+  } else {
+    // Pairing -- So LED Flashing
+    static uint8_t blinkCounter = 0;
+    static bool ledOn = 0;
+    if (blinkCounter++ >= 30) {
+      ledOn = !ledOn;
+      blinkCounter = 0;
+    }
+    analogWrite(pinLEDg, (ledOn) ? PCB_LED_BRIGHTNESS : 0);
+    digitalWrite(pinLED1, ledOn);
+  }
+}
+
+
 void loop() {
   // Poll Buttons
   buttonUpdate();
 
-  if (compositeHID.isConnected()) {
-    // Update the LED display
-    analogWrite(pinLEDg, PCB_LED_BRIGHTNESS);
+  // Update LEDs
+  ledUpdate();
 
+  if (compositeHID.isConnected()) {
     // Process all inputs and load up the usbData registers correctly
     processInputs();
 
     // Send controller data
     gamepad->sendGamepadReport();
-  } else {
-    analogWrite(pinLEDg, 0);
   }
 
-  delay(1);
+  delay(6);
 }
