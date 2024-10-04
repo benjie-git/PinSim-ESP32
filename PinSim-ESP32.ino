@@ -49,14 +49,11 @@
 
 // Require holding the home button for DELAY_HOME milliseconds to activate it, to avoid disruptive, accidental home button presses.
 // Send Start button immediately on press, but after holding for DELAY_L3R3 ms, also start sending L3 and R3 together, to activate the controller on a Quest.
-#define DELAY_HOME 2000
+#define DELAY_HOME 5000
 #define DELAY_L3R3 3000
 
 // Set to 1 to be a OneS, or 0 to be a SeriesX
 #define ACT_AS_XboxOneS 0
-
-// When enabled, move Tilt to D-Pad, and move plunger to Left Stick, to get around a Pinball FX2 VR bug
-#define CONTROL_SHUFFLE 1
 
 
 // GLOBAL CONFIGURATION VARIABLES
@@ -69,16 +66,17 @@ boolean leftStickJoy = false;           // joystick moves left analog stick inst
 boolean accelerometerEnabled = true;
 boolean accelerometerCalibrated = false;
 boolean plungerEnabled = true;
+boolean controlShuffle = false;         // When enabled, move Tilt to D-Pad, and move plunger to Left Stick, to get around a Pinball FX2 VR bug
 int16_t nudgeMultiplier = 9000;         // accelerometer multiplier (higher = more sensitive)
 int16_t plungeTrigger = 60;             // threshold to trigger a plunge (lower = more sensitive)
 int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITHOUT FLIP_L/FLIP_R closing to trigger four flipper button mode.
 
 
 // Store settings to EEPROM using preferences storage name: PinSimESP32
-// Fields: int plungerMin, int plungerMax
+// Fields: (int)plungerMin, (int)plungerMax, (int)plungerZero, (bool)controlShuffle
 Preferences preferences;
 
-int numSamples = 8;
+int numSamples = 12;
 int plungerAverage = 0;
 
 // Assign a unique ID to this sensor at the same time
@@ -280,14 +278,13 @@ uint16_t readingToDistance(int16_t reading) {
 
 
 void getPlungerSamples() {
-  for (int i = 0; i < numSamples; i++) {
-    int reading = analogRead(pinPlunger);
+  int total = 0;
 
-    // if ((reading - lastPlungerReading) > -10 && (reading - lastPlungerReading) < 10) {
-      plungerAverage = ((plungerAverage * 2) + reading) / 3;
-    // }
-    lastPlungerReading = reading;
+  for (int i = 0; i < numSamples; i++) {
+    total += analogRead(pinPlunger);
   }
+  plungerAverage = (total+numSamples/2)/numSamples;
+  lastPlungerReading = plungerAverage;
 }
 
 
@@ -426,12 +423,14 @@ void setup() {
     zeroY = event.acceleration.y * nudgeMultiplier * -1;
   }
 
+  controlShuffle = preferences.getBool("controlShuffle", false);
+
   // plunger setup
   plungerMin = plungerAverage;
   if (plungerEnabled) {
-    plungerMin = preferences.getInt("plungerMin", 200);  // With default value
+    plungerMin = preferences.getInt("plungerMin", 0);    // With default value
     plungerMax = preferences.getInt("plungerMax", 500);  // With default value
-    zeroValue = preferences.getInt("zeroValue", 0);      // With default value
+    zeroValue  = preferences.getInt("plungerZero",  0);    // With default value
 
     // to calibrate, hold A or START when powering up the PinSim ESP32 board
     if (digitalRead(pinB1) == LOW) {
@@ -494,11 +493,11 @@ void buttonUpdate() {
 void deadZoneCompensation() {
   zeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
   if (zeroValue < 0) zeroValue = 0;
-  preferences.putInt("zeroValue", zeroValue);
+  preferences.putInt("plungerZero", zeroValue);
   flashStartButton();
   buttonUpdate();
   // ensure just one calibration per button press
-  while (digitalRead(POSBK) == LOW) {
+  while (digitalRead(pinBK) == LOW) {
     // wait...
   }
 }
@@ -607,13 +606,30 @@ void processInputs() {
     else gamepad->release(XBOX_BUTTON_RS);
   }
 
-  // If BACK and Left Flipper pressed simultaneously, set new plunger dead zone
+  // If BACK and Left Flipper are pressed simultaneously, set new plunger dead zone
   // Compensates for games where the in-game plunger doesn't begin pulling back until
   // the gamepad is pulled back ~half way. Just pull the plunger to the point just before
   // it begins to move in-game, and then press BACK & LB.
   if (buttonStatus[POSBK] && buttonStatus[POSL1]) {
     Serial.println("Back and Left Flipper pressed - Calibrate Plunger Dead Zone");
     deadZoneCompensation();
+  }
+
+  // If BACK and Left D-Pad are pressed simultaneously, toggle controlShuffle, and persist that value
+  if (buttonStatus[POSBK] && buttonStatus[POSLT]) {
+    controlShuffle = !controlShuffle;
+    preferences.putBool("controlShuffle", controlShuffle);
+    if (controlShuffle) {
+      Serial.println("Back and Left D-Pad pressed - Control Shuffle Enabled: Plunge with Left Stick, Tilt with D-Pad.");
+    }
+    else {
+      Serial.println("Back and Left D-Pad pressed - Control Shuffle Disabled: Plunge with Right Stick, Tilt with Left Stick.");
+    }
+    flashStartButton();
+    // ensure just one toggle per button press
+    while (digitalRead(pinBK) == LOW) {
+      // wait...
+    }
   }
 
   // detect double contact flipper switches 
@@ -777,14 +793,15 @@ void processInputs() {
     if (millis() > tiltEnableTime) {
       accX = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
       accY = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
-#if CONTROL_SHUFFLE == 1
-      if (accY > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::NORTH;
-      if (accX > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::EAST;
-      if (accY < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::SOUTH;
-      if (accX < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::WEST;
-#else
-      gamepad->setLeftThumb(x, y);
-#endif
+      if (controlShuffle) {
+        if (accY > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::NORTH;
+        if (accX > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::EAST;
+        if (accY < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::SOUTH;
+        if (accX < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::WEST;
+      }
+      else {
+        gamepad->setLeftThumb(accX, accY);
+      }
     }
     gamepad->pressDPadDirectionFlag(XboxDpadFlags(direction));
   }
@@ -805,18 +822,19 @@ void processInputs() {
       int16_t currentDistance = readingToDistance(plungerAverage);
       distanceBuffer = currentDistance;
 
-      if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance + 20) {
+      if (currentDistance < plungerMaxDistance - 30 && currentDistance > plungerMinDistance + 20) {
         // if plunger is pulled
         currentlyPlunging = true;
         // Attempt to detect plunge
         int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance, plungeTrigger / 2, plungeTrigger);
         if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
           // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
-#if CONTROL_SHUFFLE == 1
-          gamepad->setLeftThumb(0, 0);
-#else
-          gamepad->setRightThumb(0, 0);
-#endif
+          if (controlShuffle) {
+            gamepad->setLeftThumb(0, 0);
+          }
+          else {
+            gamepad->setRightThumb(0, 0);
+          }
           // disable plunger momentarily to compensate for spring bounce
           plungerReportTime = millis() + 1000;
           distanceBuffer = plungerMaxDistance;
@@ -830,7 +848,7 @@ void processInputs() {
         lastDistance = currentDistance;
 
         // Disable accelerometer while plunging and for 1 second afterwards.
-        if (currentDistance < plungerMaxDistance - 20)
+        if (currentDistance < plungerMaxDistance - 30)
           tiltEnableTime = millis() + 1000;
       } else if (currentDistance <= plungerMinDistance + 20) {
         // cap max
@@ -851,19 +869,20 @@ void processInputs() {
     // pCnt = (++pCnt)%1024;
     // gamepad->setLeftThumb(0, (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128);
 
-#if CONTROL_SHUFFLE == 1
-   if (currentlyPlunging) {
-      gamepad->setLeftThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
-   } else {
-     gamepad->setLeftThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
-   }
-#else
-   if (currentlyPlunging) {
-      gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
-   } else {
-     gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
-   }
-#endif
+    if (controlShuffle) {
+      if (currentlyPlunging) {
+        gamepad->setLeftThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
+      } else {
+        gamepad->setLeftThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
+      }
+    }
+    else {
+      if (currentlyPlunging) {
+        gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
+      } else {
+        gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
+      }
+    }
   }
 }
 
@@ -871,11 +890,11 @@ void processInputs() {
 void ledUpdate()
 {
   if (compositeHID.isConnected()) {
-    // Connected!  So LED On Solid
+    // Connected!  So LEDs On Solid
     analogWrite(pinLEDg, PCB_LED_BRIGHTNESS);
     digitalWrite(pinLED1, HIGH);
   } else {
-    // Pairing -- So LED Flashing
+    // BLE Pairing mode -- So Flash LEDs
     static uint8_t blinkCounter = 0;
     static bool ledOn = 0;
     if (blinkCounter++ >= 30) {
