@@ -24,26 +24,21 @@
     - Button2
     - Callback
     - NimBLE-Arduino
-    
-    And also these libraries from downloaded zip files (Sketch menu -> Include Library -> Add .ZIP library)
-    - Average - https://github.com/MajenkoLibraries/Average
-    - BleCompositeHID - https://github.com/Mystfit/ESP32-BLE-CompositeHID
-
+  
 */
 
 
 #include <Arduino.h>
 #include <Preferences.h>
 #include <Button2.h>
-#include <Average.h>
 
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
 
-#include <BleConnectionStatus.h>
-#include <BleCompositeHID.h>
-#include <XboxGamepadDevice.h>
+#include "src/ESP32-BLE-CompositeHID/BleConnectionStatus.h"
+#include "src/ESP32-BLE-CompositeHID/BleCompositeHID.h"
+#include "src/ESP32-BLE-CompositeHID/XboxGamepadDevice.h"
 
 
 // LED Brightness for the Red and Green LEDs onboard the PCB.  255 is full, 5 is dim, 0 disables them.
@@ -59,6 +54,9 @@
 
 // Set to 1 to be a OneS, or 0 to be a SeriesX
 #define ACT_AS_XboxOneS 0
+
+// When enabled, move Tilt to D-Pad, and move plunger to Left Stick, to get around a Pinball FX2 VR bug
+#define CONTROL_SHUFFLE 1
 
 
 // GLOBAL CONFIGURATION VARIABLES
@@ -80,8 +78,8 @@ int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITH
 // Fields: int plungerMin, int plungerMax
 Preferences preferences;
 
-int numSamples = 20;
-Average<int> ave(numSamples);
+int numSamples = 8;
+int plungerAverage = 0;
 
 // Assign a unique ID to this sensor at the same time
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
@@ -101,7 +99,7 @@ int16_t plungerMinDistance = 0;
 uint32_t plungerReportTime = 0;
 boolean currentlyPlunging = false;
 uint32_t tiltEnableTime = 0;
-int16_t lastReading = 0;
+int16_t lastPlungerReading = 0;
 int16_t lastDistance = 0;
 int16_t distanceBuffer = 0;
 float zeroX = 0;
@@ -281,17 +279,15 @@ uint16_t readingToDistance(int16_t reading) {
 }
 
 
-uint16_t getPlungerAverage() {
+void getPlungerSamples() {
   for (int i = 0; i < numSamples; i++) {
     int reading = analogRead(pinPlunger);
 
-    if ((reading - lastReading) > -10 && (reading - lastReading) < 10) {
-      ave.push(reading);
-    }
-    lastReading = reading;
+    // if ((reading - lastPlungerReading) > -10 && (reading - lastPlungerReading) < 10) {
+      plungerAverage = ((plungerAverage * 2) + reading) / 3;
+    // }
+    lastPlungerReading = reading;
   }
-  int averageReading = ave.mean();
-  return averageReading;
 }
 
 
@@ -299,34 +295,23 @@ void getPlungerMax() {
   Serial.println("Plunger calibration: starting...");
 
   flashStartButton();
-  plungerMin = getPlungerAverage();
-  Serial.println("Plunger calibration: recorded min.");
-
+  getPlungerSamples();
+  plungerMin = plungerAverage;
   plungerMax = plungerMin + 1;
-  int averageReading = ave.mean();
 
+  Serial.println("Plunger calibration: recorded min.");
   Serial.println("Plunger calibration: pull plunger back to record max...");
 
-  while (averageReading < plungerMin + 100) {
+  while (plungerAverage < plungerMin + 100) {
     // wait for the plunger to be pulled
-    int reading = analogRead(pinPlunger);
-    if ((reading - lastReading) > -10 && (reading - lastReading) < 10) {
-      ave.push(reading);
-    }
-    lastReading = reading;
-    averageReading = ave.mean();
+    getPlungerSamples();
   }
 
-  while (averageReading > plungerMin) {
+  while (plungerAverage > plungerMin) {
     // start recording plungerMax
-    int reading = analogRead(pinPlunger);
-    if ((reading - lastReading) > -10 && (reading - lastReading) < 10) {
-      ave.push(reading);
-    }
-    lastReading = reading;
-    averageReading = ave.mean();
-    if (averageReading > plungerMax) {
-      plungerMax = averageReading;
+    getPlungerSamples();
+    if (plungerAverage > plungerMax) {
+      plungerMax = plungerAverage;
     }
   }
 
@@ -353,16 +338,12 @@ void setup() {
 
 #if ACT_AS_XboxOneS == 1
   XboxOneSControllerDeviceConfiguration* config = new XboxOneSControllerDeviceConfiguration();
-  Serial.println("Acting as an XboxOneSController");
+  Serial.println("Acting as an Xbox One S Controller");
   BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
-  hostConfig.setVid(0x5E04);
-  hostConfig.setPid(0xFD02);
 #else
   XboxSeriesXControllerDeviceConfiguration* config = new XboxSeriesXControllerDeviceConfiguration();
-  Serial.println("Acting as an XboxSeriesXController");
+  Serial.println("Acting as an Xbox Series X Controller");
   BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
-  hostConfig.setVid(0x5E04);
-  hostConfig.setPid(0x130B);
 #endif
 
   Serial.println("Using VID source: " + String(hostConfig.getVidSource(), HEX));
@@ -412,7 +393,7 @@ void setup() {
   }
 
   // Hold Right Flipper on boot to disable accelerometer
-  if (digitalRead(pinRB) == LOW) {
+  if (buttonStatus[POSR1]) {
     Serial.println("Right Flipper down at start - Disable Accelerometer");
     accelerometerEnabled = false;
     leftStickJoy = true;
@@ -431,7 +412,13 @@ void setup() {
   if (accelerometerEnabled) {
     accel.setRange(ADXL345_RANGE_2_G);
     Serial.print("Waiting for lid close... ");
-    delay(2500);  // time to lower the cabinet lid
+    
+    // delay 2500 - time to lower the cabinet lid
+    for (int i=0; i<100; i++){
+        getPlungerSamples();
+        delay(25);
+    }
+    
     Serial.println("continuing.");
     sensors_event_t event;
     accel.getEvent(&event);
@@ -440,10 +427,11 @@ void setup() {
   }
 
   // plunger setup
-  plungerMin = getPlungerAverage();
+  plungerMin = plungerAverage;
   if (plungerEnabled) {
-    plungerMin = preferences.getInt("plungerMin", 0);  // With default value
-    plungerMax = preferences.getInt("plungerMax", 0);  // With default value
+    plungerMin = preferences.getInt("plungerMin", 200);  // With default value
+    plungerMax = preferences.getInt("plungerMax", 500);  // With default value
+    zeroValue = preferences.getInt("zeroValue", 0);      // With default value
 
     // to calibrate, hold A or START when powering up the PinSim ESP32 board
     if (digitalRead(pinB1) == LOW) {
@@ -504,8 +492,9 @@ void buttonUpdate() {
 
 
 void deadZoneCompensation() {
-  zeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, -32768) + 10;
-  if (zeroValue > 0) zeroValue = 0;
+  zeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
+  if (zeroValue < 0) zeroValue = 0;
+  preferences.putInt("zeroValue", zeroValue);
   flashStartButton();
   buttonUpdate();
   // ensure just one calibration per button press
@@ -568,20 +557,21 @@ void pressStart(bool isPressed) {
   }
 }
 
+
 // ProcessInputs
 void processInputs() {
+    uint8_t direction = XboxDpadFlags::NONE;
+
   if (leftStickJoy) {
     int leftStickX = buttonStatus[POSLT] * -30000 + buttonStatus[POSRT] * 30000;
     int leftStickY = buttonStatus[POSDN] * -30000 + buttonStatus[POSUP] * 30000;
     gamepad->setLeftThumb(leftStickX, leftStickY);
   } else {
     // Update the DPAD
-    uint8_t direction = XboxDpadFlags::NONE;
     if (buttonStatus[POSUP]) direction |= XboxDpadFlags::NORTH;
     if (buttonStatus[POSRT]) direction |= XboxDpadFlags::EAST;
     if (buttonStatus[POSDN]) direction |= XboxDpadFlags::SOUTH;
     if (buttonStatus[POSLT]) direction |= XboxDpadFlags::WEST;
-    gamepad->pressDPadDirectionFlag(XboxDpadFlags(direction));
   }
 
   // If Xbox "Back" and joystick Up pressed simultaneously, map joystick to Xbox Left Stick
@@ -687,9 +677,9 @@ void processInputs() {
     else gamepad->release(XBOX_BUTTON_RB);
 
     if (buttonStatus[POSL2]) leftTrigger = XBOX_TRIGGER_MAX;
-    else leftTrigger = 0;
+    else leftTrigger = XBOX_TRIGGER_MIN;
     if (buttonStatus[POSR2]) rightTrigger = XBOX_TRIGGER_MAX;
-    else rightTrigger = 0;
+    else rightTrigger = XBOX_TRIGGER_MIN;
     gamepad->setLeftTrigger(leftTrigger);
     gamepad->setRightTrigger(rightTrigger);
   } else if (!flipperL1R1 && !doubleContactFlippers) {
@@ -702,9 +692,9 @@ void processInputs() {
     else gamepad->release(XBOX_BUTTON_RB);
 
     if (buttonStatus[POSL1]) leftTrigger = XBOX_TRIGGER_MAX;
-    else leftTrigger = 0;
+    else leftTrigger = XBOX_TRIGGER_MIN;
     if (buttonStatus[POSR1]) rightTrigger = XBOX_TRIGGER_MAX;
-    else rightTrigger = 0;
+    else rightTrigger = XBOX_TRIGGER_MIN;
     gamepad->setLeftTrigger(leftTrigger);
     gamepad->setRightTrigger(rightTrigger);
   } else if (!flipperL1R1 && doubleContactFlippers) {
@@ -716,14 +706,14 @@ void processInputs() {
     } else if (buttonStatus[POSL1] && !buttonStatus[POSL2]) {
       leftTrigger = XBOX_TRIGGER_MAX / 10;
     } else if (!buttonStatus[POSL1] && !buttonStatus[POSL2]) {
-      leftTrigger = 0;
+      leftTrigger = XBOX_TRIGGER_MIN;
     }
     if (buttonStatus[POSR1] && buttonStatus[POSR2]) {
       rightTrigger = XBOX_TRIGGER_MAX;
     } else if (buttonStatus[POSR1] && !buttonStatus[POSR2]) {
       rightTrigger = XBOX_TRIGGER_MAX / 10;
     } else if (!buttonStatus[POSR1] && !buttonStatus[POSR2]) {
-      rightTrigger = 0;
+      rightTrigger = XBOX_TRIGGER_MIN;
     }
     gamepad->setLeftTrigger(leftTrigger);
     gamepad->setRightTrigger(rightTrigger);
@@ -785,32 +775,24 @@ void processInputs() {
     }
 
     if (millis() > tiltEnableTime) {
-      accX -= zeroX;
-      accY -= zeroY;
-      if      (accX < XBOX_STICK_MIN) accX = XBOX_STICK_MIN;
-      else if (accX > XBOX_STICK_MAX) accX = XBOX_STICK_MAX;
-      if      (accY < XBOX_STICK_MIN) accY = XBOX_STICK_MIN;
-      else if (accY > XBOX_STICK_MAX) accY = XBOX_STICK_MAX;
-      gamepad->setLeftThumb(accX, accY);
+      accX = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
+      accY = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
+#if CONTROL_SHUFFLE == 1
+      if (accY > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::NORTH;
+      if (accX > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::EAST;
+      if (accY < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::SOUTH;
+      if (accX < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::WEST;
+#else
+      gamepad->setLeftThumb(x, y);
+#endif
     }
+    gamepad->pressDPadDirectionFlag(XboxDpadFlags(direction));
   }
 
   // Plunger
   // This is based on the Sharp GP2Y0A51SK0F Analog Distance Sensor 2-15cm
   if (plungerEnabled) {
-    int reading = analogRead(pinPlunger);
-
-    if (((reading - lastReading) > -10 && (reading - lastReading) < 10) || (reading - lastReading > 75) || (reading - lastReading < -75)) {
-      ave.push(reading);
-    }
-    lastReading = reading;
-    int16_t averageReading = ave.mean();
-
-    // static int logSkip = 0;
-    // logSkip = (logSkip+1)%16;
-    // if (logSkip == 0) {
-    //   Serial.println("Avg: " + String(averageReading));
-    // }
+    getPlungerSamples();
 
     // it appears the distance sensor updates at about 60hz, no point in checking more often than that
     if (millis() > plungerReportTime) {
@@ -820,17 +802,21 @@ void processInputs() {
         zeroValueBuffer = 0;
       }
       plungerReportTime = millis() + plungerReportDelay;
-      int16_t currentDistance = readingToDistance(averageReading);
+      int16_t currentDistance = readingToDistance(plungerAverage);
       distanceBuffer = currentDistance;
 
-      if (currentDistance + 50 < plungerMaxDistance && currentDistance > plungerMinDistance + 50) {
+      if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance + 20) {
         // if plunger is pulled
         currentlyPlunging = true;
         // Attempt to detect plunge
         int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance, plungeTrigger / 2, plungeTrigger);
         if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
           // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
+#if CONTROL_SHUFFLE == 1
+          gamepad->setLeftThumb(0, 0);
+#else
           gamepad->setRightThumb(0, 0);
+#endif
           // disable plunger momentarily to compensate for spring bounce
           plungerReportTime = millis() + 1000;
           distanceBuffer = plungerMaxDistance;
@@ -844,11 +830,11 @@ void processInputs() {
         lastDistance = currentDistance;
 
         // Disable accelerometer while plunging and for 1 second afterwards.
-        if (currentDistance < plungerMaxDistance - 50) tiltEnableTime = millis() + 1000;
-      } else if (currentDistance <= plungerMinDistance + 50) {
+        if (currentDistance < plungerMaxDistance - 20)
+          tiltEnableTime = millis() + 1000;
+      } else if (currentDistance <= plungerMinDistance + 20) {
         // cap max
         currentlyPlunging = true;
-        gamepad->setRightThumb(0, XBOX_STICK_MIN);
         distanceBuffer = plungerMinDistance;
         tiltEnableTime = millis() + 1000;
       } else if (currentDistance > plungerMaxDistance) {
@@ -860,11 +846,24 @@ void processInputs() {
       }
     }
 
-    if (currentlyPlunging) {
-      gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MIN));
-    } else {
-      gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MIN));
-    }
+    // // Automatically move the plunger, for testing without a plunger
+    // static int16_t pCnt = 0;
+    // pCnt = (++pCnt)%1024;
+    // gamepad->setLeftThumb(0, (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128);
+
+#if CONTROL_SHUFFLE == 1
+   if (currentlyPlunging) {
+      gamepad->setLeftThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
+   } else {
+     gamepad->setLeftThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
+   }
+#else
+   if (currentlyPlunging) {
+      gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
+   } else {
+     gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
+   }
+#endif
   }
 }
 
