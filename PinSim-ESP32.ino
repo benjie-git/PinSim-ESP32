@@ -50,7 +50,7 @@
 // Require holding the home button for DELAY_HOME milliseconds to activate it, to avoid disruptive, accidental home button presses.
 // Send Start button immediately on press, but after holding for DELAY_L3R3 ms, also start sending L3 and R3 together, to activate the controller on a Quest.
 #define DELAY_HOME 5000
-#define DELAY_L3R3 3000
+#define DELAY_L3R3 2000
 
 // Set to 1 to be a OneS, or 0 to be a SeriesX
 #define ACT_AS_XboxOneS 0
@@ -822,7 +822,7 @@ void processInputs() {
       int16_t currentDistance = readingToDistance(plungerAverage);
       distanceBuffer = currentDistance;
 
-      if (currentDistance < plungerMaxDistance - 30 && currentDistance > plungerMinDistance + 20) {
+      if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance + 20) {
         // if plunger is pulled
         currentlyPlunging = true;
         // Attempt to detect plunge
@@ -848,7 +848,7 @@ void processInputs() {
         lastDistance = currentDistance;
 
         // Disable accelerometer while plunging and for 1 second afterwards.
-        if (currentDistance < plungerMaxDistance - 30)
+        if (currentDistance < plungerMaxDistance - 20)
           tiltEnableTime = millis() + 1000;
       } else if (currentDistance <= plungerMinDistance + 20) {
         // cap max
