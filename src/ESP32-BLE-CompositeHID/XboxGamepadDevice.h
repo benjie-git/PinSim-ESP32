@@ -12,6 +12,26 @@
 #include "XboxGamepadConfiguration.h"
 
 // Button bitmasks
+// #define XBOX_BUTTON_A 0x01
+// #define XBOX_BUTTON_B 0x02
+// #define XBOX_BUTTON_X 0x04 
+// #define XBOX_BUTTON_Y 0x08
+// #define XBOX_BUTTON_LB 0x10
+// #define XBOX_BUTTON_RB 0x20
+
+// #define XBOX_BUTTON_SELECT 0x40
+// #define XBOX_BUTTON_START 0x80
+
+// #define XBOX_BUTTON_LS 0x100
+// #define XBOX_BUTTON_RS 0x200
+
+// #define XBOX_BUTTON_HOME 0x400
+
+// #define XBOX_BUTTON_DU 0x800
+// #define XBOX_BUTTON_DD 0x1000
+// #define XBOX_BUTTON_DL 0x2000
+// #define XBOX_BUTTON_DR 0x4000
+
 #define XBOX_BUTTON_A 0x01
 #define XBOX_BUTTON_B 0x02
 // UNUSED - 0x04
@@ -110,9 +130,9 @@ struct XboxGamepadInputReportData {
     uint16_t rz = 0;            // Right joystick Y
     uint16_t brake = 0;         // 10 bits for brake (left trigger) + 6 bit padding (2 bytes)
     uint16_t accelerator = 0;   // 10 bits for accelerator (right trigger) + 6bit padding
-    uint8_t hat = 0x00;         // 4bits for hat switch (Dpad) + 4 bit padding (1 byte) 
+    uint8_t  hat = 0x00;        // 4bits for hat switch (Dpad) + 4 bit padding (1 byte) 
     uint16_t buttons = 0x00;    // 15 * 1bit for buttons + 1 bit padding (2 bytes)
-    uint8_t share = 0x00;      // 1 bits for share/menu button + 7 bit padding (1 byte)
+    uint8_t  share = 0x00;      // 1 bits for share/menu button + 7 bit padding (1 byte)
 };
 #pragma pack(pop)
 

@@ -1,7 +1,7 @@
 #ifndef ESP32_BLE_GAMEPAD_CONFIG_H
 #define ESP32_BLE_GAMEPAD_CONFIG_H
 
-#include <BaseCompositeDevice.h>
+#include "BaseCompositeDevice.h"
 
 #define POSSIBLESPECIALBUTTONS 8
 #define POSSIBLEAXES 8

@@ -1,8 +1,8 @@
 #ifndef ESP32_BLE_MOUSE_CONFIG_H
 #define ESP32_BLE_MOUSE_CONFIG_H
 
-#include <BaseCompositeDevice.h>
-#include <MouseConfiguration.h>
+#include "BaseCompositeDevice.h"
+#include "MouseConfiguration.h"
 
 #define MOUSE_REPORT_ID 0x20
 #define MOUSE_DEVICE_NAME "Mouse"

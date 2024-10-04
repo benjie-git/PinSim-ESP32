@@ -168,7 +168,7 @@ void XboxGamepadDevice::setRightThumb(int16_t z, int16_t rZ) {
         {
             std::lock_guard<std::mutex> lock(_mutex);
             _inputReport.z = (uint16_t)(z + 0x8000);
-            _inputReport.rz = (uint16_t)(rZ+ 0x8000);
+            _inputReport.rz = (uint16_t)(rZ + 0x8000);
         }
 
         if (_config->getAutoReport())

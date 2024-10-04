@@ -2,9 +2,9 @@
 #ifndef ESP32_MOUSE_DEVICE_H
 #define ESP32_MOUSE_DEVICE_H
 
-#include "NimBLECharacteristic.h"
-#include <MouseConfiguration.h>
-#include <BaseCompositeDevice.h>
+#include <NimBLECharacteristic.h>
+#include "MouseConfiguration.h"
+#include "BaseCompositeDevice.h"
 #include <mutex>
 
 class MouseDevice : public BaseCompositeDevice {

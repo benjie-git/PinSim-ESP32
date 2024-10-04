@@ -6,18 +6,18 @@
 
 #define VENDOR_BLUETOOTH_SOURCE 0x01
 #define VENDOR_USB_SOURCE 0x02
-#define XBOX_VENDOR_ID 0x045E
+#define XBOX_VENDOR_ID 0x5E04
 
 // Product: Xbox One S controller (supports linux kernel < 6.5)
 // Menu/select button replaces share button
-#define XBOX_1708_PRODUCT_ID 0x02fd
-#define XBOX_1708_BCD_DEVICE_ID 0x0408
+#define XBOX_1708_PRODUCT_ID 0xE002
+#define XBOX_1708_BCD_DEVICE_ID 0x0804
 #define XBOX_1708_SERIAL "3033363030343037323136373239"
 
 // Product: latest Xbox series X wireless controller
 // Share button valid
-#define XBOX_1914_PRODUCT_ID 0x0B13
-#define XBOX_1914_BCD_DEVICE_ID 0x0509
+#define XBOX_1914_PRODUCT_ID 0x130B
+#define XBOX_1914_BCD_DEVICE_ID 0x0305
 #define XBOX_1914_SERIAL "3039373130303637313034303231"
 
 #define XBOX_INPUT_REPORT_ID 0x01

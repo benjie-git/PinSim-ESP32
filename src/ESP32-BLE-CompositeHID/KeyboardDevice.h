@@ -1,10 +1,10 @@
 #ifndef ESP32_KEYBOARD_DEVICE_H
 #define ESP32_KEYBOARD_DEVICE_H
 
-#include "NimBLECharacteristic.h"
-#include <KeyboardHIDCodes.h>
-#include <KeyboardConfiguration.h>
-#include <BaseCompositeDevice.h>
+#include <NimBLECharacteristic.h>
+#include "KeyboardHIDCodes.h"
+#include "KeyboardConfiguration.h"
+#include "BaseCompositeDevice.h"
 #include <Callback.h>
 #include <mutex>
 

@@ -83,8 +83,6 @@ void BleCompositeHID::begin(const BLEHostConfiguration& config)
 	pid = _configuration.getPid();
 	guidVersion = _configuration.getGuidVersion();
 
-#ifndef PNPVersionField
-    // Legacy behaviour for versions of Nimble <= 1.4.1
 	uint8_t high = highByte(vid);
 	uint8_t low = lowByte(vid);
 
@@ -98,7 +96,6 @@ void BleCompositeHID::begin(const BLEHostConfiguration& config)
 	high = highByte(guidVersion);
 	low = lowByte(guidVersion);
 	guidVersion = low << 8 | high;
-#endif
     
     // Start BLE server
     xTaskCreate(this->taskServer, "server", 20000, (void *)this, 5, NULL);

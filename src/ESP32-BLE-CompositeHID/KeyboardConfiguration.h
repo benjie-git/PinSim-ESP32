@@ -1,7 +1,7 @@
 #ifndef KEYBOARD_CONFIGURATION_H
 #define KEYBOARD_CONFIGURATION_H
 
-#include <BaseCompositeDevice.h>
+#include "BaseCompositeDevice.h"
 
 class KeyboardConfiguration : public BaseCompositeDeviceConfiguration
 {   

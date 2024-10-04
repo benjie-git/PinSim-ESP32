@@ -2,8 +2,8 @@
 #define ESP32_GAMEPAD_DEVICE_H
 
 #include <NimBLECharacteristic.h>
-#include <GamepadConfiguration.h>
-#include <BaseCompositeDevice.h>
+#include "GamepadConfiguration.h"
+#include "BaseCompositeDevice.h"
 #include <Callback.h>
 #include <mutex>
 
