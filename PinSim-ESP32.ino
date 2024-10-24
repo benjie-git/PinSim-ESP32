@@ -29,6 +29,9 @@
 
 
 #include <Arduino.h>
+#include "bootloader_random.h"
+#include "esp_mac.h"
+#include "esp_gap_ble_api.h"
 #include <Preferences.h>
 #include <Button2.h>
 
@@ -40,6 +43,9 @@
 #include "src/ESP32-BLE-CompositeHID/BleCompositeHID.h"
 #include "src/ESP32-BLE-CompositeHID/XboxGamepadDevice.h"
 
+
+// Define this as 2 for v0.2, or 3 for v0.3, as a few connections have changed
+#define PCB_VERSION 3
 
 // LED Brightness for the Red and Green LEDs onboard the PCB.  255 is full, 5 is dim, 0 disables them.
 #define PCB_LED_BRIGHTNESS 6
@@ -105,6 +111,7 @@ float zeroY = 0;
 
 
 // Pin Declarations
+#if PCB_VERSION == 2
 #define pinLED1 2       // Onboard LED 1
 #define pinLED2 1       // Onboard LED 2
 #define pinACC_SCL 3    // Accelerometer SCL pin
@@ -132,6 +139,39 @@ float zeroY = 0;
 #define pinLB 13        // Button 5 (LB)   -- Exposed in GPIO header
 #define pinRB 11        // Button 6 (RB)   -- Exposed in GPIO header
 #define NUMBUTTONS 17   // Total number of buttons
+
+#elif PCB_VERSION == 3
+#define pinLED1 42      // Onboard LED 1
+#define pinLED2 2       // Onboard LED 2
+#define pinACC_SCL 3    // Accelerometer SCL pin
+#define pinRT 4         // Right Flipper
+#define pinPlunger 5    // IR distance for plunger
+#define pinLEDg 6       // PCB LED GREEN
+#define pinLEDr 7       // PCB LED RED
+#define rumbleSmall 8   // Large Rumble Motor
+#define pinACC_SDA 9    // Accelerometer SDA pin
+#define rumbleLarge 10  // Large Rumble Motor
+#define pinDpadD 12     // Down on DPAD
+#define pinDpadU 14     // Up on DPAD
+#define pinB1 15        // Button 1 (A)
+#define pinB2 16        // Button 2 (B)
+#define pinB3 17        // Button 3 (X)
+#define pinB4 18        // Button 4 (Y)
+#define pinDpadL 38     // Left on DPAD
+#define pinST 39        // Button 8 (Start)
+#define pinBK 40        // Button 7 (Back)
+#define pinXB 41        // XBOX Guide Button
+#define pinLT 1         // Left Flipper
+#define pinDpadR 48     // Right on DPAD
+#define pinB9 47        // Button 9 (L3)   -- Exposed in GPIO header
+#define pinB10 21       // Button 10 (R3)  -- Exposed in GPIO header
+#define pinLB 13        // Button 5 (LB)   -- Exposed in GPIO header
+#define pinRB 11        // Button 6 (RB)   -- Exposed in GPIO header
+#define NUMBUTTONS 17   // Total number of buttons
+
+#else
+#error "Please set PCB_VERSION to a valid value"
+#endif
 
 
 // Position of a button in the button status array
@@ -190,6 +230,8 @@ Button2 buttonBACK = Button2(pinBK);
 Button2 buttonXBOX = Button2(pinXB);
 Button2 button9 = Button2(pinB9);
 Button2 button10 = Button2(pinB10);
+
+void remove_all_bonded_devices(void);
 
 
 // Configure Inputs and Outputs
@@ -333,6 +375,28 @@ void setup() {
   Serial.begin(115200);
   Serial.println("\n\nPinSim ESP32 Starting up");
 
+  preferences.begin("PinSimESP32", false);
+
+  setupPins();
+
+  for (int i = 0; i < 100; i++) {
+    delay(5);
+    buttonUpdate();
+  }
+
+  // Hold Back on boot to clear BLE paired devices
+  if (buttonStatus[POSBK]) {
+    Serial.println("Remove pairing info");
+    remove_all_bonded_devices();
+  }
+  else {
+    if (preferences.isKey("custom_BLE_MAC")) {
+      uint8_t new_mac[6];
+      preferences.getBytes("custom_BLE_MAC", new_mac, 6);
+      esp_base_mac_addr_set(new_mac);
+    }
+  }
+
 #if ACT_AS_XboxOneS == 1
   XboxOneSControllerDeviceConfiguration* config = new XboxOneSControllerDeviceConfiguration();
   Serial.println("Acting as an Xbox One S Controller");
@@ -357,15 +421,6 @@ void setup() {
   // Add all child devices to the top-level composite HID device to manage them
   compositeHID.addDevice(gamepad);
   compositeHID.begin(hostConfig);
-
-  preferences.begin("PinSimESP32", false);
-
-  setupPins();
-
-  for (int i = 0; i < 100; i++) {
-    delay(5);
-    buttonUpdate();
-  }
 
   // rumble test (hold Left Flipper on boot)
   if (buttonStatus[POSL1]) {
@@ -831,6 +886,7 @@ void processInputs() {
           // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
           if (controlShuffle) {
             gamepad->setLeftThumb(0, 0);
+            gamepad->setRightThumb(0, 0);
           }
           else {
             gamepad->setRightThumb(0, 0);
@@ -875,6 +931,7 @@ void processInputs() {
       } else {
         gamepad->setLeftThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
       }
+      gamepad->setRightThumb(0, 0);
     }
     else {
       if (currentlyPlunging) {
@@ -924,3 +981,22 @@ void loop() {
 
   delay(6);
 }
+
+
+void remove_all_bonded_devices(void)
+{
+  int dev_num = esp_ble_get_bond_device_num();
+  esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
+  esp_ble_get_bond_device_list(&dev_num, dev_list);
+  for (int i = 0; i < dev_num; i++) {
+    esp_ble_remove_bond_device(dev_list[i].bd_addr);
+  }
+
+  free(dev_list);
+
+  uint8_t new_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x00};
+  esp_fill_random(new_mac+1, 5);
+  esp_base_mac_addr_set(new_mac);
+  preferences.putBytes("custom_BLE_MAC", new_mac, 6);
+}
+
