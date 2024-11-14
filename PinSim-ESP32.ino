@@ -70,7 +70,6 @@ boolean doubleContactFlippers = false;  // FLIP_L & FLIP_R map to analog L2/R2 1
 boolean analogFlippers = false;         // use analog flipper buttons
 boolean leftStickJoy = false;           // joystick moves left analog stick instead of D-pad
 boolean accelerometerEnabled = true;
-boolean accelerometerCalibrated = false;
 boolean plungerEnabled = true;
 boolean controlShuffle = false;         // When enabled, move Tilt to D-Pad, and move plunger to Left Stick, to get around a Pinball FX2 VR bug
 int16_t nudgeMultiplier = 9000;         // accelerometer multiplier (higher = more sensitive)
@@ -463,19 +462,10 @@ void setup() {
 
   if (accelerometerEnabled) {
     accel.setRange(ADXL345_RANGE_2_G);
-    Serial.print("Waiting for lid close... ");
+    delay(100);
     
-    // delay 2500 - time to lower the cabinet lid
-    for (int i=0; i<100; i++){
-        getPlungerSamples();
-        delay(25);
-    }
-    
-    Serial.println("continuing.");
-    sensors_event_t event;
-    accel.getEvent(&event);
-    zeroX = event.acceleration.x * nudgeMultiplier * -1;
-    zeroY = event.acceleration.y * nudgeMultiplier * -1;
+    zeroX = preferences.getInt("accelZeroX", 0);
+    zeroY = preferences.getInt("accelZeroY", 0);
   }
 
   controlShuffle = preferences.getBool("controlShuffle", false);
@@ -831,18 +821,12 @@ void processInputs() {
     int32_t accX = event.acceleration.x * nudgeMultiplier * -1;
     int32_t accY = event.acceleration.y * nudgeMultiplier * -1;
 
-    // Zero accelerometer when START is first pressed (PinSim Yellow Start Button)
-    if (buttonStatus[POSST] && !accelerometerCalibrated) {
-      accelerometerCalibrated = true;
-      zeroX = accX;
-      zeroY = accY;
-    }
-
     // Re-calibrate accelerometer if both BACK and RIGHT FLIPPER pressed
     if (buttonStatus[POSBK] && buttonStatus[POSR1]) {
-      accelerometerCalibrated = true;
       zeroX = accX;
       zeroY = accY;
+      preferences.putInt("accelZeroX", zeroX);
+      preferences.putInt("accelZeroY", zeroY);
     }
 
     if (millis() > tiltEnableTime) {
