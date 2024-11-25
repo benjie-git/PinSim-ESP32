@@ -13,7 +13,7 @@ class BleConnectionStatus : public NimBLEServerCallbacks
 {
 public:
     BleConnectionStatus(void);
-    bool connected = false;
+    int connected = 0;
     void onConnect(NimBLEServer *pServer, ble_gap_conn_desc* desc);
     void onDisconnect(NimBLEServer *pServer);
 };

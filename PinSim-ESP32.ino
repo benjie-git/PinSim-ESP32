@@ -29,9 +29,9 @@
 
 
 #include <Arduino.h>
-#include "bootloader_random.h"
-#include "esp_mac.h"
-#include "esp_gap_ble_api.h"
+#include <bootloader_random.h>
+#include <esp_mac.h>
+#include <esp_gap_ble_api.h>
 #include <Preferences.h>
 #include <Button2.h>
 
@@ -342,15 +342,19 @@ void getPlungerMax() {
 
   while (plungerAverage < plungerMin + 100) {
     // wait for the plunger to be pulled
+    yield();
     getPlungerSamples();
+    delay(10);
   }
 
   while (plungerAverage > plungerMin) {
     // start recording plungerMax
+    yield();
     getPlungerSamples();
     if (plungerAverage > plungerMax) {
       plungerMax = plungerAverage;
     }
+    delay(10);
   }
 
   Serial.println("Plunger calibration: recorded max.");
@@ -378,7 +382,7 @@ void setup() {
 
   setupPins();
 
-  for (int i = 0; i < 100; i++) {
+  for (int i = 0; i < 10; i++) {
     delay(5);
     buttonUpdate();
   }
@@ -473,9 +477,9 @@ void setup() {
   // plunger setup
   plungerMin = plungerAverage;
   if (plungerEnabled) {
-    plungerMin = preferences.getInt("plungerMin", 0);    // With default value
-    plungerMax = preferences.getInt("plungerMax", 500);  // With default value
-    zeroValue  = preferences.getInt("plungerZero",  0);    // With default value
+    plungerMin = preferences.getInt("plungerMin",   0);  // With default value
+    plungerMax = preferences.getInt("plungerMax", 800);  // With default value
+    zeroValue  = preferences.getInt("plungerZero",100);  // With default value
 
     // to calibrate, hold A or START when powering up the PinSim ESP32 board
     if (digitalRead(pinB1) == LOW) {
@@ -544,6 +548,8 @@ void deadZoneCompensation() {
   // ensure just one calibration per button press
   while (digitalRead(pinBK) == LOW) {
     // wait...
+    yield();
+    delay(50);
   }
 }
 
@@ -674,6 +680,8 @@ void processInputs() {
     // ensure just one toggle per button press
     while (digitalRead(pinBK) == LOW) {
       // wait...
+      yield();
+      delay(50);
     }
   }
 
@@ -827,6 +835,14 @@ void processInputs() {
       zeroY = accY;
       preferences.putInt("accelZeroX", zeroX);
       preferences.putInt("accelZeroY", zeroY);
+      Serial.println("Recalibrated accelerometers.");
+
+      // Ensure just one calibration per button press
+      while (digitalRead(pinBK) == LOW) {
+        // wait...
+        yield();
+        delay(50);
+      }
     }
 
     if (millis() > tiltEnableTime) {

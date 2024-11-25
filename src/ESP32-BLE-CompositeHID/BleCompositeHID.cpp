@@ -129,7 +129,7 @@ void BleCompositeHID::addDevice(BaseCompositeDevice *device)
 
 bool BleCompositeHID::isConnected()
 {
-    return this->_connectionStatus->connected;
+    return this->_connectionStatus->connected > 0;
 }
 
 void BleCompositeHID::setBatteryLevel(uint8_t level)
@@ -166,6 +166,7 @@ void BleCompositeHID::sendDeferredReports()
         }
     }
 }
+
 
 void BleCompositeHID::taskServer(void *pvParameter)
 {
@@ -272,7 +273,9 @@ void BleCompositeHID::taskServer(void *pvParameter)
 
     // Start BLE advertisement
     NimBLEAdvertising *pAdvertising = pServer->getAdvertising();
-    pAdvertising->setAppearance(GENERIC_HID);
+    pAdvertising->setAppearance(HID_GAMEPAD);  // GENERIC_HID
+    pAdvertising->setMinInterval(1000);
+    pAdvertising->setMaxInterval(1500);
     pAdvertising->addServiceUUID(BleCompositeHIDInstance->_hid->hidService()->getUUID());
     pAdvertising->start();
     ESP_LOGD(LOG_TAG, "Advertising started!");
