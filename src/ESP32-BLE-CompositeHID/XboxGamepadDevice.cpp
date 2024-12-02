@@ -325,7 +325,7 @@ void XboxGamepadDevice::releaseShare() {
 
 void XboxGamepadDevice::sendGamepadReport(bool defer) {
     if(defer || _config->getAutoDefer()){
-        queueDeferredReport(std::bind(&XboxGamepadDevice::sendGamepadReportImpl, this));
+        // queueDeferredReport(std::bind(&XboxGamepadDevice::sendGamepadReportImpl, this));
     } else {
         sendGamepadReportImpl();
     }

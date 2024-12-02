@@ -46,7 +46,6 @@ public:
     BleCompositeHID* getParent();
 
 protected:
-    void queueDeferredReport(std::function<void()> && reportFunc);
     void setCharacteristics(NimBLECharacteristic* input, NimBLECharacteristic* output);
     NimBLECharacteristic* getInput();
     NimBLECharacteristic* getOutput();

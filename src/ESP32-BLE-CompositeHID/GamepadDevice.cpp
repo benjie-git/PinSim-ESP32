@@ -907,7 +907,7 @@ bool GamepadDevice::isPressed(uint8_t b)
 void GamepadDevice::sendGamepadReport(bool defer)
 {
     if(defer || _config.getAutoReport()){
-        queueDeferredReport(std::bind(&GamepadDevice::sendGamepadReportImp, this));
+        // queueDeferredReport(std::bind(&GamepadDevice::sendGamepadReportImp, this));
     } else {
         sendGamepadReportImp();
     }

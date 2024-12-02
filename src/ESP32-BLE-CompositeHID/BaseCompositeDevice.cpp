@@ -27,12 +27,6 @@ bool BaseCompositeDeviceConfiguration::getAutoDefer() const { return _autoDefer;
 
 // ---------------
 
-void BaseCompositeDevice::queueDeferredReport(std::function<void()> && reportFunc) {
-    if(auto parent = getParent()){
-        parent->queueDeviceDeferredReport(std::forward<std::function<void()>>(reportFunc));
-    }
-}
-
 BleCompositeHID* BaseCompositeDevice::getParent() { return _parent; }
 
 void BaseCompositeDevice::setCharacteristics(NimBLECharacteristic* input, NimBLECharacteristic* output) {

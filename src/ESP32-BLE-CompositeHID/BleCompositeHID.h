@@ -29,9 +29,6 @@ public:
     void addDevice(BaseCompositeDevice* device);
     bool isConnected();
 
-    void queueDeviceDeferredReport(std::function<void()> && reportFunc);
-    void sendDeferredReports();
-
     uint8_t batteryLevel;
     std::string deviceManufacturer;
     std::string deviceName;
@@ -40,16 +37,13 @@ protected:
     virtual void onStarted(NimBLEServer *pServer){};
 
 private:
-    static void taskServer(void *pvParameter);
-    static void timedSendDeferredReports(void *pvParameter);
+    void startServer();
 
     BLEHostConfiguration _configuration;
     BleConnectionStatus* _connectionStatus;
     NimBLEHIDDevice* _hid;
 
     std::vector<BaseCompositeDevice*> _devices;
-    SafeQueue<std::function<void()>> _deferredReports;
-    TaskHandle_t _autoSendTaskHandle;
 };
 
 #endif // CONFIG_BT_NIMBLE_ROLE_PERIPHERAL
