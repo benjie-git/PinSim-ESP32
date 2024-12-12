@@ -50,14 +50,15 @@ uint8_t XboxOneSControllerDeviceConfiguration::getDeviceReportSize() const {
 }
 
 size_t XboxOneSControllerDeviceConfiguration::makeDeviceReport(uint8_t* buffer, size_t bufferSize) const {
-    size_t hidDescriptorSize = sizeof(XboxOneS_1708_HIDDescriptor);
-    if(hidDescriptorSize < bufferSize){
-        memcpy(buffer, XboxOneS_1708_HIDDescriptor, hidDescriptorSize);
-    } else {
-        return -1;
-    }
+    return 0;
+    // size_t hidDescriptorSize = sizeof(XboxOneS_1708_HIDDescriptor);
+    // if(hidDescriptorSize < bufferSize){
+    //     memcpy(buffer, XboxOneS_1708_HIDDescriptor, hidDescriptorSize);
+    // } else {
+    //     return -1;
+    // }
     
-    return hidDescriptorSize;
+    // return hidDescriptorSize;
 }
 
 

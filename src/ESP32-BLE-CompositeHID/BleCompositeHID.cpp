@@ -1,5 +1,5 @@
+#include "WString.h"
 #include "BleCompositeHID.h"
-#include "BleConnectionStatus.h"
 
 #include <sstream>
 #include <iostream>
@@ -8,14 +8,16 @@
 #include <NimBLEUtils.h>
 #include <NimBLEServer.h>
 #include <NimBLEHIDDevice.h>
+#include <esp_gap_ble_api.h>
+#include <Preferences.h>
 
 #if defined(CONFIG_ARDUHAL_ESP_LOG)
 #include "esp32-hal-log.h"
-#define LOG_TAG "BLECompositeHID"
 #else
 #include "esp_log.h"
-static const char *LOG_TAG = "BLECompositeHID";
 #endif
+
+#define LOG_TAG "BleCompositeHID"
 
 #define SERVICE_UUID_DEVICE_INFORMATION        "180A"      // Service - Device information
 
@@ -30,12 +32,120 @@ uint16_t vidSource;
 uint16_t vid;
 uint16_t pid;
 uint16_t guidVersion;
+int was_connected = false;
+
 std::string modelNumber;
 std::string softwareRevision;
 std::string serialNumber;
 std::string firmwareRevision;
 std::string hardwareRevision;
 std::string systemID;
+
+
+static Preferences preferences;
+std::vector<uint64_t> pairedAddresses;
+#define MAX_ADDRESSES 4
+
+void loadPairedAddresses()
+{
+    preferences.begin(LOG_TAG);
+    int numBytes = preferences.getBytesLength("pairedAddresses");
+    if (numBytes) {
+        uint8_t *bytes = (uint8_t*)malloc(numBytes);
+        if (bytes) {
+            preferences.getBytes("pairedAddresses", bytes, numBytes);
+            int pos = 0;
+            while (pos < numBytes) {
+                uint64_t *addrInt = (uint64_t*)(bytes+pos);
+                pairedAddresses.push_back(*addrInt);
+                pos += sizeof(uint64_t);
+            }
+            free(bytes);
+        }
+    }
+}
+
+void savePairedAddresses()
+{
+    // Keep within MAX_ADDRESSES addresses
+    while (pairedAddresses.size() > MAX_ADDRESSES) {
+        pairedAddresses.erase(pairedAddresses.begin());
+    }
+
+    int numBytes = pairedAddresses.size() * sizeof(uint64_t);
+    uint8_t *bytes = (uint8_t*)malloc(numBytes);
+    if (bytes) {
+        int pos = 0;
+        for (uint64_t addrInt : pairedAddresses) {
+            ((uint64_t*)bytes)[pos++] = addrInt;
+        }
+        preferences.putBytes("pairedAddresses", bytes, numBytes);
+        free(bytes);
+    }
+}
+
+
+class BleConnectionStatus : public NimBLEServerCallbacks
+{
+public:
+    bool is_connected = false;
+    uint64_t lastAddr = 0;
+    BleCompositeHID *hid;
+
+    void onConnect(NimBLEServer *pServer, ble_gap_conn_desc* desc)
+    {
+        NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
+        uint64_t addrInt = uint64_t(addr);
+        if (this->lastAddr && addrInt == this->lastAddr) {
+            printf("Reject lastAdr\n");
+            NimBLEDevice::getServer()->disconnect(desc->conn_handle);
+            return;
+        }
+
+        this->hid->setBatteryLevel(100);
+
+        printf("Connected\n");
+        pServer->updateConnParams(desc->conn_handle, 6, 24, 0, 120);
+        NimBLEDevice::startSecurity(desc->conn_handle);
+    }
+
+    void onAuthenticationComplete(ble_gap_conn_desc* desc)
+    {
+        if(!desc->sec_state.encrypted) {
+            printf("Auth failed\n");
+            NimBLEDevice::getServer()->disconnect(desc->conn_handle);
+            return;
+        }
+
+        NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
+        uint64_t addrInt = uint64_t(addr);
+
+        if (std::find(pairedAddresses.begin(), pairedAddresses.end(), addrInt) == pairedAddresses.end()) {
+            pairedAddresses.push_back(addrInt);
+            savePairedAddresses();
+            printf("Added paired address\n");
+        }
+
+        this->hid->setBatteryLevel(100);
+
+        this->is_connected = true;
+
+        printf("auth complete\n");
+    }
+
+    void onDisconnect(NimBLEServer *pServer, ble_gap_conn_desc* desc)
+    {
+        NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
+        uint64_t addrInt = uint64_t(addr);
+        this->lastAddr = addrInt;
+
+        this->is_connected = false;
+        printf("Disconnected\n");
+
+        this->hid->startAdvertising(true);
+    }
+};
+
 
 std::string uint8_to_hex_string(const uint8_t *v, const size_t s) {
   std::stringstream ss;
@@ -55,6 +165,7 @@ BleCompositeHID::BleCompositeHID(std::string deviceName, std::string deviceManuf
     this->deviceManufacturer = deviceManufacturer;
     this->batteryLevel = batteryLevel;
     this->_connectionStatus = new BleConnectionStatus();
+    this->_connectionStatus->hid = this;
 }
 
 BleCompositeHID::~BleCompositeHID()
@@ -79,26 +190,28 @@ void BleCompositeHID::begin(const BLEHostConfiguration& config)
     systemID = _configuration.getSystemID();
 
     vidSource = _configuration.getVidSource();
-	vid = _configuration.getVid();
-	pid = _configuration.getPid();
-	guidVersion = _configuration.getGuidVersion();
+    vid = _configuration.getVid();
+    pid = _configuration.getPid();
+    guidVersion = _configuration.getGuidVersion();
 
-	uint8_t high = highByte(vid);
-	uint8_t low = lowByte(vid);
+    uint8_t high = highByte(vid);
+    uint8_t low = lowByte(vid);
 
-	vid = low << 8 | high;
+    vid = low << 8 | high;
 
-	high = highByte(pid);
-	low = lowByte(pid);
+    high = highByte(pid);
+    low = lowByte(pid);
 
-	pid = low << 8 | high;
-	
-	high = highByte(guidVersion);
-	low = lowByte(guidVersion);
-	guidVersion = low << 8 | high;
+    pid = low << 8 | high;
     
-  // Start BLE server
-  this->startServer();
+    high = highByte(guidVersion);
+    low = lowByte(guidVersion);
+    guidVersion = low << 8 | high;
+
+    loadPairedAddresses();
+
+    // Start BLE server
+    this->startServer();
 }
 
 void BleCompositeHID::addDevice(BaseCompositeDevice *device)
@@ -109,7 +222,7 @@ void BleCompositeHID::addDevice(BaseCompositeDevice *device)
 
 bool BleCompositeHID::isConnected()
 {
-    return this->_connectionStatus->connected > 0;
+    return this->_connectionStatus->is_connected;
 }
 
 void BleCompositeHID::setBatteryLevel(uint8_t level)
@@ -123,27 +236,59 @@ void BleCompositeHID::setBatteryLevel(uint8_t level)
         {
             this->_hid->batteryLevel()->notify();
         }
-		
-        // if (this->_configuration.getAutoReport())
-        // {
-        //     // TODO: Send report?
-        // }
     }
+}
+
+void BleCompositeHID::clearPairedAddresses()
+{
+    pairedAddresses.clear();
+    preferences.remove(LOG_TAG);
+}
+
+void BleCompositeHID::startAdvertising(bool useWhiteList)
+{
+    // Start BLE advertisement
+    NimBLEAdvertising *pAdvertising = this->_pServer->getAdvertising();
+    
+    if (useWhiteList && this->_connectionStatus->lastAddr) {
+        if (this->_connectionStatus->lastAddr && pairedAddresses.size() >= 2) {
+            printf("Start Advertising - Use blacklist\n");
+            pAdvertising->start(15, [this](NimBLEAdvertising *pAdvertising){ this->onAdvComplete(pAdvertising); });
+            return;
+        }
+    }
+
+    printf("Start Advertising - No blacklist\n");
+    // pAdvertising->setScanFilter(false, false);
+    this->_connectionStatus->lastAddr = 0;
+    pAdvertising->start();
+}
+
+void BleCompositeHID::onAdvComplete(NimBLEAdvertising *pAdvertising) {
+    // printf("Advertising stopped\n");
+    if (this->isConnected()) {
+        return;
+    }
+    // If advertising timed out without connection start advertising without whitelist filter
+    this->startAdvertising(false);
 }
 
 
 void BleCompositeHID::startServer()
 {
-    // Use the procedure below to set a custom Bluetooth MAC address
-    // Compiler adds 0x02 to the last value of board's base MAC address to get the BT MAC address, so take 0x02 away from the value you actually want when setting
-    //uint8_t newMACAddress[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF - 0x02};
-    //esp_base_mac_addr_set(&newMACAddress[0]); // Set new MAC address 
     NimBLEDevice::init(this->deviceName);
-    NimBLEServer *pServer = NimBLEDevice::createServer();
-    pServer->setCallbacks(this->_connectionStatus);
+    NimBLEDevice::setSecurityAuth(true, false, false);
+    // NimBLEDevice::setPower(ESP_PWR_LVL_P15);  // +15db
 
-    this->_hid = new NimBLEHIDDevice(pServer);
-    
+    this->_pServer = NimBLEDevice::createServer();
+    this->_pServer->setCallbacks(this->_connectionStatus);
+    this->_pServer->advertiseOnDisconnect(false);
+
+    this->_hid = new NimBLEHIDDevice(this->_pServer);
+    this->_hid->manufacturer()->setValue(this->deviceManufacturer);
+    this->_hid->pnp(vidSource, vid, pid, guidVersion);
+    this->_hid->hidInfo(0x00, 0x01);
+
     // Setup the HID descriptor buffers
     size_t totalBufferSize = 2048;
     uint8_t tempHidReportDescriptor[totalBufferSize];
@@ -151,97 +296,85 @@ void BleCompositeHID::startServer()
     ESP_LOGD(LOG_TAG, "About to init devices");
     
     // Setup child devices to build the HID report descriptor
-    for(auto device : this->_devices){
+    for (auto device : this->_devices) {
         ESP_LOGD(LOG_TAG, "Before device %s init", device->getDeviceConfig()->getDeviceName());
         device->init(this->_hid);
         ESP_LOGD(LOG_TAG, "After device %s init", device->getDeviceConfig()->getDeviceName());
         
         auto config = device->getDeviceConfig();
-        size_t reportSize = config->makeDeviceReport(tempHidReportDescriptor + hidReportDescriptorSize, totalBufferSize);
+        size_t reportSize = config->makeDeviceReport(tempHidReportDescriptor + hidReportDescriptorSize, totalBufferSize - hidReportDescriptorSize);
         
-        if(reportSize >= BLE_ATT_ATTR_MAX_LEN){
+        if (reportSize >= BLE_ATT_ATTR_MAX_LEN) {
             ESP_LOGE(LOG_TAG, "Device report size %d is larger than max buffer size %d", reportSize, BLE_ATT_ATTR_MAX_LEN);
             return;
-        } else if(reportSize == 0){
+        } else if (reportSize == 0) {
             ESP_LOGE(LOG_TAG, "Device report size is 0");
             return;
-        } else if(reportSize < 0){
+        } else if (reportSize < 0) {
             ESP_LOGE(LOG_TAG, "Error creating report for device %s", config->getDeviceName());
             return;
         } else {
             ESP_LOGD(LOG_TAG, "Created device %s with report size %d", config->getDeviceName(), reportSize);
         }
+
         hidReportDescriptorSize += reportSize;
     }
     ESP_LOGD(LOG_TAG, "Final hidReportDescriptorSize: %d", hidReportDescriptorSize);
 
     // Set the report map
-    uint8_t customHidReportDescriptor[hidReportDescriptorSize];
-    memcpy(&customHidReportDescriptor, tempHidReportDescriptor, hidReportDescriptorSize);
-    this->_hid->reportMap(&customHidReportDescriptor[0], hidReportDescriptorSize);
-
-    // Set manufacturer info
-    this->_hid->manufacturer()->setValue(this->deviceManufacturer);
+    uint8_t *customHidReportDescriptor = (uint8_t*)malloc(hidReportDescriptorSize);
+    memcpy(customHidReportDescriptor, tempHidReportDescriptor, hidReportDescriptorSize);
+    this->_hid->reportMap(customHidReportDescriptor, hidReportDescriptorSize);
 
     // Create device UUID
-    NimBLEService *pService = pServer->getServiceByUUID(SERVICE_UUID_DEVICE_INFORMATION);
-	
+    NimBLEService *pService = this->_pServer->getServiceByUUID(SERVICE_UUID_DEVICE_INFORMATION);
+  
     // Create characteristics
-	BLECharacteristic* pCharacteristic_Model_Number = pService->createCharacteristic(
+    BLECharacteristic* pCharacteristic_Model_Number = pService->createCharacteristic(
       CHARACTERISTIC_UUID_MODEL_NUMBER,
-      NIMBLE_PROPERTY::READ
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
     pCharacteristic_Model_Number->setValue(modelNumber);
-	
-	BLECharacteristic* pCharacteristic_Software_Revision = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_SOFTWARE_REVISION,
-      NIMBLE_PROPERTY::READ
-    );
-    pCharacteristic_Software_Revision->setValue(softwareRevision);
-	
-	BLECharacteristic* pCharacteristic_Serial_Number = pService->createCharacteristic(
+  
+    // BLECharacteristic* pCharacteristic_Software_Revision = pService->createCharacteristic(
+    //   CHARACTERISTIC_UUID_SOFTWARE_REVISION,
+    //   NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    // );
+    // pCharacteristic_Software_Revision->setValue(softwareRevision);
+  
+    BLECharacteristic* pCharacteristic_Serial_Number = pService->createCharacteristic(
       CHARACTERISTIC_UUID_SERIAL_NUMBER,
-      NIMBLE_PROPERTY::READ
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
     pCharacteristic_Serial_Number->setValue(serialNumber);
-	
-	BLECharacteristic* pCharacteristic_Firmware_Revision = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_FIRMWARE_REVISION,
-      NIMBLE_PROPERTY::READ
-    );
-    pCharacteristic_Firmware_Revision->setValue(firmwareRevision);
-	
-	BLECharacteristic* pCharacteristic_Hardware_Revision = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_HARDWARE_REVISION,
-      NIMBLE_PROPERTY::READ
-    );
-    pCharacteristic_Hardware_Revision->setValue(hardwareRevision);
-
-    // BLECharacteristic* pCharacteristic_System_ID = pService->createCharacteristic(
-    //   CHARACTERISTIC_UUID_SYSTEM_ID,
-    //   NIMBLE_PROPERTY::READ
+  
+    // BLECharacteristic* pCharacteristic_Firmware_Revision = pService->createCharacteristic(
+    //   CHARACTERISTIC_UUID_FIRMWARE_REVISION,
+    //   NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     // );
-    // pCharacteristic_Hardware_Revision->setValue();
-
-    // Set PnP IDs
-    this->_hid->pnp(vidSource, vid, pid, guidVersion);
-    this->_hid->hidInfo(0x00, 0x01);
-
-    NimBLEDevice::setSecurityAuth(BLE_SM_PAIR_AUTHREQ_BOND);  //BLE_SM_PAIR_AUTHREQ_SC
+    // pCharacteristic_Firmware_Revision->setValue(firmwareRevision);
+  
+    // BLECharacteristic* pCharacteristic_Hardware_Revision = pService->createCharacteristic(
+    //   CHARACTERISTIC_UUID_HARDWARE_REVISION,
+    //   NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    // );
+    // pCharacteristic_Hardware_Revision->setValue(hardwareRevision);
 
     // Start BLE server
     this->_hid->startServices();
-    this->onStarted(pServer);
 
     // Start BLE advertisement
-    NimBLEAdvertising *pAdvertising = pServer->getAdvertising();
-    pAdvertising->setAppearance(HID_GAMEPAD);  // GENERIC_HID
-    // pAdvertising->setMinInterval(1500);
-    // pAdvertising->setMaxInterval(2000);
+    NimBLEAdvertising *pAdvertising = this->_pServer->getAdvertising();
+    pAdvertising->setAppearance(HID_GAMEPAD);
+    pAdvertising->addServiceUUID(this->_hid->deviceInfo()->getUUID());
     pAdvertising->addServiceUUID(this->_hid->hidService()->getUUID());
-    pAdvertising->start();
-    ESP_LOGD(LOG_TAG, "Advertising started!");
+    pAdvertising->addServiceUUID(this->_hid->batteryService()->getUUID());
+    pAdvertising->setScanResponse(true);
 
     // Update battery
-    this->_hid->setBatteryLevel(this->batteryLevel);
+    this->setBatteryLevel(this->batteryLevel);
+
+    this->startAdvertising(true);
+
+    ESP_LOGD(LOG_TAG, "Advertising started!");
 }

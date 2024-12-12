@@ -7,7 +7,6 @@
 
 #include "BLEHostConfiguration.h"
 #include "BaseCompositeDevice.h"
-#include "GamepadDevice.h"
 #include "XboxDescriptors.h"
 #include "XboxGamepadConfiguration.h"
 

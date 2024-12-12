@@ -39,7 +39,6 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
 
-#include "src/ESP32-BLE-CompositeHID/BleConnectionStatus.h"
 #include "src/ESP32-BLE-CompositeHID/BleCompositeHID.h"
 #include "src/ESP32-BLE-CompositeHID/XboxGamepadDevice.h"
 
@@ -79,7 +78,7 @@ int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITH
 
 // Store settings to EEPROM using preferences storage name: PinSimESP32
 // Fields: (int)plungerMin, (int)plungerMax, (int)plungerZero, (bool)controlShuffle
-Preferences preferences;
+static Preferences preferences;
 
 int numSamples = 12;
 int plungerAverage = 0;
@@ -87,7 +86,7 @@ int plungerAverage = 0;
 // Assign a unique ID to this sensor at the same time
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
-BleCompositeHID compositeHID("PinSimESP32 XInput Controller", "Octopilot Electronics", 100);
+BleCompositeHID* compositeHID;
 XboxGamepadDevice* gamepad;
 
 long fourButtonModeTriggeredLB = 0;  // these two vars are used to check for 4 flipper buttons
@@ -330,15 +329,15 @@ void getPlungerSamples() {
 
 
 void getPlungerMax() {
-  Serial.println("Plunger calibration: starting...");
+  printf("Plunger calibration: starting...\n");
 
   flashStartButton();
   getPlungerSamples();
   plungerMin = plungerAverage;
   plungerMax = plungerMin + 1;
 
-  Serial.println("Plunger calibration: recorded min.");
-  Serial.println("Plunger calibration: pull plunger back to record max...");
+  printf("Plunger calibration: recorded min.\n");
+  printf("Plunger calibration: pull plunger back to record max...\n");
 
   while (plungerAverage < plungerMin + 100) {
     // wait for the plunger to be pulled
@@ -357,11 +356,11 @@ void getPlungerMax() {
     delay(10);
   }
 
-  Serial.println("Plunger calibration: recorded max.");
+  printf("Plunger calibration: recorded max.\n");
 
   preferences.putInt("plungerMin", plungerMin);
   preferences.putInt("plungerMax", plungerMax);
-  Serial.println("Plunger calibration: calibration data stored to flash.");
+  printf("Plunger calibration: calibration data stored to flash.\n");
   
   flashStartButton();
 }
@@ -375,10 +374,10 @@ void OnVibrateEvent(XboxGamepadOutputReportData data) {
 
 
 void setup() {
-  Serial.begin(115200);
-  Serial.println("\n\nPinSim ESP32 Starting up");
-
-  preferences.begin("PinSimESP32", false);
+  delay(1000);
+  printf("\n\nPinSim ESP32 Starting up\n");
+  
+  preferences.begin("PinSimESP32");
 
   setupPins();
 
@@ -389,7 +388,7 @@ void setup() {
 
   // Hold Back on boot to clear BLE paired devices
   if (buttonStatus[POSBK]) {
-    Serial.println("Remove pairing info");
+    printf("Remove pairing info\n");
     remove_all_bonded_devices();
   }
   else {
@@ -397,37 +396,44 @@ void setup() {
       uint8_t new_mac[6];
       preferences.getBytes("custom_BLE_MAC", new_mac, 6);
       esp_base_mac_addr_set(new_mac);
+      printf("Custom MAC: %02X%02X %02X%02X %02X%02X\n", new_mac[0], new_mac[1], new_mac[2], new_mac[3], new_mac[4], new_mac[5]);
+    }
+    else {
+      uint8_t mac_bytes[6];
+      esp_efuse_mac_get_default(mac_bytes);
+      printf("Orig MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
     }
   }
 
 #if ACT_AS_XboxOneS == 1
   XboxOneSControllerDeviceConfiguration* config = new XboxOneSControllerDeviceConfiguration();
-  Serial.println("Acting as an Xbox One S Controller");
+  printf("Acting as an Xbox One S Controller\n");
   BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
 #else
   XboxSeriesXControllerDeviceConfiguration* config = new XboxSeriesXControllerDeviceConfiguration();
-  Serial.println("Acting as an Xbox Series X Controller");
+  printf("Acting as an Xbox Series X Controller\n");
   BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
 #endif
 
-  Serial.println("Using VID source: " + String(hostConfig.getVidSource(), HEX));
-  Serial.println("Using VID: " + String(hostConfig.getVid(), HEX));
-  Serial.println("Using PID: " + String(hostConfig.getPid(), HEX));
-  Serial.println("Using GUID version: " + String(hostConfig.getGuidVersion(), HEX));
-  Serial.println("Using serial number: " + String(hostConfig.getSerialNumber()));
+  // printf(("Using VID source: " + String(hostConfig.getVidSource(), HEX) + "\n").c_str());
+  // printf(("Using VID: " + String(hostConfig.getVid(), HEX) + "\n").c_str());
+  // printf(("Using PID: " + String(hostConfig.getPid(), HEX) + "\n").c_str());
+  // printf(("Using GUID version: " + String(hostConfig.getGuidVersion(), HEX) + "\n").c_str());
+  // printf(("Using serial number: " + String(hostConfig.getSerialNumber()) + "\n").c_str());
 
+  compositeHID = new BleCompositeHID("PinSim XInput", "Octopilot", 100);
   gamepad = new XboxGamepadDevice(config);
 
   // Set up vibration event handler
   FunctionSlot<XboxGamepadOutputReportData> vibrationSlot(OnVibrateEvent);
   gamepad->onVibrate.attach(vibrationSlot);
   // Add all child devices to the top-level composite HID device to manage them
-  compositeHID.addDevice(gamepad);
-  compositeHID.begin(hostConfig);
+  compositeHID->addDevice(gamepad);
+  compositeHID->begin(hostConfig);
 
   // rumble test (hold Left Flipper on boot)
   if (buttonStatus[POSL1]) {
-    Serial.println("Left Flipper down at start - Rumble Test");
+    printf("Left Flipper down at start - Rumble Test\n");
     for (int i = 0; i < 256; i++) {
       analogWrite(rumbleSmall, i);
       delay(10);
@@ -449,7 +455,7 @@ void setup() {
 
   // Hold Right Flipper on boot to disable accelerometer
   if (buttonStatus[POSR1]) {
-    Serial.println("Right Flipper down at start - Disable Accelerometer");
+    printf("Right Flipper down at start - Disable Accelerometer\n");
     accelerometerEnabled = false;
     leftStickJoy = true;
   }
@@ -457,7 +463,7 @@ void setup() {
   /* Initialise the sensor */
   if (accelerometerEnabled) {
     if (!accel.begin()) {
-      Serial.println("Accelerometer setup failed");
+      printf("Accelerometer setup failed\n");
       /* There was a problem detecting the ADXL345 ... check your connections */
       accelerometerEnabled = false;
       flashStartButton();
@@ -483,11 +489,11 @@ void setup() {
 
     // to calibrate, hold A or START when powering up the PinSim ESP32 board
     if (digitalRead(pinB1) == LOW) {
-      Serial.println("A Button down at start - Begin Plunger Calibration");
+      printf("A Button down at start - Begin Plunger Calibration\n");
       getPlungerMax();
     }
     else if (digitalRead(pinST) == LOW) {
-      Serial.println("Start Button down at start - Begin Plunger Calibration");
+      printf("Start Button down at start - Begin Plunger Calibration\n");
       getPlungerMax();
     }
 
@@ -662,7 +668,7 @@ void processInputs() {
   // the gamepad is pulled back ~half way. Just pull the plunger to the point just before
   // it begins to move in-game, and then press BACK & LB.
   if (buttonStatus[POSBK] && buttonStatus[POSL1]) {
-    Serial.println("Back and Left Flipper pressed - Calibrate Plunger Dead Zone");
+    printf("Back and Left Flipper pressed - Calibrate Plunger Dead Zone\n");
     deadZoneCompensation();
   }
 
@@ -671,10 +677,10 @@ void processInputs() {
     controlShuffle = !controlShuffle;
     preferences.putBool("controlShuffle", controlShuffle);
     if (controlShuffle) {
-      Serial.println("Back and Left D-Pad pressed - Control Shuffle Enabled: Plunge with Left Stick, Tilt with D-Pad.");
+      printf("Back and Left D-Pad pressed - Control Shuffle Enabled: Plunge with Left Stick, Tilt with D-Pad.\n");
     }
     else {
-      Serial.println("Back and Left D-Pad pressed - Control Shuffle Disabled: Plunge with Right Stick, Tilt with Left Stick.");
+      printf("Back and Left D-Pad pressed - Control Shuffle Disabled: Plunge with Right Stick, Tilt with Left Stick.\n");
     }
     flashStartButton();
     // ensure just one toggle per button press
@@ -688,12 +694,12 @@ void processInputs() {
   // detect double contact flipper switches 
   if (!doubleContactFlippers && !fourFlipperButtons) {
     if (buttonStatus[POSL2] && buttonStatus[POSL1]) {
-      Serial.println("Double-Contact Left Flippers Detected - Enable Double-Contact Flippers");
+      printf("Double-Contact Left Flippers Detected - Enable Double-Contact Flippers\n");
       flipperL1R1 = false;
       doubleContactFlippers = true;
     }
     if (buttonStatus[POSR2] && buttonStatus[POSR1]) {
-      Serial.println("Double-Contact Right Flippers Detected - Enable Double-Contact Flippers");
+      printf("Double-Contact Right Flippers Detected - Enable Double-Contact Flippers\n");
       flipperL1R1 = false;
       doubleContactFlippers = true;
     }
@@ -709,7 +715,7 @@ void processInputs() {
       if (fourButtonModeTriggeredLB == 0) {
         fourButtonModeTriggeredLB = currentTime;
       } else if (currentTime > fourButtonModeTriggeredLB + fourButtonModeThreshold) {
-        Serial.println("2nd Left Flipper Detected - Enabling Four Flipper Mode");
+        printf("2nd Left Flipper Detected - Enabling Four Flipper Mode\n");
         flipperL1R1 = true;
         fourFlipperButtons = true;
         doubleContactFlippers = false;
@@ -724,7 +730,7 @@ void processInputs() {
       if (fourButtonModeTriggeredRB == 0) {
         fourButtonModeTriggeredRB = currentTime;
       } else if (currentTime > fourButtonModeTriggeredRB + fourButtonModeThreshold) {
-        Serial.println("2nd Right Flipper Detected - Enabling Four Flipper Mode");
+        printf("2nd Right Flipper Detected - Enabling Four Flipper Mode\n");
         flipperL1R1 = true;
         fourFlipperButtons = true;
         doubleContactFlippers = false;
@@ -835,7 +841,7 @@ void processInputs() {
       zeroY = accY;
       preferences.putInt("accelZeroX", zeroX);
       preferences.putInt("accelZeroY", zeroY);
-      Serial.println("Recalibrated accelerometers.");
+      printf("Recalibrated accelerometers.\n");
 
       // Ensure just one calibration per button press
       while (digitalRead(pinBK) == LOW) {
@@ -946,7 +952,7 @@ void processInputs() {
 
 void ledUpdate()
 {
-  if (compositeHID.isConnected()) {
+  if (compositeHID->isConnected()) {
     // Connected!  So LEDs On Solid
     analogWrite(pinLEDg, PCB_LED_BRIGHTNESS);
     digitalWrite(pinLED1, HIGH);
@@ -971,7 +977,7 @@ void loop() {
   // Update LEDs
   ledUpdate();
 
-  if (compositeHID.isConnected()) {
+  if (compositeHID->isConnected()) {
     // Process all inputs and load up the usbData registers correctly
     processInputs();
 
@@ -985,18 +991,26 @@ void loop() {
 
 void remove_all_bonded_devices(void)
 {
+  printf("remove_all_bonded_devices.\n");
+
   int dev_num = esp_ble_get_bond_device_num();
-  esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
-  esp_ble_get_bond_device_list(&dev_num, dev_list);
-  for (int i = 0; i < dev_num; i++) {
-    esp_ble_remove_bond_device(dev_list[i].bd_addr);
+  if (dev_num > 0) {
+      esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
+      if (dev_list) {
+          esp_ble_get_bond_device_list(&dev_num, dev_list);
+          for (int i = 0; i < dev_num; i++) {
+              esp_ble_remove_bond_device(dev_list[i].bd_addr);
+          }
+          free(dev_list);
+      }
   }
 
-  free(dev_list);
+  compositeHID->clearPairedAddresses();
 
   uint8_t new_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x00};
   esp_fill_random(new_mac+1, 5);
   esp_base_mac_addr_set(new_mac);
   preferences.putBytes("custom_BLE_MAC", new_mac, 6);
+  printf("New MAC: %02X%02X %02X%02X %02X%02X\n", new_mac[0], new_mac[1], new_mac[2], new_mac[3], new_mac[4], new_mac[5]);
 }
 

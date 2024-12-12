@@ -166,6 +166,7 @@ static const uint8_t XboxOneS_1914_HIDDescriptor[]
 }; 
 
 
+/*
 // Descriptor adapted from:
     // https://github.com/DJm00n/ControllersInfo/blob/master/xboxone/xboxone_model_1708_bluetooth_hid_report_descriptor.txt
 static const uint8_t XboxOneS_1708_HIDDescriptor[] = {
@@ -336,5 +337,5 @@ static const uint8_t XboxOneS_1708_HIDDescriptor[] = {
     0x81, 0x02,                         //(MAIN)   INPUT              0x00000002 (1 field x 8 bits) 0=Data 1=Variable 0=Absolute 0=NoWrap 0=Linear 0=PrefState 0=NoNull 0=NonVolatile 0=Bitmap
     0xC0                            //(MAIN)   END_COLLECTION     Application
 };
-
+*/
 #endif

@@ -6,7 +6,6 @@
 #include "nimconfig.h"
 #if defined(CONFIG_BT_NIMBLE_ROLE_PERIPHERAL)
 
-#include "BleConnectionStatus.h"
 #include "NimBLEHIDDevice.h"
 #include "NimBLECharacteristic.h"
 
@@ -15,6 +14,8 @@
 
 #include <vector>
 #include "SafeQueue.hpp"
+
+class BleConnectionStatus;
 
 class BleCompositeHID
 {
@@ -28,17 +29,20 @@ public:
     void setBatteryLevel(uint8_t level);
     void addDevice(BaseCompositeDevice* device);
     bool isConnected();
+    void startAdvertising(bool useWhiteList);
+    void clearPairedAddresses();
+    NimBLEServer* getServer() { return this->_pServer; }
+    NimBLEHIDDevice* getHIDDevice() { return this->_hid; }
 
     uint8_t batteryLevel;
     std::string deviceManufacturer;
     std::string deviceName;
 
-protected:
-    virtual void onStarted(NimBLEServer *pServer){};
-
 private:
     void startServer();
+    void onAdvComplete(NimBLEAdvertising *pAdvertising);
 
+    NimBLEServer *_pServer;
     BLEHostConfiguration _configuration;
     BleConnectionStatus* _connectionStatus;
     NimBLEHIDDevice* _hid;
