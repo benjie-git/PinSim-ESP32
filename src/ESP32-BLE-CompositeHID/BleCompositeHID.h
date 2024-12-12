@@ -29,7 +29,7 @@ public:
     void setBatteryLevel(uint8_t level);
     void addDevice(BaseCompositeDevice* device);
     bool isConnected();
-    void startAdvertising(bool useWhiteList);
+    void startAdvertising(bool useBlackList);
     void clearPairedAddresses();
     NimBLEServer* getServer() { return this->_pServer; }
     NimBLEHIDDevice* getHIDDevice() { return this->_hid; }

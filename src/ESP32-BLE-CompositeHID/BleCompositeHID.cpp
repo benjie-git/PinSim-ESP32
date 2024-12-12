@@ -28,11 +28,16 @@
 #define CHARACTERISTIC_UUID_FIRMWARE_REVISION  "2A26"      // Characteristic - Firmware Revision String - 0x2A26
 #define CHARACTERISTIC_UUID_HARDWARE_REVISION  "2A27"      // Characteristic - Hardware Revision String - 0x2A27
 
+// Set MAX_CLIENTS to 1-4 to allow N computers/phones/quests to connect at once
+//    If set to 1, uses blacklist logic to avoid reconnecting to the same device for 15 sec after a 
+//    reconect, to allow another device to connect
+#define MAX_CLIENTS 2
+
+
 uint16_t vidSource;
 uint16_t vid;
 uint16_t pid;
 uint16_t guidVersion;
-int was_connected = false;
 
 std::string modelNumber;
 std::string softwareRevision;
@@ -48,39 +53,43 @@ std::vector<uint64_t> pairedAddresses;
 
 void loadPairedAddresses()
 {
-    preferences.begin(LOG_TAG);
-    int numBytes = preferences.getBytesLength("pairedAddresses");
-    if (numBytes) {
-        uint8_t *bytes = (uint8_t*)malloc(numBytes);
-        if (bytes) {
-            preferences.getBytes("pairedAddresses", bytes, numBytes);
-            int pos = 0;
-            while (pos < numBytes) {
-                uint64_t *addrInt = (uint64_t*)(bytes+pos);
-                pairedAddresses.push_back(*addrInt);
-                pos += sizeof(uint64_t);
+    if (MAX_CLIENTS == 1) {
+        preferences.begin(LOG_TAG);
+        int numBytes = preferences.getBytesLength("pairedAddresses");
+        if (numBytes) {
+            uint8_t *bytes = (uint8_t*)malloc(numBytes);
+            if (bytes) {
+                preferences.getBytes("pairedAddresses", bytes, numBytes);
+                int pos = 0;
+                while (pos < numBytes) {
+                    uint64_t *addrInt = (uint64_t*)(bytes+pos);
+                    pairedAddresses.push_back(*addrInt);
+                    pos += sizeof(uint64_t);
+                }
+                free(bytes);
             }
-            free(bytes);
         }
     }
 }
 
 void savePairedAddresses()
 {
-    // Keep within MAX_ADDRESSES addresses
-    while (pairedAddresses.size() > MAX_ADDRESSES) {
-        pairedAddresses.erase(pairedAddresses.begin());
-    }
-
-    int numBytes = pairedAddresses.size() * sizeof(uint64_t);
-    uint8_t *bytes = (uint8_t*)malloc(numBytes);
-    if (bytes) {
-        int pos = 0;
-        for (uint64_t addrInt : pairedAddresses) {
-            ((uint64_t*)bytes)[pos++] = addrInt;
+    if (MAX_CLIENTS == 1) {
+        // Keep within MAX_ADDRESSES addresses
+        while (pairedAddresses.size() > MAX_ADDRESSES) {
+            pairedAddresses.erase(pairedAddresses.begin());
         }
-        preferences.putBytes("pairedAddresses", bytes, numBytes);
-        free(bytes);
+
+        int numBytes = pairedAddresses.size() * sizeof(uint64_t);
+        uint8_t *bytes = (uint8_t*)malloc(numBytes);
+        if (bytes) {
+            int pos = 0;
+            for (uint64_t addrInt : pairedAddresses) {
+                ((uint64_t*)bytes)[pos++] = addrInt;
+            }
+            preferences.putBytes("pairedAddresses", bytes, numBytes);
+            free(bytes);
+        }
     }
 }
 
@@ -89,24 +98,26 @@ class BleConnectionStatus : public NimBLEServerCallbacks
 {
 public:
     bool is_connected = false;
+    int num_connected = 0;
     uint64_t lastAddr = 0;
     BleCompositeHID *hid;
 
     void onConnect(NimBLEServer *pServer, ble_gap_conn_desc* desc)
     {
-        NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
-        uint64_t addrInt = uint64_t(addr);
-        if (this->lastAddr && addrInt == this->lastAddr) {
-            printf("Reject lastAdr\n");
-            NimBLEDevice::getServer()->disconnect(desc->conn_handle);
-            return;
+        if (MAX_CLIENTS == 1) {
+            NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
+            uint64_t addrInt = uint64_t(addr);
+            if (this->lastAddr && addrInt == this->lastAddr) {
+                printf("Reject lastAdr\n");
+                NimBLEDevice::getServer()->disconnect(desc->conn_handle);
+                return;
+            }
         }
 
-        this->hid->setBatteryLevel(100);
-
-        printf("Connected\n");
         pServer->updateConnParams(desc->conn_handle, 6, 24, 0, 120);
         NimBLEDevice::startSecurity(desc->conn_handle);
+        this->num_connected++;
+        printf("Connected\n");
     }
 
     void onAuthenticationComplete(ble_gap_conn_desc* desc)
@@ -117,20 +128,22 @@ public:
             return;
         }
 
-        NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
-        uint64_t addrInt = uint64_t(addr);
-
-        if (std::find(pairedAddresses.begin(), pairedAddresses.end(), addrInt) == pairedAddresses.end()) {
-            pairedAddresses.push_back(addrInt);
-            savePairedAddresses();
-            printf("Added paired address\n");
+        if (MAX_CLIENTS == 1) {
+            NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
+            uint64_t addrInt = uint64_t(addr);
+            if (std::find(pairedAddresses.begin(), pairedAddresses.end(), addrInt) == pairedAddresses.end()) {
+                pairedAddresses.push_back(addrInt);
+                savePairedAddresses();
+                printf("Added paired address\n");
+            }
         }
 
-        this->hid->setBatteryLevel(100);
-
         this->is_connected = true;
+        printf("Auth complete\n");
 
-        printf("auth complete\n");
+        if (this->num_connected < MAX_CLIENTS) {
+            this->hid->startAdvertising(false);
+        }
     }
 
     void onDisconnect(NimBLEServer *pServer, ble_gap_conn_desc* desc)
@@ -139,7 +152,10 @@ public:
         uint64_t addrInt = uint64_t(addr);
         this->lastAddr = addrInt;
 
-        this->is_connected = false;
+        this->num_connected--;
+        if (this->num_connected == 0) {
+            this->is_connected = false;
+        }
         printf("Disconnected\n");
 
         this->hid->startAdvertising(true);
@@ -245,12 +261,12 @@ void BleCompositeHID::clearPairedAddresses()
     preferences.remove(LOG_TAG);
 }
 
-void BleCompositeHID::startAdvertising(bool useWhiteList)
+void BleCompositeHID::startAdvertising(bool useBlackList)
 {
     // Start BLE advertisement
     NimBLEAdvertising *pAdvertising = this->_pServer->getAdvertising();
     
-    if (useWhiteList && this->_connectionStatus->lastAddr) {
+    if (MAX_CLIENTS == 1 && useBlackList && this->_connectionStatus->lastAddr) {
         if (this->_connectionStatus->lastAddr && pairedAddresses.size() >= 2) {
             printf("Start Advertising - Use blacklist\n");
             pAdvertising->start(15, [this](NimBLEAdvertising *pAdvertising){ this->onAdvComplete(pAdvertising); });
@@ -259,7 +275,6 @@ void BleCompositeHID::startAdvertising(bool useWhiteList)
     }
 
     printf("Start Advertising - No blacklist\n");
-    // pAdvertising->setScanFilter(false, false);
     this->_connectionStatus->lastAddr = 0;
     pAdvertising->start();
 }
