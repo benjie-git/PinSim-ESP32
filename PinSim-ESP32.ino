@@ -421,7 +421,7 @@ void setup() {
   // printf(("Using GUID version: " + String(hostConfig.getGuidVersion(), HEX) + "\n").c_str());
   // printf(("Using serial number: " + String(hostConfig.getSerialNumber()) + "\n").c_str());
 
-  compositeHID = new BleCompositeHID("PinSim XInput", "Octopilot", 100);
+  compositeHID = new BleCompositeHID("PinSimESP32 XInput Controller", "Octopilot Electronics", 100);
   gamepad = new XboxGamepadDevice(config);
 
   // Set up vibration event handler
@@ -685,6 +685,16 @@ void processInputs() {
     flashStartButton();
     // ensure just one toggle per button press
     while (digitalRead(pinBK) == LOW) {
+      // wait...
+      yield();
+      delay(50);
+    }
+  }
+
+  // If BACK and Up D-Pad are pressed simultaneously, start advertising again to allow a new connection
+  if (buttonStatus[POSST] && buttonStatus[POSUP]) {
+    compositeHID->startAdvertising(false);
+    while (digitalRead(pinST) == LOW) {
       // wait...
       yield();
       delay(50);

@@ -31,7 +31,7 @@
 // Set MAX_CLIENTS to 1-4 to allow N computers/phones/quests to connect at once
 //    If set to 1, uses blacklist logic to avoid reconnecting to the same device for 15 sec after a 
 //    reconect, to allow another device to connect
-#define MAX_CLIENTS 2
+#define MAX_CLIENTS 3
 
 
 uint16_t vidSource;
@@ -274,13 +274,25 @@ void BleCompositeHID::startAdvertising(bool useBlackList)
         }
     }
 
+    if (this->_connectionStatus->num_connected >= MAX_CLIENTS) {
+        printf("Skip Starting Advertising - already connected to MAX_CLIENTS\n");
+        return;
+    }
+
     printf("Start Advertising - No blacklist\n");
     this->_connectionStatus->lastAddr = 0;
-    pAdvertising->start();
+    if (this->_connectionStatus->num_connected > 0) {
+        // We already have a connection, so only advertise for 30s
+        pAdvertising->start(30, [this](NimBLEAdvertising *pAdvertising){ this->onAdvComplete(pAdvertising); });
+    }
+    else {
+        // No connections yet, so advertise indefinitely
+        pAdvertising->start();
+    }
 }
 
 void BleCompositeHID::onAdvComplete(NimBLEAdvertising *pAdvertising) {
-    // printf("Advertising stopped\n");
+    printf("Advertising stopped\n");
     if (this->isConnected()) {
         return;
     }
