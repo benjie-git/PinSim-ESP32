@@ -10,9 +10,9 @@
 
 // Product: Xbox One S controller (supports linux kernel < 6.5)
 // Menu/select button replaces share button
-#define XBOX_1708_PRODUCT_ID 0xE002
-#define XBOX_1708_BCD_DEVICE_ID 0x0804
-#define XBOX_1708_SERIAL "3033363030343037323136373239"
+// #define XBOX_1708_PRODUCT_ID 0xE002
+// #define XBOX_1708_BCD_DEVICE_ID 0x0804
+// #define XBOX_1708_SERIAL "3033363030343037323136373239"
 
 // Product: latest Xbox series X wireless controller
 // Share button valid

@@ -18,9 +18,9 @@ BLEHostConfiguration XboxOneSControllerDeviceConfiguration::getIdealHostConfigur
     
     // Product: Xbox One Wireless Controller - Model 1708 pre 2021 firmware
     // Specifically picked since it provides rumble support on linux kernels earlier than 6.5
-    config.setPid(XBOX_1708_PRODUCT_ID); 
-    config.setGuidVersion(XBOX_1708_BCD_DEVICE_ID);
-    config.setSerialNumber(XBOX_1708_SERIAL);
+    // config.setPid(XBOX_1708_PRODUCT_ID); 
+    // config.setGuidVersion(XBOX_1708_BCD_DEVICE_ID);
+    // config.setSerialNumber(XBOX_1708_SERIAL);
 
     return config;
 }
@@ -78,6 +78,7 @@ BLEHostConfiguration XboxSeriesXControllerDeviceConfiguration::getIdealHostConfi
     config.setPid(XBOX_1914_PRODUCT_ID); 
     config.setGuidVersion(XBOX_1914_BCD_DEVICE_ID);
     config.setSerialNumber(XBOX_1914_SERIAL);
+    config.setFirmwareRevision("5.13.3143");
 
     return config;
 }

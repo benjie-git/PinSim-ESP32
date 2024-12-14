@@ -241,6 +241,11 @@ bool BleCompositeHID::isConnected()
     return this->_connectionStatus->is_connected;
 }
 
+bool BleCompositeHID::isAdvertising()
+{
+    return this->_pServer->getAdvertising()->isAdvertising();
+}
+
 void BleCompositeHID::setBatteryLevel(uint8_t level)
 {
     this->batteryLevel = level;
@@ -359,31 +364,31 @@ void BleCompositeHID::startServer()
     // Create characteristics
     BLECharacteristic* pCharacteristic_Model_Number = pService->createCharacteristic(
       CHARACTERISTIC_UUID_MODEL_NUMBER,
-      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+      NIMBLE_PROPERTY::READ
     );
     pCharacteristic_Model_Number->setValue(modelNumber);
   
     // BLECharacteristic* pCharacteristic_Software_Revision = pService->createCharacteristic(
     //   CHARACTERISTIC_UUID_SOFTWARE_REVISION,
-    //   NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    //   NIMBLE_PROPERTY::READ
     // );
     // pCharacteristic_Software_Revision->setValue(softwareRevision);
   
-    BLECharacteristic* pCharacteristic_Serial_Number = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_SERIAL_NUMBER,
-      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
-    );
-    pCharacteristic_Serial_Number->setValue(serialNumber);
-  
-    // BLECharacteristic* pCharacteristic_Firmware_Revision = pService->createCharacteristic(
-    //   CHARACTERISTIC_UUID_FIRMWARE_REVISION,
-    //   NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    // BLECharacteristic* pCharacteristic_Serial_Number = pService->createCharacteristic(
+    //   CHARACTERISTIC_UUID_SERIAL_NUMBER,
+    //   NIMBLE_PROPERTY::READ
     // );
-    // pCharacteristic_Firmware_Revision->setValue(firmwareRevision);
+    // pCharacteristic_Serial_Number->setValue(serialNumber);
+  
+    BLECharacteristic* pCharacteristic_Firmware_Revision = pService->createCharacteristic(
+      CHARACTERISTIC_UUID_FIRMWARE_REVISION,
+      NIMBLE_PROPERTY::READ
+    );
+    pCharacteristic_Firmware_Revision->setValue(firmwareRevision);
   
     // BLECharacteristic* pCharacteristic_Hardware_Revision = pService->createCharacteristic(
     //   CHARACTERISTIC_UUID_HARDWARE_REVISION,
-    //   NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    //   NIMBLE_PROPERTY::READ
     // );
     // pCharacteristic_Hardware_Revision->setValue(hardwareRevision);
 

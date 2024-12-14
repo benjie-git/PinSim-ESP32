@@ -616,7 +616,13 @@ void pressStart(bool isPressed) {
 
 // ProcessInputs
 void processInputs() {
-    uint8_t direction = XboxDpadFlags::NONE;
+  uint8_t direction = XboxDpadFlags::NONE;
+  
+  // Add noise into the non-moving thumb/stick axes to fix right stick stuck to top-left
+  int8_t noise[2];
+  esp_fill_random(&noise[0], 2);
+  noise[0] = noise[0]>>2;
+  noise[1] = noise[1]>>2;
 
   if (leftStickJoy) {
     int leftStickX = buttonStatus[POSLT] * -30000 + buttonStatus[POSRT] * 30000;
@@ -901,11 +907,11 @@ void processInputs() {
         if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
           // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
           if (controlShuffle) {
-            gamepad->setLeftThumb(0, 0);
-            gamepad->setRightThumb(0, 0);
+            gamepad->setLeftThumb(noise[0], noise[1]);
+            gamepad->setRightThumb(noise[0], noise[1]);
           }
           else {
-            gamepad->setRightThumb(0, 0);
+            gamepad->setRightThumb(noise[0], noise[1]);
           }
           // disable plunger momentarily to compensate for spring bounce
           plungerReportTime = millis() + 1000;
@@ -943,26 +949,28 @@ void processInputs() {
 
     if (controlShuffle) {
       if (currentlyPlunging) {
-        gamepad->setLeftThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
+        gamepad->setLeftThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
       } else {
-        gamepad->setLeftThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
+        gamepad->setLeftThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
       }
-      gamepad->setRightThumb(0, 0);
     }
     else {
       if (currentlyPlunging) {
-        gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
+        gamepad->setRightThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
       } else {
-        gamepad->setRightThumb(0, map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
+        gamepad->setRightThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
       }
     }
+  }
+  if (controlShuffle) {
+    gamepad->setRightThumb(noise[0], noise[1]);
   }
 }
 
 
 void ledUpdate()
 {
-  if (compositeHID->isConnected()) {
+  if (!compositeHID->isAdvertising()) {
     // Connected!  So LEDs On Solid
     analogWrite(pinLEDg, PCB_LED_BRIGHTNESS);
     digitalWrite(pinLED1, HIGH);
