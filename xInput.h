@@ -23,21 +23,6 @@ class ServerCallbacks;
 #define XBOX_BUTTON_LS 0x2000
 #define XBOX_BUTTON_RS 0x4000
 
-// Select bitmask
-// The share button lives in its own byte at the end of the input report
-#define XBOX_BUTTON_SHARE 0x01
-
-// Dpad values
-#define XBOX_BUTTON_DPAD_NONE 0x00
-#define XBOX_BUTTON_DPAD_NORTH 0x01
-#define XBOX_BUTTON_DPAD_NORTHEAST 0x02
-#define XBOX_BUTTON_DPAD_EAST 0x03
-#define XBOX_BUTTON_DPAD_SOUTHEAST 0x04
-#define XBOX_BUTTON_DPAD_SOUTH 0x05
-#define XBOX_BUTTON_DPAD_SOUTHWEST 0x06
-#define XBOX_BUTTON_DPAD_WEST 0x07
-#define XBOX_BUTTON_DPAD_NORTHWEST 0x08
-
 // Dpad bitflags
 enum XboxDpadFlags : uint8_t {
     NONE = 0x00,

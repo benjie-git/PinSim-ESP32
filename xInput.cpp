@@ -20,6 +20,22 @@
 #define XBOX_INPUT_REPORT_ID 0x01
 #define XBOX_OUTPUT_REPORT_ID 0x03
 
+// Dpad values
+#define XBOX_BUTTON_DPAD_NONE 0x00
+#define XBOX_BUTTON_DPAD_NORTH 0x01
+#define XBOX_BUTTON_DPAD_NORTHEAST 0x02
+#define XBOX_BUTTON_DPAD_EAST 0x03
+#define XBOX_BUTTON_DPAD_SOUTHEAST 0x04
+#define XBOX_BUTTON_DPAD_SOUTH 0x05
+#define XBOX_BUTTON_DPAD_SOUTHWEST 0x06
+#define XBOX_BUTTON_DPAD_WEST 0x07
+#define XBOX_BUTTON_DPAD_NORTHWEST 0x08
+
+// Select bitmask
+// The share button lives in its own byte at the end of the input report
+#define XBOX_BUTTON_SHARE 0x01
+
+
 #define PREFS_NAME "XInput_BLE"
 
 // Set MAX_CLIENTS to 1-4 to allow N computers/phones/quests to connect at once
@@ -266,19 +282,19 @@ public:
 
     ServerCallbacks(XInput* xInput) : _xInput(xInput) {}
 
-    void onConnect(NimBLEServer *pServer, ble_gap_conn_desc* desc)
+    void onConnect(NimBLEServer *server, ble_gap_conn_desc* desc)
     {
         if (MAX_CLIENTS == 1) {
             NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
             uint64_t addrInt = uint64_t(addr);
             if (this->lastAddr && addrInt == this->lastAddr) {
                 printf("Reject lastAdr\n");
-                pServer->disconnect(desc->conn_handle);
+                server->disconnect(desc->conn_handle);
                 return;
             }
         }
 
-        pServer->updateConnParams(desc->conn_handle, 12, 24, 0, 80);
+        server->updateConnParams(desc->conn_handle, 12, 24, 0, 80);
         NimBLEDevice::startSecurity(desc->conn_handle);
         this->num_connected++;
         printf("Connected\n");
@@ -310,7 +326,7 @@ public:
         }
     }
 
-    void onDisconnect(NimBLEServer *pServer, ble_gap_conn_desc* desc)
+    void onDisconnect(NimBLEServer *server, ble_gap_conn_desc* desc)
     {
         NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
         uint64_t addrInt = uint64_t(addr);
@@ -416,8 +432,10 @@ void XInput::onAdvComplete(NimBLEAdvertising *advertising) {
 
 void XInput::clearPairedAddresses()
 {
-    pairedAddresses.clear();
-    preferences.remove("pairedAddresses");
+    if (MAX_CLIENTS == 1) {
+        pairedAddresses.clear();
+        preferences.remove("pairedAddresses");
+    }
 }
 
 
