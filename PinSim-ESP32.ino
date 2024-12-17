@@ -39,9 +39,10 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
 
-#include "src/ESP32-BLE-CompositeHID/BleCompositeHID.h"
-#include "src/ESP32-BLE-CompositeHID/XboxGamepadDevice.h"
+#include "xInput.h"
 
+const char *XB_NAME = "PinSimESP32 XInput Controller";
+const char *XB_MANUFACTURER = "Octopilot Electronics";
 
 // Define this as 2 for v0.2, or 3 for v0.3, as a few connections have changed
 #define PCB_VERSION 3
@@ -86,8 +87,7 @@ int plungerAverage = 0;
 // Assign a unique ID to this sensor at the same time
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
-BleCompositeHID* compositeHID;
-XboxGamepadDevice* gamepad;
+XInput gamepad;
 
 long fourButtonModeTriggeredLB = 0;  // these two vars are used to check for 4 flipper buttons
 long fourButtonModeTriggeredRB = 0;
@@ -405,31 +405,10 @@ void setup() {
     }
   }
 
-#if ACT_AS_XboxOneS == 1
-  XboxOneSControllerDeviceConfiguration* config = new XboxOneSControllerDeviceConfiguration();
-  printf("Acting as an Xbox One S Controller\n");
-  BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
-#else
-  XboxSeriesXControllerDeviceConfiguration* config = new XboxSeriesXControllerDeviceConfiguration();
-  printf("Acting as an Xbox Series X Controller\n");
-  BLEHostConfiguration hostConfig = config->getIdealHostConfiguration();
-#endif
-
-  // printf(("Using VID source: " + String(hostConfig.getVidSource(), HEX) + "\n").c_str());
-  // printf(("Using VID: " + String(hostConfig.getVid(), HEX) + "\n").c_str());
-  // printf(("Using PID: " + String(hostConfig.getPid(), HEX) + "\n").c_str());
-  // printf(("Using GUID version: " + String(hostConfig.getGuidVersion(), HEX) + "\n").c_str());
-  // printf(("Using serial number: " + String(hostConfig.getSerialNumber()) + "\n").c_str());
-
-  compositeHID = new BleCompositeHID("PinSimESP32 XInput Controller", "Octopilot Electronics", 100);
-  gamepad = new XboxGamepadDevice(config);
-
   // Set up vibration event handler
   FunctionSlot<XboxGamepadOutputReportData> vibrationSlot(OnVibrateEvent);
-  gamepad->onVibrate.attach(vibrationSlot);
-  // Add all child devices to the top-level composite HID device to manage them
-  compositeHID->addDevice(gamepad);
-  compositeHID->begin(hostConfig);
+  gamepad.onVibrate.attach(vibrationSlot);
+  gamepad.startServer(XB_NAME, XB_MANUFACTURER);
 
   // rumble test (hold Left Flipper on boot)
   if (buttonStatus[POSL1]) {
@@ -574,12 +553,12 @@ void pressHome(bool isPressed) {
   else if (wasPressed == 1 && isPressed) {
     long currentTime = millis();
     if (currentTime > lastPress + DELAY_HOME) {
-      gamepad->press(XBOX_BUTTON_HOME);
+      gamepad.press(XBOX_BUTTON_HOME);
       wasPressed = 2;
     }
   }
   else if (wasPressed != 0 && !isPressed) {
-    gamepad->release(XBOX_BUTTON_HOME);
+    gamepad.release(XBOX_BUTTON_HOME);
     wasPressed = 0;
   }
 }
@@ -593,22 +572,22 @@ void pressStart(bool isPressed) {
   long currentTime = millis();
 
   if (wasPressed == 0 && isPressed) {
-    gamepad->press(XBOX_BUTTON_START);
+    gamepad.press(XBOX_BUTTON_START);
     lastPress = currentTime;
     wasPressed = 1;
   }
   else if (wasPressed == 1 && isPressed) {
     long currentTime = millis();
     if (currentTime > lastPress + DELAY_L3R3) {
-      gamepad->press(XBOX_BUTTON_LS);
-      gamepad->press(XBOX_BUTTON_RS);
+      gamepad.press(XBOX_BUTTON_LS);
+      gamepad.press(XBOX_BUTTON_RS);
       wasPressed = 2;
     }
   }
   else if (wasPressed != 0 && !isPressed) {
-    gamepad->release(XBOX_BUTTON_START);
-    gamepad->release(XBOX_BUTTON_LS);
-    gamepad->release(XBOX_BUTTON_RS);
+    gamepad.release(XBOX_BUTTON_START);
+    gamepad.release(XBOX_BUTTON_LS);
+    gamepad.release(XBOX_BUTTON_RS);
     wasPressed = 0;
   }
 }
@@ -627,7 +606,7 @@ void processInputs() {
   if (leftStickJoy) {
     int leftStickX = buttonStatus[POSLT] * -30000 + buttonStatus[POSRT] * 30000;
     int leftStickY = buttonStatus[POSDN] * -30000 + buttonStatus[POSUP] * 30000;
-    gamepad->setLeftThumb(leftStickX, leftStickY);
+    gamepad.setLeftThumb(leftStickX, leftStickY);
   } else {
     // Update the DPAD
     if (buttonStatus[POSUP]) direction |= XboxDpadFlags::NORTH;
@@ -653,20 +632,20 @@ void processInputs() {
   }
 
   // Buttons
-  if (buttonStatus[POSB1]) gamepad->press(XBOX_BUTTON_A);
-  else gamepad->release(XBOX_BUTTON_A);
-  if (buttonStatus[POSB2]) gamepad->press(XBOX_BUTTON_B);
-  else gamepad->release(XBOX_BUTTON_B);
-  if (buttonStatus[POSB3]) gamepad->press(XBOX_BUTTON_X);
-  else gamepad->release(XBOX_BUTTON_X);
-  if (buttonStatus[POSB4]) gamepad->press(XBOX_BUTTON_Y);
-  else gamepad->release(XBOX_BUTTON_Y);
+  if (buttonStatus[POSB1]) gamepad.press(XBOX_BUTTON_A);
+  else gamepad.release(XBOX_BUTTON_A);
+  if (buttonStatus[POSB2]) gamepad.press(XBOX_BUTTON_B);
+  else gamepad.release(XBOX_BUTTON_B);
+  if (buttonStatus[POSB3]) gamepad.press(XBOX_BUTTON_X);
+  else gamepad.release(XBOX_BUTTON_X);
+  if (buttonStatus[POSB4]) gamepad.press(XBOX_BUTTON_Y);
+  else gamepad.release(XBOX_BUTTON_Y);
 
   if (!buttonStatus[POSST]) {
-    if (buttonStatus[POSB9]) gamepad->press(XBOX_BUTTON_LS);
-    else gamepad->release(XBOX_BUTTON_LS);
-    if (buttonStatus[POSB10]) gamepad->press(XBOX_BUTTON_RS);
-    else gamepad->release(XBOX_BUTTON_RS);
+    if (buttonStatus[POSB9]) gamepad.press(XBOX_BUTTON_LS);
+    else gamepad.release(XBOX_BUTTON_LS);
+    if (buttonStatus[POSB10]) gamepad.press(XBOX_BUTTON_RS);
+    else gamepad.release(XBOX_BUTTON_RS);
   }
 
   // If BACK and Left Flipper are pressed simultaneously, set new plunger dead zone
@@ -699,7 +678,7 @@ void processInputs() {
 
   // If BACK and Up D-Pad are pressed simultaneously, start advertising again to allow a new connection
   if (buttonStatus[POSST] && buttonStatus[POSUP]) {
-    compositeHID->startAdvertising(false);
+    gamepad.startAdvertising(false);
     while (digitalRead(pinST) == LOW) {
       // wait...
       yield();
@@ -762,32 +741,32 @@ void processInputs() {
     // Standard mode: FLIP_L and FLIP_R map to L1/R1, and optionally GPIO 13 & 14 map to L2/R2
     uint16_t leftTrigger = 0;
     uint16_t rightTrigger = 0;
-    if (buttonStatus[POSL1]) gamepad->press(XBOX_BUTTON_LB);
-    else gamepad->release(XBOX_BUTTON_LB);
-    if (buttonStatus[POSR1]) gamepad->press(XBOX_BUTTON_RB);
-    else gamepad->release(XBOX_BUTTON_RB);
+    if (buttonStatus[POSL1]) gamepad.press(XBOX_BUTTON_LB);
+    else gamepad.release(XBOX_BUTTON_LB);
+    if (buttonStatus[POSR1]) gamepad.press(XBOX_BUTTON_RB);
+    else gamepad.release(XBOX_BUTTON_RB);
 
     if (buttonStatus[POSL2]) leftTrigger = XBOX_TRIGGER_MAX;
     else leftTrigger = XBOX_TRIGGER_MIN;
     if (buttonStatus[POSR2]) rightTrigger = XBOX_TRIGGER_MAX;
     else rightTrigger = XBOX_TRIGGER_MIN;
-    gamepad->setLeftTrigger(leftTrigger);
-    gamepad->setRightTrigger(rightTrigger);
+    gamepad.setLeftTrigger(leftTrigger);
+    gamepad.setRightTrigger(rightTrigger);
   } else if (!flipperL1R1 && !doubleContactFlippers) {
     // L2/R2 Flippers (standard mode swapped)
     uint16_t leftTrigger = 0;
     uint16_t rightTrigger = 0;
-    if (buttonStatus[POSL2]) gamepad->press(XBOX_BUTTON_LB);
-    else gamepad->release(XBOX_BUTTON_LB);
-    if (buttonStatus[POSR2]) gamepad->press(XBOX_BUTTON_RB);
-    else gamepad->release(XBOX_BUTTON_RB);
+    if (buttonStatus[POSL2]) gamepad.press(XBOX_BUTTON_LB);
+    else gamepad.release(XBOX_BUTTON_LB);
+    if (buttonStatus[POSR2]) gamepad.press(XBOX_BUTTON_RB);
+    else gamepad.release(XBOX_BUTTON_RB);
 
     if (buttonStatus[POSL1]) leftTrigger = XBOX_TRIGGER_MAX;
     else leftTrigger = XBOX_TRIGGER_MIN;
     if (buttonStatus[POSR1]) rightTrigger = XBOX_TRIGGER_MAX;
     else rightTrigger = XBOX_TRIGGER_MIN;
-    gamepad->setLeftTrigger(leftTrigger);
-    gamepad->setRightTrigger(rightTrigger);
+    gamepad.setLeftTrigger(leftTrigger);
+    gamepad.setRightTrigger(rightTrigger);
   } else if (!flipperL1R1 && doubleContactFlippers) {
     // Double Contact Flippers
     uint16_t leftTrigger = 0;
@@ -806,31 +785,31 @@ void processInputs() {
     } else if (!buttonStatus[POSR1] && !buttonStatus[POSR2]) {
       rightTrigger = XBOX_TRIGGER_MIN;
     }
-    gamepad->setLeftTrigger(leftTrigger);
-    gamepad->setRightTrigger(rightTrigger);
+    gamepad.setLeftTrigger(leftTrigger);
+    gamepad.setRightTrigger(rightTrigger);
   }
 
   // Middle Buttons: Start, Select, Home
   if (buttonStatus[POSST] && buttonStatus[POSBK]) {
     pressStart(0);
-    gamepad->release(XBOX_BUTTON_SELECT);
+    gamepad.release(XBOX_BUTTON_SELECT);
     pressHome(1);
   } else if (buttonStatus[POSST]) {
     pressHome(0);
-    gamepad->release(XBOX_BUTTON_SELECT);
+    gamepad.release(XBOX_BUTTON_SELECT);
     pressStart(1);
   } else if (buttonStatus[POSBK]) {
     pressHome(0);
     pressStart(0);
-    gamepad->press(XBOX_BUTTON_SELECT);
+    gamepad.press(XBOX_BUTTON_SELECT);
   } else if (buttonStatus[POSXB]) {
     pressStart(0);
-    gamepad->release(XBOX_BUTTON_SELECT);
+    gamepad.release(XBOX_BUTTON_SELECT);
     pressHome(1);
   } else {
     pressHome(0);
     pressStart(0);
-    gamepad->release(XBOX_BUTTON_SELECT);
+    gamepad.release(XBOX_BUTTON_SELECT);
   }
 
   // Experimental Analog Input
@@ -838,8 +817,8 @@ void processInputs() {
   if (analogFlippers) {
     uint8_t leftTrigger = map(analogRead(pinLT), 0, 512, 0, 255);
     uint8_t rightTrigger = map(analogRead(pinRT), 0, 512, 0, 255);
-    gamepad->setLeftTrigger(leftTrigger);
-    gamepad->setRightTrigger(rightTrigger);
+    gamepad.setLeftTrigger(leftTrigger);
+    gamepad.setRightTrigger(rightTrigger);
   }
 
   // Tilt
@@ -877,10 +856,10 @@ void processInputs() {
         if (accX < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::WEST;
       }
       else {
-        gamepad->setLeftThumb(accX, accY);
+        gamepad.setLeftThumb(accX, accY);
       }
     }
-    gamepad->pressDPadDirectionFlag(XboxDpadFlags(direction));
+    gamepad.pressDPadDirection(XboxDpadFlags(direction));
   }
 
   // Plunger
@@ -907,11 +886,11 @@ void processInputs() {
         if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
           // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
           if (controlShuffle) {
-            gamepad->setLeftThumb(noise[0], noise[1]);
-            gamepad->setRightThumb(noise[0], noise[1]);
+            gamepad.setLeftThumb(noise[0], noise[1]);
+            gamepad.setRightThumb(noise[0], noise[1]);
           }
           else {
-            gamepad->setRightThumb(noise[0], noise[1]);
+            gamepad.setRightThumb(noise[0], noise[1]);
           }
           // disable plunger momentarily to compensate for spring bounce
           plungerReportTime = millis() + 1000;
@@ -945,32 +924,32 @@ void processInputs() {
     // // Automatically move the plunger, for testing without a plunger
     // static int16_t pCnt = 0;
     // pCnt = (++pCnt)%1024;
-    // gamepad->setLeftThumb(0, (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128);
+    // gamepad.setLeftThumb(0, (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128);
 
     if (controlShuffle) {
       if (currentlyPlunging) {
-        gamepad->setLeftThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
+        gamepad.setLeftThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
       } else {
-        gamepad->setLeftThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
+        gamepad.setLeftThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
       }
     }
     else {
       if (currentlyPlunging) {
-        gamepad->setRightThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
+        gamepad.setRightThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
       } else {
-        gamepad->setRightThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
+        gamepad.setRightThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
       }
     }
   }
   if (controlShuffle) {
-    gamepad->setRightThumb(noise[0], noise[1]);
+    gamepad.setRightThumb(noise[0], noise[1]);
   }
 }
 
 
 void ledUpdate()
 {
-  if (!compositeHID->isAdvertising()) {
+  if (!gamepad.isAdvertising()) {
     // Connected!  So LEDs On Solid
     analogWrite(pinLEDg, PCB_LED_BRIGHTNESS);
     digitalWrite(pinLED1, HIGH);
@@ -988,22 +967,38 @@ void ledUpdate()
 }
 
 
+// Delay until at least ms_since_last_delay ms after the last call of this function
+void delay_since_last_delay(uint32_t ms_since_last_delay)
+{
+    static uint32_t last_target = 0;
+    uint32_t now = millis();
+    uint32_t new_target = last_target + ms_since_last_delay;
+    if (new_target <= now) {
+        new_target = now;
+    }
+    else {
+        delay(new_target-now);
+    }
+    last_target = new_target;
+}
+
+
 void loop() {
+  delay_since_last_delay(15);
+
   // Poll Buttons
   buttonUpdate();
 
   // Update LEDs
   ledUpdate();
 
-  if (compositeHID->isConnected()) {
+  if (gamepad.isConnected()) {
     // Process all inputs and load up the usbData registers correctly
     processInputs();
 
     // Send controller data
-    gamepad->sendGamepadReport();
+    gamepad.sendGamepadReport();
   }
-
-  delay(6);
 }
 
 
@@ -1023,7 +1018,7 @@ void remove_all_bonded_devices(void)
       }
   }
 
-  compositeHID->clearPairedAddresses();
+  gamepad.clearPairedAddresses();
 
   uint8_t new_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x00};
   esp_fill_random(new_mac+1, 5);
