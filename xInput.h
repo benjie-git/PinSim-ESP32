@@ -1,27 +1,11 @@
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
 #include <Callback.h>
+#include "xInput_defs.h"
 
 class HIDOutputCallbacks;
 class ServerCallbacks;
 
-
-#define XBOX_BUTTON_A 0x01
-#define XBOX_BUTTON_B 0x02
-// UNUSED - 0x04
-#define XBOX_BUTTON_X 0x08 
-#define XBOX_BUTTON_Y 0x10
-// UNUSED - 0x20
-#define XBOX_BUTTON_LB 0x40
-#define XBOX_BUTTON_RB 0x80
-// UNUSED - 0x100
-// UNUSED - 0x200
-// UNUSED - 0x400
-#define XBOX_BUTTON_SELECT 0x400
-#define XBOX_BUTTON_START 0x800
-#define XBOX_BUTTON_HOME 0x1000
-#define XBOX_BUTTON_LS 0x2000
-#define XBOX_BUTTON_RS 0x4000
 
 // Dpad bitflags
 enum XboxDpadFlags : uint8_t {
