@@ -264,9 +264,6 @@ public:
         XboxGamepadOutputReportData vibrationData = pCharacteristic->getValue<uint64_t>();
         this->_xInput->onVibrate.fire(vibrationData);
     }
-    // void onRead(NimBLECharacteristic* pCharacteristic) override {}
-    // void onNotify(NimBLECharacteristic* pCharacteristic) override {}
-    // void onStatus(NimBLECharacteristic* pCharacteristic, Status status, int code) override {}
 
 private:
     XInput* _xInput;
@@ -358,7 +355,7 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
 
     this->_hid = new NimBLEHIDDevice(this->_server);
     this->_hid->manufacturer()->setValue(manufacturer);
-    this->_hid->pnp(0x01, XBOX_VENDOR_ID, XBOX_1914_PRODUCT_ID, XBOX_1914_BCD_DEVICE_ID);
+    this->_hid->pnp(VENDOR_USB_SOURCE, XBOX_VENDOR_ID, XBOX_1914_PRODUCT_ID, XBOX_1914_BCD_DEVICE_ID);
     this->_hid->hidInfo(0x00, 0x01);
     this->_hid->reportMap((uint8_t*)XboxOneS_1914_HIDDescriptor, sizeof(XboxOneS_1914_HIDDescriptor));
 
@@ -374,13 +371,11 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     this->_advertising->addServiceUUID(this->_hid->deviceInfo()->getUUID());
     this->_advertising->addServiceUUID(this->_hid->hidService()->getUUID());
     this->_advertising->addServiceUUID(this->_hid->batteryService()->getUUID());
-    this->_advertising->setScanResponse(false);
+    this->_advertising->setScanResponse(true);
     this->_advertising->start();
 
     this->_hid->setBatteryLevel(100);
     this->_hid->batteryLevel()->notify();
-
-    printf("\n\nXInput Server Started\n");
 }
 
 bool XInput::isConnected()
