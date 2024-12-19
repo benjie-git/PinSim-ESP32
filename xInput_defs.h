@@ -1,17 +1,17 @@
 
 // Uncomment exactly one of these 2 lines to choose the controller type to emulate:
 
-// #define XINPUT_TYPE 1914 // XBoxSeriesX
-#define XINPUT_TYPE 1708    // XBoxOneS
+#define XINPUT_TYPE 1914 // XBoxSeriesX
+// #define XINPUT_TYPE 1708    // XBoxOneS
 
 
 #define SERVICE_UUID_DEVICE_INFORMATION        "180A"      // Service - Device information
 
-// #define CHARACTERISTIC_UUID_SYSTEM_ID          "2A23"      // Characteristic - System ID 0x2A23
-// #define CHARACTERISTIC_UUID_MODEL_NUMBER       "2A24"      // Characteristic - Model Number String - 0x2A24
+#define CHARACTERISTIC_UUID_SYSTEM_ID          "2A23"      // Characteristic - System ID 0x2A23
+#define CHARACTERISTIC_UUID_MODEL_NUMBER       "2A24"      // Characteristic - Model Number String - 0x2A24
+#define CHARACTERISTIC_UUID_SERIAL_NUMBER      "2A25"      // Characteristic - Serial Number String - 0x2A25
+#define CHARACTERISTIC_UUID_FIRMWARE_REVISION  "2A26"      // Characteristic - Firmware Revision String - 0x2A26
 // #define CHARACTERISTIC_UUID_SOFTWARE_REVISION  "2A28"      // Characteristic - Software Revision String - 0x2A28
-// #define CHARACTERISTIC_UUID_SERIAL_NUMBER      "2A25"      // Characteristic - Serial Number String - 0x2A25
-// #define CHARACTERISTIC_UUID_FIRMWARE_REVISION  "2A26"      // Characteristic - Firmware Revision String - 0x2A26
 // #define CHARACTERISTIC_UUID_HARDWARE_REVISION  "2A27"      // Characteristic - Hardware Revision String - 0x2A27
 
 // Product: latest Xbox series X wireless controller
@@ -61,6 +61,8 @@
 #define XBOX_PRODUCT_ID 0x0B13
 #define XBOX_BCD_DEVICE_ID 0x0503
 #define XBOX_SERIAL "3039373130303637313034303231"
+#define XBOX_MODEL "1914"
+#define XBOX_FW_VER "5.13.3143"
 
 static const uint8_t Xbox_HIDDescriptor[] 
 {
@@ -230,6 +232,8 @@ static const uint8_t Xbox_HIDDescriptor[]
 #define XBOX_PRODUCT_ID 0x02E0
 #define XBOX_BCD_DEVICE_ID 0x0408
 #define XBOX_SERIAL "3033363030343037323136373239"
+#define XBOX_MODEL "1708"
+#define XBOX_FW_VER "1.0.0"
 
 // Descriptor adapted from:
     // https://github.com/DJm00n/ControllersInfo/blob/master/xboxone/xboxone_model_1708_bluetooth_hid_report_descriptor.txt

@@ -187,6 +187,29 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     this->_output = this->_hid->outputReport(XBOX_OUTPUT_REPORT_ID);
     this->_hidOutputCallbacks = new HIDOutputCallbacks(this);
     this->_output->setCallbacks(this->_hidOutputCallbacks);
+
+    // Create device UUID
+    NimBLEService *service = this->_server->getServiceByUUID(SERVICE_UUID_DEVICE_INFORMATION);
+  
+    // Create characteristics
+    BLECharacteristic* characteristic_Model_Number = service->createCharacteristic(
+      CHARACTERISTIC_UUID_MODEL_NUMBER,
+      NIMBLE_PROPERTY::READ);
+    static char* modelNumber = XBOX_MODEL;
+    characteristic_Model_Number->setValue(modelNumber);
+  
+    BLECharacteristic* characteristic_Serial_Number = service->createCharacteristic(
+      CHARACTERISTIC_UUID_SERIAL_NUMBER,
+      NIMBLE_PROPERTY::READ);
+    static char* serialNumber = XBOX_SERIAL;
+    characteristic_Serial_Number->setValue(serialNumber);
+  
+    BLECharacteristic* characteristic_Firmware_Revision = service->createCharacteristic(
+      CHARACTERISTIC_UUID_FIRMWARE_REVISION,
+      NIMBLE_PROPERTY::READ);
+    static char* firmwareRevision = XBOX_FW_VER;
+    characteristic_Firmware_Revision->setValue(firmwareRevision);
+  
     this->_hid->startServices();
 
     // Start BLE advertisement
