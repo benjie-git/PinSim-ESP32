@@ -41,7 +41,7 @@
 
 #include "xInput.h"
 
-const char *XB_NAME = "PinSimESP32 XInput Controller";
+const char *XB_NAME = "PinSimESP32 Xbox Controller";
 const char *XB_MANUFACTURER = "Octopilot Electronics";
 
 // Define this as 2 for v0.2, or 3 for v0.3, as a few connections have changed
@@ -57,9 +57,6 @@ const char *XB_MANUFACTURER = "Octopilot Electronics";
 // Send Start button immediately on press, but after holding for DELAY_L3R3 ms, also start sending L3 and R3 together, to activate the controller on a Quest.
 #define DELAY_HOME 5000
 #define DELAY_L3R3 2000
-
-// Set to 1 to be a OneS, or 0 to be a SeriesX
-#define ACT_AS_XboxOneS 0
 
 
 // GLOBAL CONFIGURATION VARIABLES

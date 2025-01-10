@@ -215,9 +215,7 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     // Start BLE advertisement
     this->_advertising = this->_server->getAdvertising();
     this->_advertising->setAppearance(HID_GAMEPAD);
-    this->_advertising->addServiceUUID(this->_hid->deviceInfo()->getUUID());
     this->_advertising->addServiceUUID(this->_hid->hidService()->getUUID());
-    this->_advertising->addServiceUUID(this->_hid->batteryService()->getUUID());
     this->_advertising->setScanResponse(true);
     this->_advertising->start();
 

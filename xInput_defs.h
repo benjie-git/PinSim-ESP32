@@ -1,7 +1,6 @@
 
 // Uncomment exactly one of these 2 lines to choose the controller type to emulate:
-
-#define XINPUT_TYPE 1914 // XBoxSeriesX
+#define XINPUT_TYPE 1914    // XBoxSeriesX
 // #define XINPUT_TYPE 1708    // XBoxOneS
 
 
@@ -59,10 +58,10 @@
 #define XBOX_BUTTON_RS 0x4000
 
 #define XBOX_PRODUCT_ID 0x0B13
-#define XBOX_BCD_DEVICE_ID 0x0503
-#define XBOX_SERIAL "3039373130303637313034303231"
+#define XBOX_BCD_DEVICE_ID 0x0509
+#define XBOX_SERIAL "09711282953030"
 #define XBOX_MODEL "1914"
-#define XBOX_FW_VER "5.13.3143"
+#define XBOX_FW_VER "5.0.2709.0"
 
 static const uint8_t Xbox_HIDDescriptor[] 
 {
