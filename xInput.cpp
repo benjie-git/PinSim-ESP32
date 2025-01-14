@@ -177,7 +177,7 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     this->_server->setCallbacks(this->_serverCallbacks);
 
     this->_hid = new NimBLEHIDDevice(this->_server);
-    this->_hid->manufacturer()->setValue(manufacturer);
+    this->_hid->manufacturer(manufacturer);
     this->_hid->pnp(VENDOR_USB_SOURCE, XBOX_VENDOR_ID, XBOX_PRODUCT_ID, XBOX_BCD_DEVICE_ID);
     this->_hid->hidInfo(0x00, 0x01);
     this->_hid->reportMap((uint8_t*)Xbox_HIDDescriptor, sizeof(Xbox_HIDDescriptor));

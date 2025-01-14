@@ -41,8 +41,8 @@
 
 #include "xInput.h"
 
-const char *XB_NAME = "PinSimESP32 Xbox Controller";
-const char *XB_MANUFACTURER = "Octopilot Electronics";
+const char *XB_NAME = "Xbox Wireless Controller";  // "PinSimESP32 Xbox Controller";
+const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 
 // Define this as 2 for v0.2, or 3 for v0.3, as a few connections have changed
 #define PCB_VERSION 3
