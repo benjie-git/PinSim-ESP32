@@ -1,5 +1,6 @@
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
+#include <NimBLEAdvertising.h>
 #include <Callback.h>
 #include "xInput_defs.h"
 

@@ -7,7 +7,7 @@
 // Set MAX_CLIENTS to 1-4 to allow N computers/phones/quests to connect at once
 //    If set to 1, uses blacklist logic to avoid reconnecting to the same device for 15 sec after a 
 //    reconect, to allow another device to connect
-#define MAX_CLIENTS 3
+#define MAX_CLIENTS 4
 
 static Preferences preferences;
 std::vector<uint64_t> pairedAddresses;
@@ -82,7 +82,7 @@ class HIDOutputCallbacks : public NimBLECharacteristicCallbacks
 public:
     HIDOutputCallbacks(XInput* xInput) : _xInput(xInput) {}
 
-    void onWrite(NimBLECharacteristic* pCharacteristic) override
+    void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override
     {
         // An example packet we might receive from XInput might look like 0x0300002500ff00ff
         XboxGamepadOutputReportData vibrationData = pCharacteristic->getValue<uint64_t>();
@@ -98,39 +98,38 @@ class ServerCallbacks : public NimBLEServerCallbacks
 {
 public:
     bool is_connected = false;
-    int num_connected = 0;
     uint64_t lastAddr = 0;
 
     ServerCallbacks(XInput* xInput) : _xInput(xInput) {}
 
-    void onConnect(NimBLEServer *server, ble_gap_conn_desc* desc)
+    void onConnect(NimBLEServer *server, NimBLEConnInfo& connInfo) override
     {
         if (MAX_CLIENTS == 1) {
-            NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
+            NimBLEAddress addr = NimBLEAddress(connInfo.getAddress());
             uint64_t addrInt = uint64_t(addr);
             if (this->lastAddr && addrInt == this->lastAddr) {
                 printf("Reject lastAdr\n");
-                server->disconnect(desc->conn_handle);
+                server->disconnect(connInfo.getConnHandle());
                 return;
             }
         }
-        // server->updateConnParams(desc->conn_handle, 12, 24, 0, 80);
-        server->updateConnParams(desc->conn_handle, 6, 7, 0, 300);
-        NimBLEDevice::startSecurity(desc->conn_handle);
-        this->num_connected++;
-        printf("Connected\n");
+
+        server->updateConnParams(connInfo.getConnHandle(), 6, 12, 0, 160);
+        NimBLEDevice::startSecurity(connInfo.getConnHandle());
+        printf("Connected %d                  (%s)\n", server->getConnectedCount(),
+          connInfo.getAddress().toString().c_str());
     }
 
-    void onAuthenticationComplete(ble_gap_conn_desc* desc)
+    void onAuthenticationComplete(NimBLEConnInfo& connInfo) override
     {
-        if(!desc->sec_state.encrypted) {
-            printf("Auth failed\n");
-            NimBLEDevice::getServer()->disconnect(desc->conn_handle);
+        if (!connInfo.isEncrypted()) {
+            printf("Auth failed                  (%s)\n", connInfo.getAddress().toString().c_str());
+            NimBLEDevice::getServer()->disconnect(connInfo.getConnHandle());
             return;
         }
 
         if (MAX_CLIENTS == 1) {
-            NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
+            NimBLEAddress addr = NimBLEAddress(connInfo.getAddress());
             uint64_t addrInt = uint64_t(addr);
             if (std::find(pairedAddresses.begin(), pairedAddresses.end(), addrInt) == pairedAddresses.end()) {
                 pairedAddresses.push_back(addrInt);
@@ -140,26 +139,31 @@ public:
         }
 
         this->is_connected = true;
-        printf("Auth complete\n");
+        printf("Auth complete                (%s)\n", connInfo.getAddress().toString().c_str());
 
-        if (this->num_connected < MAX_CLIENTS) {
+        if (NimBLEDevice::getServer()->getConnectedCount() < MAX_CLIENTS) {
             this->_xInput->startAdvertising(false);
         }
     }
 
-    void onDisconnect(NimBLEServer *server, ble_gap_conn_desc* desc)
+    // void onConnParamsUpdate(NimBLEConnInfo& connInfo) override
+    // {
+    //     printf("Conn Params: %d, %d, %d, %d (%s)\n", connInfo.getConnInterval(),
+    //         connInfo.getConnTimeout(), connInfo.getConnLatency(), connInfo.getMTU(),
+    //         connInfo.getAddress().toString().c_str());
+    // }
+
+    void onDisconnect(NimBLEServer *server, NimBLEConnInfo& connInfo, int reason) override
     {
-        NimBLEAddress addr = NimBLEAddress(desc->peer_ota_addr);
+        NimBLEAddress addr = NimBLEAddress(connInfo.getAddress());
         uint64_t addrInt = uint64_t(addr);
         this->lastAddr = addrInt;
 
-        this->num_connected--;
-        if (this->num_connected == 0) {
+        if (server->getConnectedCount() == 0) {
             this->is_connected = false;
         }
-        printf("Disconnected\n");
-
-        this->_xInput->startAdvertising(true);
+        printf("Disconnected %d %d            (%s)\n", server->getConnectedCount(), 
+            reason, connInfo.getAddress().toString().c_str());
     }
 
 private:
@@ -177,14 +181,14 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     this->_server->setCallbacks(this->_serverCallbacks);
 
     this->_hid = new NimBLEHIDDevice(this->_server);
-    this->_hid->manufacturer(manufacturer);
-    this->_hid->pnp(VENDOR_USB_SOURCE, XBOX_VENDOR_ID, XBOX_PRODUCT_ID, XBOX_BCD_DEVICE_ID);
-    this->_hid->hidInfo(0x00, 0x01);
-    this->_hid->reportMap((uint8_t*)Xbox_HIDDescriptor, sizeof(Xbox_HIDDescriptor));
+    this->_hid->setManufacturer(manufacturer);
+    this->_hid->setPnp(VENDOR_USB_SOURCE, XBOX_VENDOR_ID, XBOX_PRODUCT_ID, XBOX_BCD_DEVICE_ID);
+    this->_hid->setHidInfo(0x00, 0x01);
+    this->_hid->setReportMap((uint8_t*)Xbox_HIDDescriptor, sizeof(Xbox_HIDDescriptor));
     // printf("HID report size: %d", sizeof(Xbox_HIDDescriptor));
 
-    this->_input = this->_hid->inputReport(XBOX_INPUT_REPORT_ID);
-    this->_output = this->_hid->outputReport(XBOX_OUTPUT_REPORT_ID);
+    this->_input = this->_hid->getInputReport(XBOX_INPUT_REPORT_ID);
+    this->_output = this->_hid->getOutputReport(XBOX_OUTPUT_REPORT_ID);
     this->_hidOutputCallbacks = new HIDOutputCallbacks(this);
     this->_output->setCallbacks(this->_hidOutputCallbacks);
 
@@ -210,17 +214,17 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     static char* firmwareRevision = XBOX_FW_VER;
     characteristic_Firmware_Revision->setValue((const uint8_t*)firmwareRevision, strlen(firmwareRevision));
   
+    this->_hid->setBatteryLevel(100);
+
     this->_hid->startServices();
 
     // Start BLE advertisement
     this->_advertising = this->_server->getAdvertising();
     this->_advertising->setAppearance(HID_GAMEPAD);
-    this->_advertising->addServiceUUID(this->_hid->hidService()->getUUID());
-    this->_advertising->setScanResponse(true);
+    this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
+    this->_advertising->enableScanResponse(true);
+    this->_server->advertiseOnDisconnect(true);
     this->_advertising->start();
-
-    this->_hid->setBatteryLevel(100);
-    this->_hid->batteryLevel()->notify();
 }
 
 bool XInput::isConnected()
@@ -239,25 +243,33 @@ void XInput::startAdvertising(bool useBlackList)
     if (MAX_CLIENTS == 1 && useBlackList && this->_serverCallbacks->lastAddr) {
         if (this->_serverCallbacks->lastAddr && pairedAddresses.size() >= 2) {
             printf("Start Advertising - Use blacklist\n");
-            this->_advertising->start(15, [this](NimBLEAdvertising *pAdvertising){ this->onAdvComplete(this->_advertising); });
+            this->_advertising->start(15000);
+            this->_advertising->setAdvertisingCompleteCallback([this](NimBLEAdvertising *pAdvertising){
+               this->onAdvComplete(pAdvertising);
+            });
             return;
         }
     }
 
-    if (this->_serverCallbacks->num_connected >= MAX_CLIENTS) {
+    if (this->_server->getConnectedCount() >= MAX_CLIENTS) {
         printf("Skip Starting Advertising - already connected to MAX_CLIENTS\n");
         return;
     }
 
-    printf("Start Advertising - No blacklist\n");
+    printf("Start Advertising\n");
     this->_serverCallbacks->lastAddr = 0;
-    if (this->_serverCallbacks->num_connected > 0) {
-        // We already have a connection, so only advertise for 30s
-        this->_advertising->start(30, [this](NimBLEAdvertising *advertising){ this->onAdvComplete(advertising); });
+    if (this->_server->getConnectedCount() > 0) {
+        this->_advertising->start();
+        this->_advertising->setAdvertisingCompleteCallback([this](NimBLEAdvertising *pAdvertising){
+            this->onAdvComplete(pAdvertising);
+        });
     }
     else {
         // No connections yet, so advertise indefinitely
         this->_advertising->start();
+        this->_advertising->setAdvertisingCompleteCallback([this](NimBLEAdvertising *pAdvertising){
+            this->onAdvComplete(pAdvertising);
+        });
     }
 }
 
