@@ -58,6 +58,8 @@ const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 #define DELAY_HOME 5000
 #define DELAY_L3R3 2000
 
+#define vTaskDelay_ms(x)  vTaskDelay(pdMS_TO_TICKS(x));
+
 
 // GLOBAL CONFIGURATION VARIABLES
 // configure these
@@ -85,6 +87,9 @@ int plungerAverage = 0;
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
 XInput gamepad;
+
+TaskHandle_t mainTaskHandle = NULL;
+void handle_main_task(void *arg);
 
 long fourButtonModeTriggeredLB = 0;  // these two vars are used to check for 4 flipper buttons
 long fourButtonModeTriggeredRB = 0;
@@ -298,9 +303,9 @@ void setupPins() {
 void flashStartButton() {
   for (int i = 0; i < 10; i++) {
     digitalWrite(pinLED1, HIGH);
-    delay(50);
+    vTaskDelay_ms(50);
     digitalWrite(pinLED1, LOW);
-    delay(50);
+    vTaskDelay_ms(50);
   }
 }
 
@@ -338,19 +343,17 @@ void getPlungerMax() {
 
   while (plungerAverage < plungerMin + 100) {
     // wait for the plunger to be pulled
-    yield();
     getPlungerSamples();
-    delay(10);
+    vTaskDelay_ms(10);
   }
 
   while (plungerAverage > plungerMin) {
     // start recording plungerMax
-    yield();
     getPlungerSamples();
     if (plungerAverage > plungerMax) {
       plungerMax = plungerAverage;
     }
-    delay(10);
+    vTaskDelay_ms(10);
   }
 
   printf("Plunger calibration: recorded max.\n");
@@ -371,7 +374,7 @@ void OnVibrateEvent(XboxGamepadOutputReportData data) {
 
 
 void setup() {
-  delay(1000);
+  vTaskDelay_ms(1000);
   printf("\n\nPinSim ESP32 Starting up\n");
   
   preferences.begin("PinSimESP32");
@@ -379,7 +382,7 @@ void setup() {
   setupPins();
 
   for (int i = 0; i < 10; i++) {
-    delay(5);
+    vTaskDelay_ms(5);
     buttonUpdate();
   }
 
@@ -412,20 +415,20 @@ void setup() {
     printf("Left Flipper down at start - Rumble Test\n");
     for (int i = 0; i < 256; i++) {
       analogWrite(rumbleSmall, i);
-      delay(10);
+      vTaskDelay_ms(10);
     }
     for (int i = 255; i >= 0; i--) {
       analogWrite(rumbleSmall, i);
-      delay(10);
+      vTaskDelay_ms(10);
     }
 
     for (int i = 0; i < 256; i++) {
       analogWrite(rumbleLarge, i);
-      delay(10);
+      vTaskDelay_ms(10);
     }
     for (int i = 255; i >= 0; i--) {
       analogWrite(rumbleLarge, i);
-      delay(10);
+      vTaskDelay_ms(10);
     }
   }
 
@@ -448,7 +451,7 @@ void setup() {
 
   if (accelerometerEnabled) {
     accel.setRange(ADXL345_RANGE_2_G);
-    delay(100);
+    vTaskDelay_ms(100);
     
     zeroX = preferences.getInt("accelZeroX", 0);
     zeroY = preferences.getInt("accelZeroY", 0);
@@ -478,7 +481,12 @@ void setup() {
     plungerMinDistance = readingToDistance(plungerMax);
     lastDistance = plungerMaxDistance;
   }
+
+  xTaskCreatePinnedToCore(&handle_main_task, "mani_loop", 8192, NULL, 20, &mainTaskHandle, 1);
 }
+
+// Nothing to do in loop().  Use handle_main_task() instead.
+void loop() {}
 
 
 // Update the debounced button statuses
@@ -530,8 +538,7 @@ void deadZoneCompensation() {
   // ensure just one calibration per button press
   while (digitalRead(pinBK) == LOW) {
     // wait...
-    yield();
-    delay(50);
+    vTaskDelay_ms(50);
   }
 }
 
@@ -668,8 +675,7 @@ void processInputs() {
     // ensure just one toggle per button press
     while (digitalRead(pinBK) == LOW) {
       // wait...
-      yield();
-      delay(50);
+      vTaskDelay_ms(50);
     }
   }
 
@@ -678,8 +684,7 @@ void processInputs() {
     gamepad.startAdvertising(false);
     while (digitalRead(pinST) == LOW) {
       // wait...
-      yield();
-      delay(50);
+      vTaskDelay_ms(50);
     }
   }
 
@@ -838,8 +843,7 @@ void processInputs() {
       // Ensure just one calibration per button press
       while (digitalRead(pinBK) == LOW) {
         // wait...
-        yield();
-        delay(50);
+        vTaskDelay_ms(50);
       }
     }
 
@@ -974,27 +978,30 @@ void delay_since_last_delay(uint32_t ms_since_last_delay)
         new_target = now;
     }
     else {
-        delay(new_target-now);
+        vTaskDelay_ms(new_target - now);
     }
     last_target = new_target;
 }
 
 
-void loop() {
-  delay_since_last_delay(15);
+// Main Task runs forever, yielding during vTaskDelay() calls
+void handle_main_task(void *arg)
+{
+  while (1) {
+    delay_since_last_delay(15);
+    // Poll Buttons
+    buttonUpdate();
 
-  // Poll Buttons
-  buttonUpdate();
+    // Update LEDs
+    ledUpdate();
 
-  // Update LEDs
-  ledUpdate();
+    if (gamepad.isConnected()) {
+      // Process all inputs and load up the usbData registers correctly
+      processInputs();
 
-  if (gamepad.isConnected()) {
-    // Process all inputs and load up the usbData registers correctly
-    processInputs();
-
-    // Send controller data
-    gamepad.sendGamepadReport();
+      // Send controller data
+      gamepad.sendGamepadReport();
+    }
   }
 }
 

@@ -114,8 +114,8 @@ public:
                 return;
             }
         }
-
-        server->updateConnParams(desc->conn_handle, 12, 24, 0, 80);
+        // server->updateConnParams(desc->conn_handle, 12, 24, 0, 80);
+        server->updateConnParams(desc->conn_handle, 6, 7, 0, 300);
         NimBLEDevice::startSecurity(desc->conn_handle);
         this->num_connected++;
         printf("Connected\n");
@@ -196,19 +196,19 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
       CHARACTERISTIC_UUID_MODEL_NUMBER,
       NIMBLE_PROPERTY::READ);
     static char* modelNumber = XBOX_MODEL;
-    characteristic_Model_Number->setValue(modelNumber);
+    characteristic_Model_Number->setValue((const uint8_t*)modelNumber, strlen(modelNumber));
   
     BLECharacteristic* characteristic_Serial_Number = service->createCharacteristic(
       CHARACTERISTIC_UUID_SERIAL_NUMBER,
       NIMBLE_PROPERTY::READ);
     static char* serialNumber = XBOX_SERIAL;
-    characteristic_Serial_Number->setValue(serialNumber);
+    characteristic_Serial_Number->setValue((const uint8_t*)serialNumber, strlen(serialNumber));
   
     BLECharacteristic* characteristic_Firmware_Revision = service->createCharacteristic(
       CHARACTERISTIC_UUID_FIRMWARE_REVISION,
       NIMBLE_PROPERTY::READ);
     static char* firmwareRevision = XBOX_FW_VER;
-    characteristic_Firmware_Revision->setValue(firmwareRevision);
+    characteristic_Firmware_Revision->setValue((const uint8_t*)firmwareRevision, strlen(firmwareRevision));
   
     this->_hid->startServices();
 

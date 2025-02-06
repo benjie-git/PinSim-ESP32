@@ -61,7 +61,7 @@
 #define XBOX_BCD_DEVICE_ID 0x0509
 #define XBOX_SERIAL "09711282953030"
 #define XBOX_MODEL "1914"
-#define XBOX_FW_VER "5.0.2709.0"
+#define XBOX_FW_VER "5.9.2709.0"
 
 static const uint8_t Xbox_HIDDescriptor[] 
 {
