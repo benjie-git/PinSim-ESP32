@@ -989,7 +989,7 @@ void delay_since_last_delay(uint32_t ms_since_last_delay)
 void handle_main_task(void *arg)
 {
   while (true) {
-    delay_since_last_delay(16);
+    delay_since_last_delay(20);
 
     // Poll Buttons
     buttonUpdate();

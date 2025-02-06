@@ -104,6 +104,18 @@ public:
 
     void onConnect(NimBLEServer *server, NimBLEConnInfo& connInfo) override
     {
+        // Detect old connections from the same peer address, and disconnect them
+        // This section works around issue #886  https://github.com/h2zero/NimBLE-Arduino/issues/886
+        std::vector<uint16_t> peers = server->getPeerDevices();
+        for (const uint16_t& peerHandle : peers) {
+            NimBLEConnInfo peer = server->getPeerInfoByHandle(peerHandle);
+            if (peer.getConnHandle() != connInfo.getConnHandle() && peer.getAddress() == connInfo.getAddress()) {
+                printf("Found duplicate peer\n");
+                server->disconnect(peerHandle);
+            }
+        }
+        // End workaround
+
         if (MAX_CLIENTS == 1) {
             NimBLEAddress addr = NimBLEAddress(connInfo.getAddress());
             uint64_t addrInt = uint64_t(addr);
@@ -118,6 +130,10 @@ public:
         NimBLEDevice::startSecurity(connInfo.getConnHandle());
         printf("Connected %d                  (%s)\n", server->getConnectedCount(),
           connInfo.getAddress().toString().c_str());
+
+        if (NimBLEDevice::getServer()->getConnectedCount() < MAX_CLIENTS) {
+            this->_xInput->startAdvertising(false);
+        }
     }
 
     void onAuthenticationComplete(NimBLEConnInfo& connInfo) override
@@ -140,10 +156,6 @@ public:
 
         this->is_connected = true;
         printf("Auth complete                (%s)\n", connInfo.getAddress().toString().c_str());
-
-        if (NimBLEDevice::getServer()->getConnectedCount() < MAX_CLIENTS) {
-            this->_xInput->startAdvertising(false);
-        }
     }
 
     // void onConnParamsUpdate(NimBLEConnInfo& connInfo) override
@@ -162,8 +174,10 @@ public:
         if (server->getConnectedCount() == 0) {
             this->is_connected = false;
         }
-        printf("Disconnected %d %d            (%s)\n", server->getConnectedCount(), 
+        printf("Disconnected %d %d           (%s)\n", server->getConnectedCount(), 
             reason, connInfo.getAddress().toString().c_str());
+            
+        this->_xInput->startAdvertising(false);
     }
 
 private:
@@ -188,6 +202,8 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     // printf("HID report size: %d", sizeof(Xbox_HIDDescriptor));
 
     this->_input = this->_hid->getInputReport(XBOX_INPUT_REPORT_ID);
+    this->_input->setValue((uint8_t*)&_inputReport, sizeof(_inputReport));
+
     this->_output = this->_hid->getOutputReport(XBOX_OUTPUT_REPORT_ID);
     this->_hidOutputCallbacks = new HIDOutputCallbacks(this);
     this->_output->setCallbacks(this->_hidOutputCallbacks);
@@ -223,7 +239,6 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     this->_advertising->setAppearance(HID_GAMEPAD);
     this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
     this->_advertising->enableScanResponse(true);
-    this->_server->advertiseOnDisconnect(true);
     this->_advertising->start();
 }
 
