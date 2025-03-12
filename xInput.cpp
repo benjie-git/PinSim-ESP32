@@ -110,7 +110,7 @@ public:
         for (const uint16_t& peerHandle : peers) {
             NimBLEConnInfo peer = server->getPeerInfoByHandle(peerHandle);
             if (peer.getConnHandle() != connInfo.getConnHandle() && peer.getAddress() == connInfo.getAddress()) {
-                printf("Found duplicate peer\n");
+                printf("--- Removing duplicate peer\n");
                 server->disconnect(peerHandle);
             }
         }
