@@ -115,7 +115,7 @@ public:
             }
         }
         // server->updateConnParams(desc->conn_handle, 12, 24, 0, 80);
-        server->updateConnParams(desc->conn_handle, 6, 7, 0, 300);
+        server->updateConnParams(desc->conn_handle, 6, 12, 0, 160);
         NimBLEDevice::startSecurity(desc->conn_handle);
         this->num_connected++;
         printf("Connected\n");
@@ -185,7 +185,7 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
 
     this->_input = this->_hid->inputReport(XBOX_INPUT_REPORT_ID);
     this->_input->setValue((uint8_t*)&_inputReport, sizeof(_inputReport));
-    
+
     this->_output = this->_hid->outputReport(XBOX_OUTPUT_REPORT_ID);
     this->_hidOutputCallbacks = new HIDOutputCallbacks(this);
     this->_output->setCallbacks(this->_hidOutputCallbacks);

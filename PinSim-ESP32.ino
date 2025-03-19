@@ -71,7 +71,7 @@ boolean leftStickJoy = false;           // joystick moves left analog stick inst
 boolean accelerometerEnabled = true;
 boolean plungerEnabled = true;
 boolean controlShuffle = false;         // When enabled, move Tilt to D-Pad, and move plunger to Left Stick, to get around a Pinball FX2 VR bug
-int16_t nudgeMultiplier = 9000;         // accelerometer multiplier (higher = more sensitive)
+int16_t nudgeMultiplier = 4000;         // accelerometer multiplier (higher = more sensitive)
 int16_t plungeTrigger = 60;             // threshold to trigger a plunge (lower = more sensitive)
 int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITHOUT FLIP_L/FLIP_R closing to trigger four flipper button mode.
 
@@ -601,11 +601,11 @@ void pressStart(bool isPressed) {
 void processInputs() {
   uint8_t direction = XboxDpadFlags::NONE;
   
-  // Add noise into the non-moving thumb/stick axes to fix right stick stuck to top-left
-  int8_t noise[2];
-  esp_fill_random(&noise[0], 2);
-  noise[0] = noise[0]>>2;
-  noise[1] = noise[1]>>2;
+  // Use -1 instead of 0 for non-moving thumb/stick axes to fix right stick stuck to top-left
+  // Some hosts need to see negative values or else they assume that 0 is the lowest value.
+  int8_t center[2];
+  center[0] = -1;
+  center[1] = -1;
 
   if (leftStickJoy) {
     int leftStickX = buttonStatus[POSLT] * -30000 + buttonStatus[POSRT] * 30000;
@@ -857,7 +857,13 @@ void processInputs() {
         if (accX < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::WEST;
       }
       else {
-        gamepad.setLeftThumb(accX, accY);
+        // Add a big dead zone for Left-stick analog accelerometer movements
+        if (abs(accX) > XBOX_STICK_MAX * 0.6 || abs(accY) > XBOX_STICK_MAX * 0.6) {
+          gamepad.setLeftThumb(accX, accY);
+        }
+        else {
+          gamepad.setLeftThumb(0, 0);
+        }
       }
     }
     gamepad.pressDPadDirection(XboxDpadFlags(direction));
@@ -887,11 +893,11 @@ void processInputs() {
         if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
           // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
           if (controlShuffle) {
-            gamepad.setLeftThumb(noise[0], noise[1]);
-            gamepad.setRightThumb(noise[0], noise[1]);
+            gamepad.setLeftThumb(center[0], center[1]);
+            gamepad.setRightThumb(center[0], center[1]);
           }
           else {
-            gamepad.setRightThumb(noise[0], noise[1]);
+            gamepad.setRightThumb(center[0], center[1]);
           }
           // disable plunger momentarily to compensate for spring bounce
           plungerReportTime = millis() + 1000;
@@ -929,21 +935,21 @@ void processInputs() {
 
     if (controlShuffle) {
       if (currentlyPlunging) {
-        gamepad.setLeftThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
+        gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
       } else {
-        gamepad.setLeftThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
+        gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
       }
     }
     else {
       if (currentlyPlunging) {
-        gamepad.setRightThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
+        gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
       } else {
-        gamepad.setRightThumb(noise[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
+        gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
       }
     }
   }
   if (controlShuffle) {
-    gamepad.setRightThumb(noise[0], noise[1]);
+    gamepad.setRightThumb(center[0], center[1]);
   }
 }
 
@@ -988,7 +994,7 @@ void delay_since_last_delay(uint32_t ms_since_last_delay)
 void handle_main_task(void *arg)
 {
   while (true) {
-    delay_since_last_delay(16);
+    delay_since_last_delay(20);
     // Poll Buttons
     buttonUpdate();
 
