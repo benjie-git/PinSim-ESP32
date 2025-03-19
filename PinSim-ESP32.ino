@@ -374,7 +374,7 @@ void OnVibrateEvent(XboxGamepadOutputReportData data) {
 
 
 void setup() {
-  vTaskDelay_ms(1000);
+  vTaskDelay_ms(1200);
   printf("\n\nPinSim ESP32 Starting up\n");
   
   preferences.begin("PinSimESP32");
@@ -987,8 +987,8 @@ void delay_since_last_delay(uint32_t ms_since_last_delay)
 // Main Task runs forever, yielding during vTaskDelay() calls
 void handle_main_task(void *arg)
 {
-  while (1) {
-    delay_since_last_delay(15);
+  while (true) {
+    delay_since_last_delay(16);
     // Poll Buttons
     buttonUpdate();
 

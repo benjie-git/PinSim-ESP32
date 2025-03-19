@@ -7,7 +7,7 @@
 // Set MAX_CLIENTS to 1-4 to allow N computers/phones/quests to connect at once
 //    If set to 1, uses blacklist logic to avoid reconnecting to the same device for 15 sec after a 
 //    reconect, to allow another device to connect
-#define MAX_CLIENTS 3
+#define MAX_CLIENTS 4
 
 static Preferences preferences;
 std::vector<uint64_t> pairedAddresses;
@@ -184,6 +184,8 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     // printf("HID report size: %d", sizeof(Xbox_HIDDescriptor));
 
     this->_input = this->_hid->inputReport(XBOX_INPUT_REPORT_ID);
+    this->_input->setValue((uint8_t*)&_inputReport, sizeof(_inputReport));
+    
     this->_output = this->_hid->outputReport(XBOX_OUTPUT_REPORT_ID);
     this->_hidOutputCallbacks = new HIDOutputCallbacks(this);
     this->_output->setCallbacks(this->_hidOutputCallbacks);
