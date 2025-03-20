@@ -130,10 +130,6 @@ public:
         NimBLEDevice::startSecurity(connInfo.getConnHandle());
         printf("Connected %d                  (%s)\n", server->getConnectedCount(),
           connInfo.getAddress().toString().c_str());
-
-        if (NimBLEDevice::getServer()->getConnectedCount() < MAX_CLIENTS) {
-            this->_xInput->startAdvertising(false);
-        }
     }
 
     void onAuthenticationComplete(NimBLEConnInfo& connInfo) override
@@ -176,8 +172,6 @@ public:
         }
         printf("Disconnected %d %d           (%s)\n", server->getConnectedCount(), 
             reason, connInfo.getAddress().toString().c_str());
-            
-        this->_xInput->startAdvertising(false);
     }
 
 private:
@@ -274,19 +268,7 @@ void XInput::startAdvertising(bool useBlackList)
 
     printf("Start Advertising\n");
     this->_serverCallbacks->lastAddr = 0;
-    if (this->_server->getConnectedCount() > 0) {
-        this->_advertising->start();
-        this->_advertising->setAdvertisingCompleteCallback([this](NimBLEAdvertising *pAdvertising){
-            this->onAdvComplete(pAdvertising);
-        });
-    }
-    else {
-        // No connections yet, so advertise indefinitely
-        this->_advertising->start();
-        this->_advertising->setAdvertisingCompleteCallback([this](NimBLEAdvertising *pAdvertising){
-            this->onAdvComplete(pAdvertising);
-        });
-    }
+    this->_advertising->start();
 }
 
 void XInput::onAdvComplete(NimBLEAdvertising *advertising) {
@@ -467,4 +449,9 @@ void XInput::sendGamepadReport() {
         this->_input->notify();
         _inputReportDirty = false;
     }
+
+    if (!this->_advertising->isAdvertising() && NimBLEDevice::getServer()->getConnectedCount() < MAX_CLIENTS) {
+        this->startAdvertising(false);
+    }
+
 }
