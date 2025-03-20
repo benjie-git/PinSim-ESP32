@@ -44,7 +44,7 @@
 const char *XB_NAME = "Xbox Wireless Controller";  // "PinSimESP32 Xbox Controller";
 const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 
-// Define this as 2 for v0.2, or 3 for v0.3, as a few connections have changed
+// Define this as 2 for v0.2, or 3 for v0.3/v0.4, as a few connections have changed
 #define PCB_VERSION 3
 
 // LED Brightness for the Red and Green LEDs onboard the PCB.  255 is full, 5 is dim, 0 disables them.
@@ -71,7 +71,7 @@ boolean leftStickJoy = false;           // joystick moves left analog stick inst
 boolean accelerometerEnabled = true;
 boolean plungerEnabled = true;
 boolean controlShuffle = false;         // When enabled, move Tilt to D-Pad, and move plunger to Left Stick, to get around a Pinball FX2 VR bug
-int16_t nudgeMultiplier = 4000;         // accelerometer multiplier (higher = more sensitive)
+int16_t nudgeMultiplier = 8000;         // accelerometer multiplier (higher = more sensitive)
 int16_t plungeTrigger = 60;             // threshold to trigger a plunge (lower = more sensitive)
 int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITHOUT FLIP_L/FLIP_R closing to trigger four flipper button mode.
 
@@ -994,7 +994,7 @@ void delay_since_last_delay(uint32_t ms_since_last_delay)
 void handle_main_task(void *arg)
 {
   while (true) {
-    delay_since_last_delay(20);
+    delay_since_last_delay(16);
     // Poll Buttons
     buttonUpdate();
 
