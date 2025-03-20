@@ -190,6 +190,7 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     NimBLEDevice::init(device_name);
     NimBLEDevice::setSecurityAuth(true, false, false);
 
+    this->_inputReportDirty = true;
     this->_server = NimBLEDevice::createServer();
     this->_serverCallbacks = new ServerCallbacks(this);
     this->_server->setCallbacks(this->_serverCallbacks);
@@ -313,6 +314,7 @@ void XInput::press(uint16_t button) {
     // Avoid double presses
     if (!isPressed(button)) {
         _inputReport.buttons |= button;
+        _inputReportDirty = true;
     }
 }
 
@@ -320,6 +322,7 @@ void XInput::release(uint16_t button) {
     // Avoid double presses
     if (isPressed(button)) {   
         _inputReport.buttons ^= button;
+        _inputReportDirty = true;
     }
 }
 
@@ -330,20 +333,28 @@ bool XInput::isPressed(uint16_t button) {
 void XInput::setLeftThumb(int16_t x, int16_t y) {
     x = constrain(x, XBOX_STICK_MIN, XBOX_STICK_MAX);
     y = constrain(y, XBOX_STICK_MIN, XBOX_STICK_MAX);
+    
+    uint16_t ux = (uint16_t)(x + 0x8000);
+    uint16_t uy = (uint16_t)(y + 0x8000);
 
-    if(_inputReport.x != x || _inputReport.y != y) {
-        _inputReport.x = (uint16_t)(x + 0x8000);
-        _inputReport.y = (uint16_t)(y + 0x8000);
+    if(_inputReport.x != ux || _inputReport.y != uy) {
+        _inputReport.x = ux;
+        _inputReport.y = uy;
+        _inputReportDirty = true;
     }
 }
 
 void XInput::setRightThumb(int16_t z, int16_t rZ) {
     z = constrain(z, XBOX_STICK_MIN, XBOX_STICK_MAX);
     rZ = constrain(rZ, XBOX_STICK_MIN, XBOX_STICK_MAX);
+    
+    uint16_t uz = (uint16_t)(z + 0x8000);
+    uint16_t urZ = (uint16_t)(rZ + 0x8000);
 
-    if(_inputReport.z != z || _inputReport.rz != rZ){
-        _inputReport.z = (uint16_t)(z + 0x8000);
-        _inputReport.rz = (uint16_t)(rZ + 0x8000);
+    if(_inputReport.z != uz || _inputReport.rz != urZ){
+        _inputReport.z = uz;
+        _inputReport.rz = urZ;
+        _inputReportDirty = true;
     }
 }
 
@@ -352,6 +363,7 @@ void XInput::setLeftTrigger(uint16_t value) {
 
     if (_inputReport.brake != value) {
         _inputReport.brake = value;
+        _inputReportDirty = true;
     }
 }
 
@@ -360,6 +372,7 @@ void XInput::setRightTrigger(uint16_t value) {
 
     if (_inputReport.accelerator != value) {
         _inputReport.accelerator = value;
+        _inputReportDirty = true;
     }
 }
 
@@ -370,6 +383,7 @@ void XInput::setTriggers(uint16_t left, uint16_t right) {
     if (_inputReport.brake != left || _inputReport.accelerator != right) {
         _inputReport.brake = left;
         _inputReport.accelerator = right;
+        _inputReportDirty = true;
     }
 }
 
@@ -379,6 +393,7 @@ void XInput::pressDPadDirectionInternal(uint8_t direction) {
     if (!isDPadPressedInternal(direction))
     {
         _inputReport.hat = direction;
+        _inputReportDirty = true;
     }
 }
 
@@ -431,12 +446,14 @@ void XInput::pressShare() {
     // Avoid double presses
     if (!(_inputReport.share & XBOX_BUTTON_SHARE)) {
         _inputReport.share |= XBOX_BUTTON_SHARE;
+        _inputReportDirty = true;
     }
 }
 
 void XInput::releaseShare() {
     if (_inputReport.share & XBOX_BUTTON_SHARE) {
         _inputReport.share ^= XBOX_BUTTON_SHARE;
+        _inputReportDirty = true;
     }
 }
 
@@ -445,6 +462,9 @@ void XInput::sendGamepadReport() {
         return;
     }
 
-    this->_input->setValue((uint8_t*)&_inputReport, sizeof(_inputReport));
-    this->_input->notify();
+    if (_inputReportDirty) {
+        this->_input->setValue((uint8_t*)&_inputReport, sizeof(_inputReport));
+        this->_input->notify();
+        _inputReportDirty = false;
+    }
 }

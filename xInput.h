@@ -101,6 +101,7 @@ private:
     NimBLECharacteristic *_output;
     XboxGamepadInputReportData _inputReport;
     HIDOutputCallbacks *_hidOutputCallbacks;
+    bool _inputReportDirty;
 
     void pressDPadDirectionInternal(uint8_t direction = 0);
     bool isDPadPressedInternal(uint8_t direction = 0);
