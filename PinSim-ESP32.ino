@@ -31,7 +31,6 @@
 #include <Arduino.h>
 #include <bootloader_random.h>
 #include <esp_mac.h>
-#include <esp_gap_ble_api.h>
 #include <Preferences.h>
 #include <Button2.h>
 
@@ -231,8 +230,6 @@ Button2 buttonXBOX = Button2(pinXB);
 Button2 button9 = Button2(pinB9);
 Button2 button10 = Button2(pinB10);
 
-void remove_all_bonded_devices(void);
-
 
 // Configure Inputs and Outputs
 void setupPins() {
@@ -374,42 +371,38 @@ void OnVibrateEvent(XboxGamepadOutputReportData data) {
 
 
 void setup() {
-  // vTaskDelay_ms(1200);
+  // delay(2000);
   printf("\n\n");
   printf("PinSim ESP32 Starting up\n");
-  
+  uint8_t mac_bytes[6];
+  esp_efuse_mac_get_default(mac_bytes);
+  printf("MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
+
   preferences.begin("PinSimESP32");
-
   setupPins();
-
-  for (int i = 0; i < 10; i++) {
-    vTaskDelay_ms(5);
-    buttonUpdate();
-  }
-
-  // Hold Back on boot to clear BLE paired devices
-  if (buttonStatus[POSBK]) {
-    printf("Remove pairing info\n");
-    remove_all_bonded_devices();
-  }
-  else {
-    if (preferences.isKey("custom_BLE_MAC")) {
-      uint8_t new_mac[6];
-      preferences.getBytes("custom_BLE_MAC", new_mac, 6);
-      esp_base_mac_addr_set(new_mac);
-      printf("Custom MAC: %02X%02X %02X%02X %02X%02X\n", new_mac[0], new_mac[1], new_mac[2], new_mac[3], new_mac[4], new_mac[5]);
-    }
-    else {
-      uint8_t mac_bytes[6];
-      esp_efuse_mac_get_default(mac_bytes);
-      printf("Orig MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
-    }
-  }
 
   // Set up vibration event handler
   FunctionSlot<XboxGamepadOutputReportData> vibrationSlot(OnVibrateEvent);
   gamepad.onVibrate.attach(vibrationSlot);
   gamepad.startServer(XB_NAME, XB_MANUFACTURER);
+
+  for (int i = 0; i < 20; i++) {
+    delay(5);
+    buttonUpdate();
+  }
+
+  // Hold Back on boot to clear BLE paired devices
+  if (buttonStatus[POSBK]) {
+    gamepad.clearWhitelist();
+  }
+
+  // Hold Guide on boot to allow pairing a new device
+  if (buttonStatus[POSXB]) {
+    printf("Allow new devices to connect...\n");
+    gamepad.allowNewConnections(true);
+  }
+
+  gamepad.startAdvertising();
 
   // rumble test (hold Left Flipper on boot)
   if (buttonStatus[POSL1]) {
@@ -452,7 +445,7 @@ void setup() {
 
   if (accelerometerEnabled) {
     accel.setRange(ADXL345_RANGE_2_G);
-    vTaskDelay_ms(100);
+    delay(100);
     
     zeroX = preferences.getInt("accelZeroX", 0);
     zeroY = preferences.getInt("accelZeroY", 0);
@@ -675,15 +668,6 @@ void processInputs() {
     flashStartButton();
     // ensure just one toggle per button press
     while (digitalRead(pinBK) == LOW) {
-      // wait...
-      vTaskDelay_ms(50);
-    }
-  }
-
-  // If BACK and Up D-Pad are pressed simultaneously, start advertising again to allow a new connection
-  if (buttonStatus[POSST] && buttonStatus[POSUP]) {
-    gamepad.startAdvertising(false);
-    while (digitalRead(pinST) == LOW) {
       // wait...
       vTaskDelay_ms(50);
     }
@@ -957,7 +941,7 @@ void processInputs() {
 
 void ledUpdate()
 {
-  if (!gamepad.isAdvertising()) {
+  if (!gamepad.isAdvertisingNewDevices()) {
     // Connected!  So LEDs On Solid
     analogWrite(pinLEDg, PCB_LED_BRIGHTNESS);
     digitalWrite(pinLED1, HIGH);
@@ -1012,30 +996,3 @@ void handle_main_task(void *arg)
     }
   }
 }
-
-
-void remove_all_bonded_devices(void)
-{
-  printf("remove_all_bonded_devices.\n");
-
-  int dev_num = esp_ble_get_bond_device_num();
-  if (dev_num > 0) {
-      esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
-      if (dev_list) {
-          esp_ble_get_bond_device_list(&dev_num, dev_list);
-          for (int i = 0; i < dev_num; i++) {
-              esp_ble_remove_bond_device(dev_list[i].bd_addr);
-          }
-          free(dev_list);
-      }
-  }
-
-  gamepad.clearPairedAddresses();
-
-  uint8_t new_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x00};
-  esp_fill_random(new_mac+1, 5);
-  esp_base_mac_addr_set(new_mac);
-  preferences.putBytes("custom_BLE_MAC", new_mac, 6);
-  printf("New MAC: %02X%02X %02X%02X %02X%02X\n", new_mac[0], new_mac[1], new_mac[2], new_mac[3], new_mac[4], new_mac[5]);
-}
-

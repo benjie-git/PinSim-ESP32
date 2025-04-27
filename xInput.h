@@ -68,11 +68,13 @@ class XInput
 {
 public:
     void startServer(const char *device_name, const char *manufacturer);
-    void startAdvertising(bool useBlackList);
+    void startAdvertising();
+    void allowNewConnections(bool allow);
     void onAdvComplete(NimBLEAdvertising *advertising);
     bool isConnected();
     bool isAdvertising();
-    void clearPairedAddresses();
+    bool isAdvertisingNewDevices();
+    void clearWhitelist();
 
     Signal<XboxGamepadOutputReportData> onVibrate;
 
@@ -102,6 +104,7 @@ private:
     XboxGamepadInputReportData _inputReport;
     HIDOutputCallbacks *_hidOutputCallbacks;
     bool _inputReportDirty;
+    bool _allowNewConnections;
 
     void pressDPadDirectionInternal(uint8_t direction = 0);
     bool isDPadPressedInternal(uint8_t direction = 0);

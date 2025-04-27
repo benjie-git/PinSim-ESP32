@@ -1,81 +1,78 @@
+#include <string>
 #include "xInput.h"
 #include <Preferences.h>
 #include <NimBLEDevice.h>
 
-#define PREFS_NAME "XInput_BLE"
-
-// Set MAX_CLIENTS to 1-4 to allow N computers/phones/quests to connect at once
-//    If set to 1, uses blacklist logic to avoid reconnecting to the same device for 15 sec after a 
-//    reconect, to allow another device to connect
 #define MAX_CLIENTS 4
 
+
+
+///////////////////////////////////////////
+// Manage persistent Whitelist
+
+#define PREFS_NAME "XInput_BLE"
 static Preferences preferences;
-std::vector<uint64_t> pairedAddresses;
 #define MAX_ADDRESSES 4
+std::vector<uint64_t> pairedAddresses;
 
-void loadPairedAddresses()
+void loadWhitelist()
 {
-    if (MAX_CLIENTS == 1) {
-        preferences.begin(PREFS_NAME);
-        int numBytes = preferences.getBytesLength("pairedAddresses");
-        if (numBytes) {
-            uint8_t *bytes = (uint8_t*)malloc(numBytes);
-            if (bytes) {
-                preferences.getBytes("pairedAddresses", bytes, numBytes);
-                int pos = 0;
-                while (pos < numBytes) {
-                    uint64_t *addrInt = (uint64_t*)(bytes+pos);
-                    pairedAddresses.push_back(*addrInt);
-                    pos += sizeof(uint64_t);
-                }
-                free(bytes);
-            }
-        }
-    }
-}
-
-void savePairedAddresses()
-{
-    if (MAX_CLIENTS == 1) {
-        // Keep within MAX_ADDRESSES addresses
-        while (pairedAddresses.size() > MAX_ADDRESSES) {
-            pairedAddresses.erase(pairedAddresses.begin());
-        }
-
-        int numBytes = pairedAddresses.size() * sizeof(uint64_t);
+    preferences.begin(PREFS_NAME);
+    int numBytes = preferences.getBytesLength("pairedAddresses");
+    if (numBytes) {
         uint8_t *bytes = (uint8_t*)malloc(numBytes);
         if (bytes) {
+            preferences.getBytes("pairedAddresses", bytes, numBytes);
             int pos = 0;
-            for (uint64_t addrInt : pairedAddresses) {
-                ((uint64_t*)bytes)[pos++] = addrInt;
+            while (pos < numBytes) {
+                uint64_t *addrInt = (uint64_t*)(bytes+pos);
+                pairedAddresses.push_back(*addrInt);
+                NimBLEDevice::whiteListAdd(NimBLEAddress(*addrInt, BLE_ADDR_PUBLIC));
+                pos += sizeof(uint64_t);
             }
-            preferences.putBytes("pairedAddresses", bytes, numBytes);
             free(bytes);
         }
     }
 }
 
-static uint8_t dPadDirectionToValue(XboxDpadFlags direction){
-    if(direction == XboxDpadFlags::NORTH)
-        return XBOX_BUTTON_DPAD_NORTH;
-    else if(direction == (XboxDpadFlags::EAST | XboxDpadFlags::NORTH))
-        return XBOX_BUTTON_DPAD_NORTHEAST;
-    else if(direction == XboxDpadFlags::EAST)
-        return XBOX_BUTTON_DPAD_EAST;
-    else if(direction == (XboxDpadFlags::EAST | XboxDpadFlags::SOUTH))
-        return XBOX_BUTTON_DPAD_SOUTHEAST;
-    else if(direction == XboxDpadFlags::SOUTH)
-        return XBOX_BUTTON_DPAD_SOUTH;
-    else if(direction == (XboxDpadFlags::WEST | XboxDpadFlags::SOUTH))
-        return XBOX_BUTTON_DPAD_SOUTHWEST;
-    else if(direction == XboxDpadFlags::WEST)
-        return XBOX_BUTTON_DPAD_WEST;
-    else if(direction == (XboxDpadFlags::WEST | XboxDpadFlags::NORTH))
-        return XBOX_BUTTON_DPAD_NORTHWEST;
-    
-    return XBOX_BUTTON_DPAD_NONE;
+void saveWhitelist()
+{
+    // Keep within MAX_ADDRESSES addresses
+    while (pairedAddresses.size() > MAX_ADDRESSES) {
+        pairedAddresses.erase(pairedAddresses.begin());
+    }
+
+    int numBytes = pairedAddresses.size() * sizeof(uint64_t);
+    uint8_t *bytes = (uint8_t*)malloc(numBytes);
+    if (bytes) {
+        int pos = 0;
+        for (uint64_t addrInt : pairedAddresses) {
+            ((uint64_t*)bytes)[pos++] = addrInt;
+        }
+        preferences.putBytes("pairedAddresses", bytes, numBytes);
+        free(bytes);
+    }
 }
 
+void clearWhitelistInternal()
+{
+    printf("--- Clear whitelist and delete all bonds.\n");
+    NimBLEDevice::deleteAllBonds();
+
+    // Iterate over all whitelist addresses, removing each one
+    for (int i=0; i< NimBLEDevice::getWhiteListCount(); i++) {
+        NimBLEDevice::whiteListRemove(NimBLEDevice::getWhiteListAddress(0));
+    }
+
+    pairedAddresses.clear();
+    saveWhitelist();
+    preferences.remove("pairedAddresses");
+}
+
+
+
+///////////////////////////////////////////
+// BLE Callbacks / Event Handlers
 
 class HIDOutputCallbacks : public NimBLECharacteristicCallbacks
 {
@@ -98,86 +95,76 @@ class ServerCallbacks : public NimBLEServerCallbacks
 {
 public:
     bool is_connected = false;
-    uint64_t lastAddr = 0;
 
     ServerCallbacks(XInput* xInput) : _xInput(xInput) {}
 
     void onConnect(NimBLEServer *server, NimBLEConnInfo& connInfo) override
     {
-        // Detect old connections from the same peer address, and disconnect them
-        // This section works around issue #886  https://github.com/h2zero/NimBLE-Arduino/issues/886
-        std::vector<uint16_t> peers = server->getPeerDevices();
-        for (const uint16_t& peerHandle : peers) {
-            NimBLEConnInfo peer = server->getPeerInfoByHandle(peerHandle);
-            if (peer.getConnHandle() != connInfo.getConnHandle() && peer.getAddress() == connInfo.getAddress()) {
-                printf("--- Removing duplicate peer\n");
-                server->disconnect(peerHandle);
-            }
-        }
-        // End workaround
-
-        if (MAX_CLIENTS == 1) {
-            NimBLEAddress addr = NimBLEAddress(connInfo.getAddress());
-            uint64_t addrInt = uint64_t(addr);
-            if (this->lastAddr && addrInt == this->lastAddr) {
-                printf("Reject lastAdr\n");
-                server->disconnect(connInfo.getConnHandle());
-                return;
-            }
-        }
-
         server->updateConnParams(connInfo.getConnHandle(), 6, 12, 0, 160);
         NimBLEDevice::startSecurity(connInfo.getConnHandle());
         printf("Connected %d                  (%s)\n", server->getConnectedCount(),
-          connInfo.getAddress().toString().c_str());
+                                                       connInfo.getIdAddress().toString().c_str());
+    }
+
+    void saveIdentity(NimBLEConnInfo& connInfo)
+    {
+        NimBLEAddress addr = NimBLEAddress(connInfo.getIdAddress());
+        uint64_t addrInt = uint64_t(addr);
+        if (std::find(pairedAddresses.begin(), pairedAddresses.end(), addrInt) == pairedAddresses.end()) {
+            pairedAddresses.push_back(addrInt);
+            NimBLEDevice::whiteListAdd(connInfo.getIdAddress());
+            this->_xInput->allowNewConnections(false);
+            saveWhitelist();
+            printf("Added paired address         (%s) (%s)\n", connInfo.getAddress().toString().c_str(), connInfo.getIdAddress().toString().c_str());
+        }
     }
 
     void onAuthenticationComplete(NimBLEConnInfo& connInfo) override
     {
         if (!connInfo.isEncrypted()) {
-            printf("Auth failed                  (%s)\n", connInfo.getAddress().toString().c_str());
+            printf("Auth failed                  (%s)\n", connInfo.getIdAddress().toString().c_str());
             NimBLEDevice::getServer()->disconnect(connInfo.getConnHandle());
+            this->_xInput->startAdvertising();
             return;
         }
 
-        if (MAX_CLIENTS == 1) {
-            NimBLEAddress addr = NimBLEAddress(connInfo.getAddress());
-            uint64_t addrInt = uint64_t(addr);
-            if (std::find(pairedAddresses.begin(), pairedAddresses.end(), addrInt) == pairedAddresses.end()) {
-                pairedAddresses.push_back(addrInt);
-                savePairedAddresses();
-                printf("Added paired address\n");
-            }
+        uint8_t t = connInfo.getIdAddress().getType();
+
+        if ((t & 0x01) == 0) {
+            // If this is not a random address, save it now
+            // If it is random, save it later, when onIdentity() is called
+            saveIdentity(connInfo);
         }
 
         this->is_connected = true;
-        printf("Auth complete                (%s)\n", connInfo.getAddress().toString().c_str());
+        printf("Auth complete                (%s)\n", connInfo.getIdAddress().toString().c_str());
+        
+        this->_xInput->startAdvertising();
     }
 
-    // void onConnParamsUpdate(NimBLEConnInfo& connInfo) override
-    // {
-    //     printf("Conn Params: %d, %d, %d, %d (%s)\n", connInfo.getConnInterval(),
-    //         connInfo.getConnTimeout(), connInfo.getConnLatency(), connInfo.getMTU(),
-    //         connInfo.getAddress().toString().c_str());
-    // }
+    void onIdentity(NimBLEConnInfo& connInfo) override
+    {
+        saveIdentity(connInfo);
+    }
 
     void onDisconnect(NimBLEServer *server, NimBLEConnInfo& connInfo, int reason) override
     {
-        NimBLEAddress addr = NimBLEAddress(connInfo.getAddress());
-        uint64_t addrInt = uint64_t(addr);
-        this->lastAddr = addrInt;
-
         if (server->getConnectedCount() == 0) {
             this->is_connected = false;
         }
-        printf("Disconnected %d %d           (%s)\n", server->getConnectedCount(), 
-            reason, connInfo.getAddress().toString().c_str());
+        printf("Disconnected %d               (%s)\n", server->getConnectedCount(), 
+            connInfo.getIdAddress().toString().c_str());
+        this->_xInput->startAdvertising();
     }
 
 private:
     XInput *_xInput = NULL;
 };
 
+
+
+///////////////////////////////////////////
+// Manage the BLE Server / Advertising
 
 void XInput::startServer(const char *device_name, const char *manufacturer)
 {
@@ -231,10 +218,17 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
 
     // Start BLE advertisement
     this->_advertising = this->_server->getAdvertising();
+    NimBLEAdvertisementData ad = this->_advertising->getAdvertisementData();
+    ad.setName(std::string(device_name));
+    this->_advertising->setAdvertisementData(ad);
     this->_advertising->setAppearance(HID_GAMEPAD);
     this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
     this->_advertising->enableScanResponse(true);
-    this->_advertising->start();
+    this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });
+    this->_advertising->setScanFilter(true, true);
+    this->_allowNewConnections = false;
+
+    loadWhitelist();
 }
 
 bool XInput::isConnected()
@@ -247,52 +241,63 @@ bool XInput::isAdvertising()
     return this->_advertising->isAdvertising();
 }
 
-void XInput::startAdvertising(bool useBlackList)
+bool XInput::isAdvertisingNewDevices()
 {
-    // Start BLE advertisement
-    if (MAX_CLIENTS == 1 && useBlackList && this->_serverCallbacks->lastAddr) {
-        if (this->_serverCallbacks->lastAddr && pairedAddresses.size() >= 2) {
-            printf("Start Advertising - Use blacklist\n");
-            this->_advertising->start(15000);
-            this->_advertising->setAdvertisingCompleteCallback([this](NimBLEAdvertising *pAdvertising){
-               this->onAdvComplete(pAdvertising);
-            });
-            return;
-        }
-    }
+    return this->_advertising->isAdvertising() && this->_allowNewConnections;
+}
 
+void XInput::startAdvertising()
+{
     if (this->_server->getConnectedCount() >= MAX_CLIENTS) {
         printf("Skip Starting Advertising - already connected to MAX_CLIENTS\n");
         return;
     }
-
-    printf("Start Advertising\n");
-    this->_serverCallbacks->lastAddr = 0;
-    this->_advertising->start();
-}
-
-void XInput::onAdvComplete(NimBLEAdvertising *advertising) {
-    printf("Advertising stopped\n");
-    if (this->isConnected()) {
-        return;
+    
+    int cnt = pairedAddresses.size();
+    if (this->_allowNewConnections == false && cnt == 0) {
+        this->_allowNewConnections = true;
     }
-    // If advertising timed out without connection start advertising without whitelist filter
-    this->startAdvertising(false);
+
+    if (this->_allowNewConnections == false) {
+        printf("Start Advertising (whitelist only)\n");
+        this->_advertising->stop();
+        this->_advertising->setScanFilter(true, true);
+        this->_advertising->start();
+    }
+    else {
+        printf("Start Advertising (allow all - 30sec)\n");
+        this->_advertising->stop();  // 30 sec
+        this->_advertising->setScanFilter(false, false);
+        this->_advertising->start(30000);  // 30 sec
+    }
 }
 
-void XInput::clearPairedAddresses()
+void XInput::allowNewConnections(bool allow)
 {
-    if (MAX_CLIENTS == 1) {
-        pairedAddresses.clear();
-        preferences.remove("pairedAddresses");
-    }
+    this->_allowNewConnections = allow;
 }
+
+void XInput::onAdvComplete(NimBLEAdvertising *advertising)
+{
+    printf("Advertising stopped\n");
+
+    // Restart advertising with whitelist filter
+    this->startAdvertising();
+}
+
+void XInput::clearWhitelist()
+{
+    clearWhitelistInternal();
+}
+
+
 
 
 ///////////////////////////////////////////
 // Handle button presses / stick movements
 
-void XInput::press(uint16_t button) {
+void XInput::press(uint16_t button)
+{
     // Avoid double presses
     if (!isPressed(button)) {
         _inputReport.buttons |= button;
@@ -300,7 +305,8 @@ void XInput::press(uint16_t button) {
     }
 }
 
-void XInput::release(uint16_t button) {
+void XInput::release(uint16_t button)
+{
     // Avoid double presses
     if (isPressed(button)) {   
         _inputReport.buttons ^= button;
@@ -308,11 +314,13 @@ void XInput::release(uint16_t button) {
     }
 }
 
-bool XInput::isPressed(uint16_t button) {
+bool XInput::isPressed(uint16_t button)
+{
     return (bool)((_inputReport.buttons & button) == button);
 }
 
-void XInput::setLeftThumb(int16_t x, int16_t y) {
+void XInput::setLeftThumb(int16_t x, int16_t y)
+{
     x = constrain(x, XBOX_STICK_MIN, XBOX_STICK_MAX);
     y = constrain(y, XBOX_STICK_MIN, XBOX_STICK_MAX);
     
@@ -326,7 +334,8 @@ void XInput::setLeftThumb(int16_t x, int16_t y) {
     }
 }
 
-void XInput::setRightThumb(int16_t z, int16_t rZ) {
+void XInput::setRightThumb(int16_t z, int16_t rZ)
+{
     z = constrain(z, XBOX_STICK_MIN, XBOX_STICK_MAX);
     rZ = constrain(rZ, XBOX_STICK_MIN, XBOX_STICK_MAX);
     
@@ -340,7 +349,8 @@ void XInput::setRightThumb(int16_t z, int16_t rZ) {
     }
 }
 
-void XInput::setLeftTrigger(uint16_t value) {
+void XInput::setLeftTrigger(uint16_t value)
+{
     value = constrain(value, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
 
     if (_inputReport.brake != value) {
@@ -349,7 +359,8 @@ void XInput::setLeftTrigger(uint16_t value) {
     }
 }
 
-void XInput::setRightTrigger(uint16_t value) {
+void XInput::setRightTrigger(uint16_t value)
+{
     value = constrain(value, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
 
     if (_inputReport.accelerator != value) {
@@ -358,7 +369,8 @@ void XInput::setRightTrigger(uint16_t value) {
     }
 }
 
-void XInput::setTriggers(uint16_t left, uint16_t right) {
+void XInput::setTriggers(uint16_t left, uint16_t right)
+{
     left = constrain(left, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
     right = constrain(right, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
 
@@ -369,7 +381,30 @@ void XInput::setTriggers(uint16_t left, uint16_t right) {
     }
 }
 
-void XInput::pressDPadDirectionInternal(uint8_t direction) {
+static uint8_t dPadDirectionToValue(XboxDpadFlags direction)
+{
+    if(direction == XboxDpadFlags::NORTH)
+        return XBOX_BUTTON_DPAD_NORTH;
+    else if(direction == (XboxDpadFlags::EAST | XboxDpadFlags::NORTH))
+        return XBOX_BUTTON_DPAD_NORTHEAST;
+    else if(direction == XboxDpadFlags::EAST)
+        return XBOX_BUTTON_DPAD_EAST;
+    else if(direction == (XboxDpadFlags::EAST | XboxDpadFlags::SOUTH))
+        return XBOX_BUTTON_DPAD_SOUTHEAST;
+    else if(direction == XboxDpadFlags::SOUTH)
+        return XBOX_BUTTON_DPAD_SOUTH;
+    else if(direction == (XboxDpadFlags::WEST | XboxDpadFlags::SOUTH))
+        return XBOX_BUTTON_DPAD_SOUTHWEST;
+    else if(direction == XboxDpadFlags::WEST)
+        return XBOX_BUTTON_DPAD_WEST;
+    else if(direction == (XboxDpadFlags::WEST | XboxDpadFlags::NORTH))
+        return XBOX_BUTTON_DPAD_NORTHWEST;
+    
+    return XBOX_BUTTON_DPAD_NONE;
+}
+
+void XInput::pressDPadDirectionInternal(uint8_t direction)
+{
 
     // Avoid double presses
     if (!isDPadPressedInternal(direction))
@@ -379,7 +414,8 @@ void XInput::pressDPadDirectionInternal(uint8_t direction) {
     }
 }
 
-void XInput::pressDPadDirection(XboxDpadFlags direction) {
+void XInput::pressDPadDirection(XboxDpadFlags direction)
+{
     // Filter opposite button presses
     if((direction & (XboxDpadFlags::NORTH | XboxDpadFlags::SOUTH)) == (XboxDpadFlags::NORTH | XboxDpadFlags::SOUTH)){
         ESP_LOGD(LOG_TAG, "Filtering opposite button presses - up down");
@@ -393,16 +429,19 @@ void XInput::pressDPadDirection(XboxDpadFlags direction) {
     pressDPadDirectionInternal(dPadDirectionToValue(direction));
 }
 
-void XInput::releaseDPad() {
+void XInput::releaseDPad() 
+{
     pressDPadDirectionInternal(XBOX_BUTTON_DPAD_NONE);
 }
 
-bool XInput::isDPadPressedInternal(uint8_t direction) {
+bool XInput::isDPadPressedInternal(uint8_t direction)
+{
     return _inputReport.hat == direction;
     //return (bool)((_inputReport.hat & direction) == direction);
 }
 
-bool XInput::isDPadPressed(XboxDpadFlags direction) {
+bool XInput::isDPadPressed(XboxDpadFlags direction)
+{
     if (direction == XboxDpadFlags::NORTH) {
         return _inputReport.hat == XBOX_BUTTON_DPAD_NORTH;
     } else if(direction == (XboxDpadFlags::NORTH & XboxDpadFlags::EAST)) {
@@ -423,8 +462,8 @@ bool XInput::isDPadPressed(XboxDpadFlags direction) {
     return false;
 }
 
-
-void XInput::pressShare() {
+void XInput::pressShare()
+{
     // Avoid double presses
     if (!(_inputReport.share & XBOX_BUTTON_SHARE)) {
         _inputReport.share |= XBOX_BUTTON_SHARE;
@@ -432,14 +471,16 @@ void XInput::pressShare() {
     }
 }
 
-void XInput::releaseShare() {
+void XInput::releaseShare()
+{
     if (_inputReport.share & XBOX_BUTTON_SHARE) {
         _inputReport.share ^= XBOX_BUTTON_SHARE;
         _inputReportDirty = true;
     }
 }
 
-void XInput::sendGamepadReport() {
+void XInput::sendGamepadReport()
+{
     if (!this->_input || !this->isConnected()) {
         return;
     }
@@ -449,9 +490,4 @@ void XInput::sendGamepadReport() {
         this->_input->notify();
         _inputReportDirty = false;
     }
-
-    if (!this->_advertising->isAdvertising() && NimBLEDevice::getServer()->getConnectedCount() < MAX_CLIENTS) {
-        this->startAdvertising(false);
-    }
-
 }
