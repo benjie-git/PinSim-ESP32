@@ -43,8 +43,8 @@
 const char *XB_NAME = "Xbox Wireless Controller";  // "PinSimESP32 Xbox Controller";
 const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 
-// Define this as 2 for v0.2, or 3 for v0.3/v0.4, as a few connections have changed
-#define PCB_VERSION 3
+// Define this as 2 for v0.2, or 3 for v0.3/v0.4, , or 5 for v0.5 as a few connections have changed
+#define PCB_VERSION 5
 
 // LED Brightness for the Red and Green LEDs onboard the PCB.  255 is full, 5 is dim, 0 disables them.
 #define PCB_LED_BRIGHTNESS 6
@@ -111,13 +111,17 @@ float zeroY = 0;
 
 // Pin Declarations
 #if PCB_VERSION == 2
-#define pinLED1 2       // Onboard LED 1
-#define pinLED2 1       // Onboard LED 2
+// PCB Version 0.2
+#define pinLEDStart 2   // Start Button LED
+#define pinLEDLR    0   // Left/Right Buttons LED
+#define pinLEDABC   0   // ABC Buttons LED
+#define pinLEDBG    0   // BG Buttons LED
+#define pinLEDXYZ   0   // XYZ Buttons LED
+#define pinLEDg     6   // PCB LED GREEN
+#define pinLEDr     7   // PCB LED RED
 #define pinACC_SCL 3    // Accelerometer SCL pin
 #define pinRT 4         // Right Flipper
 #define pinPlunger 5    // IR distance for plunger
-#define pinLEDg 6       // PCB LED GREEN
-#define pinLEDr 7       // PCB LED RED
 #define rumbleSmall 8   // Large Rumble Motor
 #define pinACC_SDA 9    // Accelerometer SDA pin
 #define rumbleLarge 10  // Large Rumble Motor
@@ -140,13 +144,50 @@ float zeroY = 0;
 #define NUMBUTTONS 17   // Total number of buttons
 
 #elif PCB_VERSION == 3
-#define pinLED1 42      // Onboard LED 1
-#define pinLED2 2       // Onboard LED 2
+// PCB Versions 0.3, 0.4
+#define pinLEDStart 42  // Start Button LED
+#define pinLEDLR 0      // Left/Right Buttons LED
+#define pinLEDABC 0     // ABC Buttons LED
+#define pinLEDBG  0     // BG Buttons LED
+#define pinLEDXYZ 0     // XYZ Buttons LED
+#define pinLEDg 6       // PCB LED GREEN
+#define pinLEDr 7       // PCB LED RED
 #define pinACC_SCL 3    // Accelerometer SCL pin
 #define pinRT 4         // Right Flipper
 #define pinPlunger 5    // IR distance for plunger
+#define rumbleSmall 8   // Large Rumble Motor
+#define pinACC_SDA 9    // Accelerometer SDA pin
+#define rumbleLarge 10  // Large Rumble Motor
+#define pinDpadD 12     // Down on DPAD
+#define pinDpadU 14     // Up on DPAD
+#define pinB1 15        // Button 1 (A)
+#define pinB2 16        // Button 2 (B)
+#define pinB3 17        // Button 3 (X)
+#define pinB4 18        // Button 4 (Y)
+#define pinDpadL 38     // Left on DPAD
+#define pinST 39        // Button 8 (Start)
+#define pinBK 40        // Button 7 (Back)
+#define pinXB 41        // XBOX Guide Button
+#define pinLT 1         // Left Flipper
+#define pinDpadR 48     // Right on DPAD
+#define pinB9 47        // Button 9 (L3)   -- Exposed in GPIO header
+#define pinB10 21       // Button 10 (R3)  -- Exposed in GPIO header
+#define pinLB 13        // Button 5 (LB)   -- Exposed in GPIO header
+#define pinRB 11        // Button 6 (RB)   -- Exposed in GPIO header
+#define NUMBUTTONS 17   // Total number of buttons
+
+#elif PCB_VERSION == 5
+// PCB Version 0.5
+#define pinLEDStart 45  // Start Button LED
+#define pinLEDLR 2      // Left/Right Buttons LED
+#define pinLEDABC 7     // ABC Buttons LED
+#define pinLEDBG 42     // BG Buttons LED
+#define pinLEDXYZ 46    // XYZ Buttons LED
 #define pinLEDg 6       // PCB LED GREEN
-#define pinLEDr 7       // PCB LED RED
+#define pinLEDr 0       // PCB LED RED
+#define pinACC_SCL 3    // Accelerometer SCL pin
+#define pinRT 4         // Right Flipper
+#define pinPlunger 5    // IR distance for plunger
 #define rumbleSmall 8   // Large Rumble Motor
 #define pinACC_SDA 9    // Accelerometer SDA pin
 #define rumbleLarge 10  // Large Rumble Motor
@@ -195,11 +236,6 @@ float zeroY = 0;
 
 uint8_t buttonStatus[NUMBUTTONS];  // array Holds a "Snapshot" of the button status to parse and manipulate
 
-// LED Toggle Tracking Global Variables
-uint8_t LEDState = LOW;   //used to set the pin for the LED
-uint32_t previousMS = 0;  //used to store the last time LED was updated
-uint8_t LEDtracker = 0;   //used as an index to step through a pattern on interval
-
 // LED Patterns
 uint8_t patternAllOff[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 uint8_t patternBlinkRotate[10] = { 1, 0, 1, 0, 1, 0, 1, 0, 1, 0 };
@@ -231,6 +267,23 @@ Button2 button9 = Button2(pinB9);
 Button2 button10 = Button2(pinB10);
 
 
+bool LED_states[50];
+
+// Use LED_Set() and LED_SetAnalog() to control LEDS.
+// These will ignore LEDs with pin numbers set to 0 (not used on the current board revision)
+void LED_Set(int pin, bool state, bool skipSetState=0) {
+  if (pin) {
+    digitalWrite(pin, state);
+  }
+  if (!skipSetState) LED_states[pin] = state;
+}
+void LED_SetAnalog(int pin, int value) {
+  if (pin) {
+    analogWrite(pin, value);
+  }
+}
+
+
 // Configure Inputs and Outputs
 void setupPins() {
   // Configure the direction of the pins
@@ -252,12 +305,29 @@ void setupPins() {
   pinMode(pinST, INPUT_PULLUP);
   pinMode(pinBK, INPUT_PULLUP);
   pinMode(pinXB, INPUT_PULLUP);
-  pinMode(pinLED1, OUTPUT);
-  pinMode(pinLED2, OUTPUT);
-  pinMode(pinLEDg, OUTPUT);
-  pinMode(pinLEDr, OUTPUT);
   pinMode(rumbleSmall, OUTPUT);
   pinMode(rumbleLarge, OUTPUT);
+
+  if (pinLEDStart) pinMode(pinLEDStart, OUTPUT);
+  if (pinLEDLR) pinMode(pinLEDLR, OUTPUT);
+  if (pinLEDBG) pinMode(pinLEDBG, OUTPUT);
+  if (pinLEDABC) pinMode(pinLEDABC, OUTPUT);
+  if (pinLEDXYZ) pinMode(pinLEDXYZ, OUTPUT);
+  if (pinLEDg) pinMode(pinLEDg, OUTPUT);
+  if (pinLEDr) pinMode(pinLEDr, OUTPUT);
+
+  // Disable bright neopixel on ESP32-S3 Dev Board
+  // pinMode(LED_BUILTIN, OUTPUT);
+  // LED_Set(LED_BUILTIN, LOW);
+
+  // Set up LED initial states
+  LED_SetAnalog(pinLEDr, PCB_LED_BRIGHTNESS);
+  LED_SetAnalog(pinLEDg, 0);
+  LED_Set(pinLEDStart, LOW);
+  LED_Set(pinLEDLR, LOW);
+  LED_Set(pinLEDBG, LOW);
+  LED_Set(pinLEDABC, LOW);
+  LED_Set(pinLEDXYZ, LOW);
 
   // Set button timeouts
   dpadUP.setDebounceTime(MILLIDEBOUNCE);
@@ -278,18 +348,6 @@ void setupPins() {
   button9.setDebounceTime(MILLIDEBOUNCE);
   button10.setDebounceTime(MILLIDEBOUNCE);
 
-  // Set the LED to low to make sure it is off
-  digitalWrite(pinLED1, LOW);
-  analogWrite(pinLEDg, LOW);
-
-  // Disable bright neopixel on ESP32-S3 Dev Board
-  // pinMode(LED_BUILTIN, OUTPUT);
-  // digitalWrite(LED_BUILTIN, LOW);
-
-  // Set the LED to high to turn it on
-  digitalWrite(pinLED2, LOW);
-  analogWrite(pinLEDr, PCB_LED_BRIGHTNESS);
-
   // Set up DATA and CLK pins for the Acceleromter I2C interface
   if (accelerometerEnabled) {
     Wire.setPins(pinACC_SDA, pinACC_SCL);
@@ -299,9 +357,9 @@ void setupPins() {
 
 void flashStartButton() {
   for (int i = 0; i < 10; i++) {
-    digitalWrite(pinLED1, HIGH);
+    LED_Set(pinLEDStart, HIGH);
     vTaskDelay_ms(50);
-    digitalWrite(pinLED1, LOW);
+    LED_Set(pinLEDStart, LOW);
     vTaskDelay_ms(50);
   }
 }
@@ -489,19 +547,40 @@ void buttonUpdate() {
   dpadDOWN.loop();
   dpadLEFT.loop();
   dpadRIGHT.loop();
+
+  // Disable button LEDs while testing the buttons
+  LED_Set(pinLEDABC, LOW, 1);
   button1.loop();
   button2.loop();
+  button9.loop();
+  LED_Set(pinLEDABC, LED_states[pinLEDABC]);
+
+  // Disable button LEDs while testing the buttons
+  LED_Set(pinLEDXYZ, LOW, 1);
   button3.loop();
   button4.loop();
-  buttonLB.loop();
-  buttonRB.loop();
+  button10.loop();
+  LED_Set(pinLEDXYZ, LED_states[pinLEDXYZ]);
+
+  // Disable button LEDs while testing the buttons
+  LED_Set(pinLEDLR, LOW, 1);
   buttonLT.loop();
   buttonRT.loop();
+  LED_Set(pinLEDLR, LED_states[pinLEDLR]);
+
+  buttonLB.loop();
+  buttonRB.loop();
+
+  // Disable button LEDs while testing the buttons
+  LED_Set(pinLEDStart, LOW, 1);
   buttonSTART.loop();
+  LED_Set(pinLEDStart, LED_states[pinLEDStart]);
+
+  // Disable button LEDs while testing the buttons
+  LED_Set(pinLEDBG, LOW, 1);
   buttonBACK.loop();
   buttonXBOX.loop();
-  button9.loop();
-  button10.loop();
+  LED_Set(pinLEDBG, LED_states[pinLEDBG]);
 
   buttonStatus[POSUP] = dpadUP.isPressed();
   buttonStatus[POSDN] = dpadDOWN.isPressed();
@@ -943,8 +1022,8 @@ void ledUpdate()
 {
   if (!gamepad.isAdvertisingNewDevices()) {
     // Connected!  So LEDs On Solid
-    analogWrite(pinLEDg, PCB_LED_BRIGHTNESS);
-    digitalWrite(pinLED1, HIGH);
+    LED_SetAnalog(pinLEDg, PCB_LED_BRIGHTNESS);
+    LED_Set(pinLEDStart, HIGH);
   } else {
     // BLE Pairing mode -- So Flash LEDs
     static uint8_t blinkCounter = 0;
@@ -953,8 +1032,8 @@ void ledUpdate()
       ledOn = !ledOn;
       blinkCounter = 0;
     }
-    analogWrite(pinLEDg, (ledOn) ? PCB_LED_BRIGHTNESS : 0);
-    digitalWrite(pinLED1, ledOn);
+    LED_SetAnalog(pinLEDg, (ledOn) ? PCB_LED_BRIGHTNESS : 0);
+    LED_Set(pinLEDStart, ledOn);
   }
 }
 
