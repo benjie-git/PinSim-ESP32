@@ -17,6 +17,8 @@ std::vector<uint64_t> pairedAddresses;
 
 void loadWhitelist()
 {
+    pairedAddresses.reserve(MAX_ADDRESSES+1);
+    
     preferences.begin(PREFS_NAME);
     int numBytes = preferences.getBytesLength("pairedAddresses");
     if (numBytes) {
@@ -113,7 +115,7 @@ public:
         if (std::find(pairedAddresses.begin(), pairedAddresses.end(), addrInt) == pairedAddresses.end()) {
             pairedAddresses.push_back(addrInt);
             NimBLEDevice::whiteListAdd(connInfo.getIdAddress());
-            this->_xInput->allowNewConnections(false);
+            // this->_xInput->allowNewConnections(false);
             saveWhitelist();
             printf("Added paired address         (%s) (%s)\n", connInfo.getAddress().toString().c_str(), connInfo.getIdAddress().toString().c_str());
         }
