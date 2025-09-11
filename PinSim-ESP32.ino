@@ -33,7 +33,7 @@
 #include <esp_mac.h>
 #include <Preferences.h>
 #include <Button2.h>
-
+#include "solenoid.h"
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
@@ -62,10 +62,6 @@ const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 
 // GLOBAL CONFIGURATION VARIABLES
 // configure these
-boolean flipperL1R1 = true;             //
-boolean fourFlipperButtons = false;     // FLIP_L & FLIP_R map to L1/R1 and pins 13 & 14 map to analog L2/R2 100%
-boolean doubleContactFlippers = false;  // FLIP_L & FLIP_R map to analog L2/R2 10% and pins 13 & 14 map to L2/R2 100%
-boolean analogFlippers = false;         // use analog flipper buttons
 boolean leftStickJoy = false;           // joystick moves left analog stick instead of D-pad
 boolean accelerometerEnabled = true;
 boolean plungerEnabled = true;
@@ -139,9 +135,11 @@ float zeroY = 0;
 #define pinDpadR 48     // Right on DPAD
 #define pinB9 47        // Button 9 (L3)   -- Exposed in GPIO header
 #define pinB10 21       // Button 10 (R3)  -- Exposed in GPIO header
-#define pinLB 13        // Button 5 (LB)   -- Exposed in GPIO header
-#define pinRB 11        // Button 6 (RB)   -- Exposed in GPIO header
-#define NUMBUTTONS 17   // Total number of buttons
+#define pinGPIO11 11    // Exposed in GPIO header
+#define pinGPIO13 13    // Exposed in GPIO header
+#define pinGPIO35 35
+#define pinGPIO36 36
+#define pinGPIO37 37
 
 #elif PCB_VERSION == 3
 // PCB Versions 0.3, 0.4
@@ -172,9 +170,11 @@ float zeroY = 0;
 #define pinDpadR 48     // Right on DPAD
 #define pinB9 47        // Button 9 (L3)   -- Exposed in GPIO header
 #define pinB10 21       // Button 10 (R3)  -- Exposed in GPIO header
-#define pinLB 13        // Button 5 (LB)   -- Exposed in GPIO header
-#define pinRB 11        // Button 6 (RB)   -- Exposed in GPIO header
-#define NUMBUTTONS 17   // Total number of buttons
+#define pinGPIO11 11    // Exposed in GPIO header
+#define pinGPIO13 13    // Exposed in GPIO header
+#define pinGPIO35 35
+#define pinGPIO36 36
+#define pinGPIO37 37
 
 #elif PCB_VERSION == 5
 // PCB Version 0.5
@@ -203,35 +203,40 @@ float zeroY = 0;
 #define pinXB 41        // XBOX Guide Button
 #define pinLT 1         // Left Flipper
 #define pinDpadR 48     // Right on DPAD
-#define pinB9 47        // Button 9 (L3)   -- Exposed in GPIO header
-#define pinB10 21       // Button 10 (R3)  -- Exposed in GPIO header
-#define pinLB 13        // Button 5 (LB)   -- Exposed in GPIO header
-#define pinRB 11        // Button 6 (RB)   -- Exposed in GPIO header
-#define NUMBUTTONS 17   // Total number of buttons
+#define pinB9 47        // Button 9 (L3)
+#define pinB10 21       // Button 10 (R3)
+#define pinGPIO11 11    // Exposed in GPIO header
+#define pinGPIO13 13    // Exposed in GPIO header
+#define pinGPIO35 35    // Exposed in GPIO header
+#define pinGPIO36 36    // Exposed in GPIO header
+#define pinGPIO37 37    // Exposed in GPIO header
 
 #else
 #error "Please set PCB_VERSION to a valid value"
 #endif
 
 
+Solenoid solLeft(pinGPIO11, pinGPIO13, pinGPIO37);
+Solenoid solRight(pinGPIO35, pinGPIO36, pinGPIO37);
+
+
 // Position of a button in the button status array
-#define POSUP 0
-#define POSDN 1
-#define POSLT 2
-#define POSRT 3
-#define POSB1 4
-#define POSB2 5
-#define POSB3 6
-#define POSB4 7
-#define POSL1 8
-#define POSR1 9
-#define POSL2 10
-#define POSR2 11
-#define POSST 12
-#define POSBK 13
-#define POSXB 14
-#define POSB9 15
-#define POSB10 16
+#define POSUP   0
+#define POSDN   1
+#define POSLT   2
+#define POSRT   3
+#define POSB1   4
+#define POSB2   5
+#define POSB3   6
+#define POSB4   7
+#define POSL1   8
+#define POSR1   9
+#define POSST  10
+#define POSBK  11
+#define POSXB  12
+#define POSB9  13
+#define POSB10 14
+#define NUMBUTTONS 15   // Total number of buttons
 
 
 uint8_t buttonStatus[NUMBUTTONS];  // array Holds a "Snapshot" of the button status to parse and manipulate
@@ -256,8 +261,6 @@ Button2 button1 = Button2(pinB1);
 Button2 button2 = Button2(pinB2);
 Button2 button3 = Button2(pinB3);
 Button2 button4 = Button2(pinB4);
-Button2 buttonLB = Button2(pinLB);
-Button2 buttonRB = Button2(pinRB);
 Button2 buttonLT = Button2(pinLT);
 Button2 buttonRT = Button2(pinRT);
 Button2 buttonSTART = Button2(pinST);
@@ -298,8 +301,6 @@ void setupPins() {
   pinMode(pinB4, INPUT_PULLUP);
   pinMode(pinB9, INPUT_PULLUP);
   pinMode(pinB10, INPUT_PULLUP);
-  pinMode(pinLB, INPUT_PULLUP);
-  pinMode(pinRB, INPUT_PULLUP);
   pinMode(pinLT, INPUT_PULLUP);
   pinMode(pinRT, INPUT_PULLUP);
   pinMode(pinST, INPUT_PULLUP);
@@ -338,8 +339,6 @@ void setupPins() {
   button2.setDebounceTime(MILLIDEBOUNCE);
   button3.setDebounceTime(MILLIDEBOUNCE);
   button4.setDebounceTime(MILLIDEBOUNCE);
-  buttonLB.setDebounceTime(MILLIDEBOUNCE);
-  buttonRB.setDebounceTime(MILLIDEBOUNCE);
   buttonLT.setDebounceTime(MILLIDEBOUNCE);
   buttonRT.setDebounceTime(MILLIDEBOUNCE);
   buttonSTART.setDebounceTime(MILLIDEBOUNCE);
@@ -568,9 +567,6 @@ void buttonUpdate() {
   buttonRT.loop();
   LED_Set(pinLEDLR, LED_states[pinLEDLR]);
 
-  buttonLB.loop();
-  buttonRB.loop();
-
   // Disable button LEDs while testing the buttons
   LED_Set(pinLEDStart, LOW, 1);
   buttonSTART.loop();
@@ -592,8 +588,6 @@ void buttonUpdate() {
   buttonStatus[POSB4] = button4.isPressed();
   buttonStatus[POSL1] = buttonLT.isPressed();
   buttonStatus[POSR1] = buttonRT.isPressed();
-  buttonStatus[POSL2] = buttonLB.isPressed();
-  buttonStatus[POSR2] = buttonRB.isPressed();
   buttonStatus[POSST] = buttonSTART.isPressed();
   buttonStatus[POSBK] = buttonBACK.isPressed();
   buttonStatus[POSXB] = buttonXBOX.isPressed();
@@ -700,14 +694,6 @@ void processInputs() {
     leftStickJoy = true;
   }
 
-  // If Xbox "Back" and joystick Left pressed simultaneously, use normal L1 & R1
-  // If Xbox "Back" and joystick Right pressed, use analog L2 & R2
-  if (!flipperL1R1 && buttonStatus[POSLT] && buttonStatus[POSBK]) {
-    flipperL1R1 = true;
-  } else if (flipperL1R1 && buttonStatus[POSRT] && buttonStatus[POSBK]) {
-    flipperL1R1 = false;
-  }
-
   // Buttons
   if (buttonStatus[POSB1]) gamepad.press(XBOX_BUTTON_A);
   else gamepad.release(XBOX_BUTTON_A);
@@ -752,108 +738,11 @@ void processInputs() {
     }
   }
 
-  // detect double contact flipper switches 
-  if (!doubleContactFlippers && !fourFlipperButtons) {
-    if (buttonStatus[POSL2] && buttonStatus[POSL1]) {
-      printf("Double-Contact Left Flippers Detected - Enable Double-Contact Flippers\n");
-      flipperL1R1 = false;
-      doubleContactFlippers = true;
-    }
-    if (buttonStatus[POSR2] && buttonStatus[POSR1]) {
-      printf("Double-Contact Right Flippers Detected - Enable Double-Contact Flippers\n");
-      flipperL1R1 = false;
-      doubleContactFlippers = true;
-    }
-  }
-
-  // detect four flipper buttons, second pair tied to GPIO 13 & 14
-  // detection occurs if GPIO 13 is pressed WITHOUT FLIP_L being pressed
-  // or GPIO 14 without FLIP_R being pressed (not possible with double contact switch)
-  // 20190511 - Switch must be closed for ~250 ms in order to qualify mode change.
-  if (!fourFlipperButtons) {
-    if (buttonStatus[POSL2] && !buttonStatus[POSL1]) {
-      long currentTime = millis();
-      if (fourButtonModeTriggeredLB == 0) {
-        fourButtonModeTriggeredLB = currentTime;
-      } else if (currentTime > fourButtonModeTriggeredLB + fourButtonModeThreshold) {
-        printf("2nd Left Flipper Detected - Enabling Four Flipper Mode\n");
-        flipperL1R1 = true;
-        fourFlipperButtons = true;
-        doubleContactFlippers = false;
-      }
-    }
-    // reset check timer if necessary
-    else if (fourButtonModeTriggeredLB > 0)
-      fourButtonModeTriggeredLB = 0;
-
-    if (buttonStatus[POSR2] && !buttonStatus[POSR1]) {
-      long currentTime = millis();
-      if (fourButtonModeTriggeredRB == 0) {
-        fourButtonModeTriggeredRB = currentTime;
-      } else if (currentTime > fourButtonModeTriggeredRB + fourButtonModeThreshold) {
-        printf("2nd Right Flipper Detected - Enabling Four Flipper Mode\n");
-        flipperL1R1 = true;
-        fourFlipperButtons = true;
-        doubleContactFlippers = false;
-      }
-    }
-    // reset check timer if necessary
-    else if (fourButtonModeTriggeredRB > 0)
-      fourButtonModeTriggeredRB = 0;
-  }
-
   // Bumpers
-  if (flipperL1R1) {
-    // Standard mode: FLIP_L and FLIP_R map to L1/R1, and optionally GPIO 13 & 14 map to L2/R2
-    uint16_t leftTrigger = 0;
-    uint16_t rightTrigger = 0;
-    if (buttonStatus[POSL1]) gamepad.press(XBOX_BUTTON_LB);
-    else gamepad.release(XBOX_BUTTON_LB);
-    if (buttonStatus[POSR1]) gamepad.press(XBOX_BUTTON_RB);
-    else gamepad.release(XBOX_BUTTON_RB);
-
-    if (buttonStatus[POSL2]) leftTrigger = XBOX_TRIGGER_MAX;
-    else leftTrigger = XBOX_TRIGGER_MIN;
-    if (buttonStatus[POSR2]) rightTrigger = XBOX_TRIGGER_MAX;
-    else rightTrigger = XBOX_TRIGGER_MIN;
-    gamepad.setLeftTrigger(leftTrigger);
-    gamepad.setRightTrigger(rightTrigger);
-  } else if (!flipperL1R1 && !doubleContactFlippers) {
-    // L2/R2 Flippers (standard mode swapped)
-    uint16_t leftTrigger = 0;
-    uint16_t rightTrigger = 0;
-    if (buttonStatus[POSL2]) gamepad.press(XBOX_BUTTON_LB);
-    else gamepad.release(XBOX_BUTTON_LB);
-    if (buttonStatus[POSR2]) gamepad.press(XBOX_BUTTON_RB);
-    else gamepad.release(XBOX_BUTTON_RB);
-
-    if (buttonStatus[POSL1]) leftTrigger = XBOX_TRIGGER_MAX;
-    else leftTrigger = XBOX_TRIGGER_MIN;
-    if (buttonStatus[POSR1]) rightTrigger = XBOX_TRIGGER_MAX;
-    else rightTrigger = XBOX_TRIGGER_MIN;
-    gamepad.setLeftTrigger(leftTrigger);
-    gamepad.setRightTrigger(rightTrigger);
-  } else if (!flipperL1R1 && doubleContactFlippers) {
-    // Double Contact Flippers
-    uint16_t leftTrigger = 0;
-    uint16_t rightTrigger = 0;
-    if (buttonStatus[POSL1] && buttonStatus[POSL2]) {
-      leftTrigger = XBOX_TRIGGER_MAX;
-    } else if (buttonStatus[POSL1] && !buttonStatus[POSL2]) {
-      leftTrigger = XBOX_TRIGGER_MAX / 10;
-    } else if (!buttonStatus[POSL1] && !buttonStatus[POSL2]) {
-      leftTrigger = XBOX_TRIGGER_MIN;
-    }
-    if (buttonStatus[POSR1] && buttonStatus[POSR2]) {
-      rightTrigger = XBOX_TRIGGER_MAX;
-    } else if (buttonStatus[POSR1] && !buttonStatus[POSR2]) {
-      rightTrigger = XBOX_TRIGGER_MAX / 10;
-    } else if (!buttonStatus[POSR1] && !buttonStatus[POSR2]) {
-      rightTrigger = XBOX_TRIGGER_MIN;
-    }
-    gamepad.setLeftTrigger(leftTrigger);
-    gamepad.setRightTrigger(rightTrigger);
-  }
+  if (buttonStatus[POSL1]) gamepad.press(XBOX_BUTTON_LB);
+  else gamepad.release(XBOX_BUTTON_LB);
+  if (buttonStatus[POSR1]) gamepad.press(XBOX_BUTTON_RB);
+  else gamepad.release(XBOX_BUTTON_RB);
 
   // Middle Buttons: Start, Select, Home
   if (buttonStatus[POSST] && buttonStatus[POSBK]) {
@@ -876,15 +765,6 @@ void processInputs() {
     pressHome(0);
     pressStart(0);
     gamepad.release(XBOX_BUTTON_SELECT);
-  }
-
-  // Experimental Analog Input
-  // Analog flippers
-  if (analogFlippers) {
-    uint8_t leftTrigger = map(analogRead(pinLT), 0, 512, 0, 255);
-    uint8_t rightTrigger = map(analogRead(pinRT), 0, 512, 0, 255);
-    gamepad.setLeftTrigger(leftTrigger);
-    gamepad.setRightTrigger(rightTrigger);
   }
 
   // Tilt
@@ -1038,6 +918,40 @@ void ledUpdate()
 }
 
 
+void solenoidUpdate()
+{
+  // Last state is the previous button state, to help notice state changes
+  static bool lastStateLeft  = 0;
+  static bool lastStateRight = 0;
+
+  if (buttonStatus[POSL1] && !lastStateLeft) {
+    // Left was just pressed
+    lastStateLeft = 1;
+    solLeft.fwd();
+  }
+  else if (!buttonStatus[POSL1] && lastStateLeft) {
+    // Left was just released
+    lastStateLeft = 0;
+    solLeft.coast();
+  }
+
+  if (buttonStatus[POSR1] && !lastStateRight) {
+    // Right was just pressed
+    lastStateRight = 1;
+    solRight.fwd();
+  }
+  else if (!buttonStatus[POSR1] && lastStateRight) {
+    // Right was just released
+    lastStateRight = 0;
+    solRight.coast();
+  }
+
+  if (lastStateLeft == 0 && lastStateRight == 0) {
+    solLeft.standby();
+  }
+}
+
+
 // Delay until at least ms_since_last_delay ms after the last call of this function
 void delay_since_last_delay(uint32_t ms_since_last_delay)
 {
@@ -1065,6 +979,9 @@ void handle_main_task(void *arg)
 
     // Update LEDs
     ledUpdate();
+
+    // Update Solenoids
+    solenoidUpdate();
 
     if (gamepad.isConnected()) {
       // Process all inputs and load up the usbData registers correctly
