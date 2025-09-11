@@ -241,17 +241,6 @@ Solenoid solRight(pinGPIO35, pinGPIO36, pinGPIO37);
 
 uint8_t buttonStatus[NUMBUTTONS];  // array Holds a "Snapshot" of the button status to parse and manipulate
 
-// LED Patterns
-uint8_t patternAllOff[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-uint8_t patternBlinkRotate[10] = { 1, 0, 1, 0, 1, 0, 1, 0, 1, 0 };
-uint8_t patternPlayer1[10] = { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-uint8_t patternPlayer2[10] = { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0 };
-uint8_t patternPlayer3[10] = { 1, 0, 1, 0, 1, 0, 0, 0, 0, 0 };
-uint8_t patternPlayer4[10] = { 1, 0, 1, 0, 1, 0, 1, 0, 0, 0 };
-
-// Variable to hold the current pattern selected by the host
-uint8_t patternCurrent[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
 // Setup Button Debouncing
 Button2 dpadUP = Button2(pinDpadU);
 Button2 dpadDOWN = Button2(pinDpadD);
