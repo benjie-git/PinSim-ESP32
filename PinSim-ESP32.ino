@@ -86,16 +86,14 @@ XInput gamepad;
 TaskHandle_t mainTaskHandle = NULL;
 void handle_main_task(void *arg);
 
-long fourButtonModeTriggeredLB = 0;  // these two vars are used to check for 4 flipper buttons
-long fourButtonModeTriggeredRB = 0;
-int16_t zeroValue = 0;            // xbox 360 value for neutral analog stick
-int16_t zeroValueBuffer = 0;      // save zero value during plunge
-int16_t plungerReportDelay = 17;  // delay in ms between reading ~60hz plunger updates from sensor
-int16_t plungerMin = 200;         // min plunger analog sensor value
-int16_t plungerMax = 550;         // max plunger analog sensor value
-int16_t plungerMaxDistance = 0;   // sensor value converted to actual distance
-int16_t plungerMinDistance = 0;
+int16_t zeroValue = 100;            // xbox 360 value for neutral analog stick
+int16_t zeroValueBuffer = 0;        // save zero value during plunge
+int16_t plungerReportDelay = 17;    // delay in ms between reading ~60hz plunger updates from sensor
 uint32_t plungerReportTime = 0;
+int16_t plungerMin = 1300;          // default min plunger analog sensor value
+int16_t plungerMax = 2950;          // default max plunger analog sensor value
+int16_t plungerMaxDistance = 0;     // sensor value converted to actual distance
+int16_t plungerMinDistance = 0; 
 boolean currentlyPlunging = false;
 uint32_t tiltEnableTime = 0;
 int16_t lastPlungerReading = 0;
@@ -403,7 +401,8 @@ void getPlungerMax() {
 
   preferences.putInt("plungerMin", plungerMin);
   preferences.putInt("plungerMax", plungerMax);
-  printf("Plunger calibration: calibration data stored to flash.\n");
+  printf("Plunger calibration data stored to flash.\n");
+  printf("---- min: %d, max: %d\n", plungerMin, plungerMax);
   
   flashStartButton();
 }
@@ -502,9 +501,9 @@ void setup() {
   // plunger setup
   plungerMin = plungerAverage;
   if (plungerEnabled) {
-    plungerMin = preferences.getInt("plungerMin",   0);  // With default value
-    plungerMax = preferences.getInt("plungerMax", 800);  // With default value
-    zeroValue  = preferences.getInt("plungerZero",100);  // With default value
+    plungerMin = preferences.getInt("plungerMin", plungerMin);  // With default value
+    plungerMax = preferences.getInt("plungerMax", plungerMax);  // With default value
+    zeroValue  = preferences.getInt("plungerZero", zeroValue);  // With default value
 
     // to calibrate, hold A or START when powering up the PinSim ESP32 board
     if (digitalRead(pinB1) == LOW) {
@@ -589,6 +588,8 @@ void deadZoneCompensation() {
   zeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
   if (zeroValue < 0) zeroValue = 0;
   preferences.putInt("plungerZero", zeroValue);
+  printf("Plunger deadzone data stored to flash.\n");
+  printf("---- zeroValue: %d\n", zeroValue);
   flashStartButton();
   buttonUpdate();
   // ensure just one calibration per button press
