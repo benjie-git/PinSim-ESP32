@@ -6,7 +6,10 @@ Solenoid::Solenoid(int In1pin, int In2pin, int STBYpin)
    In1 = In1pin;
    In2 = In2pin;
    Standby = STBYpin;
-   
+}
+
+void Solenoid::setup()
+{
    pinMode(In1, OUTPUT);
    pinMode(In2, OUTPUT);
    if (Standby) {

@@ -24,7 +24,48 @@
     - Button2
     - Callback
     - NimBLE-Arduino
-  
+
+    Configuration:
+    During Startup Hold Back button to enter Config mode.
+    • While in Config mode:
+      - Menu+Guide button LEDs turn on
+      - Start button LED flashes fast
+      - Continue holding Back while you press other buttons
+    • Press Left Flipper -- Rumble Test
+    • Press DPad Up  -- Clear all BLE Pairings
+    • Press DPad Down -- Enter pairing mode to add a device
+    • Press DPad Left -- Swap plunger controls
+      - Start LED will flash 5x for plunger on Right stick, or 10x for Left stick
+    • Press DPad Right -- Begin accelerometer calibration
+      - After also releasing
+      - Now close the lid and press Start to calibrate.
+    • Press Start -- Begin Plunger calibration
+      - Reboot with plunger slack/neautral and Back held down
+      - Press Start
+      - Start LED will immediately flash 5x
+      - Slowly pull plunger all the way out, and then slowly push all the way in.
+      - Start will flash 5x again
+      - After also releasing Back button, controls will work, but it's still waiting for you to choose the plunger deadzone.
+        - For no deadzone, just press Start now, while leaving the plunger alone.
+        - Or to add a deadzone, like for Pinball FX VR, pull the plunger out part-way until it just starts to show as moving, and then press Start.
+      - Start will flash 5x again.  Done.
+
+    For example:
+    - Hold Back while booting
+    - Config mode LEDs turn on
+    - Press and release DPad Down to allow pairing a new device
+    - Start button flashes 5x
+    - Press and release DPad Right to signal that you want to calibrate the accelerometer when you next press Start
+    - Start button flashes 5x
+    - Press DPad Left to swap plunger control.
+    - Start button flashes 10x to show that you're now in plunger on Left stick mode
+    - Finally Release Back button
+    - Config mode LEDs turn off
+    - Close LID
+    - Gently press Start to calibrate the accelerometer
+    - Start button flashes 5x
+    - Done
+
 */
 
 
@@ -62,9 +103,12 @@ const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 
 // GLOBAL CONFIGURATION VARIABLES
 // configure these
-boolean leftStickJoy = false;           // joystick moves left analog stick instead of D-pad
 boolean accelerometerEnabled = true;
 boolean plungerEnabled = true;
+boolean solenoidsEnabled = true;
+
+boolean waitingForDeadzoneSetting = false;
+boolean waitingForAccelSetting = false;
 boolean controlShuffle = false;         // When enabled, move Tilt to D-Pad, and move plunger to Left Stick, to get around a Pinball FX2 VR bug
 int16_t nudgeMultiplier = 8000;         // accelerometer multiplier (higher = more sensitive)
 int16_t plungeTrigger = 60;             // threshold to trigger a plunge (lower = more sensitive)
@@ -88,15 +132,12 @@ void handle_main_task(void *arg);
 
 int16_t zeroValue = 100;            // xbox 360 value for neutral analog stick
 int16_t zeroValueBuffer = 0;        // save zero value during plunge
-int16_t plungerReportDelay = 17;    // delay in ms between reading ~60hz plunger updates from sensor
-uint32_t plungerReportTime = 0;
 int16_t plungerMin = 1300;          // default min plunger analog sensor value
 int16_t plungerMax = 2950;          // default max plunger analog sensor value
 int16_t plungerMaxDistance = 0;     // sensor value converted to actual distance
 int16_t plungerMinDistance = 0; 
 boolean currentlyPlunging = false;
 uint32_t tiltEnableTime = 0;
-int16_t lastPlungerReading = 0;
 int16_t lastDistance = 0;
 int16_t distanceBuffer = 0;
 float zeroX = 0;
@@ -275,7 +316,8 @@ void LED_SetAnalog(int pin, int value) {
 
 
 // Configure Inputs and Outputs
-void setupPins() {
+void setupPins()
+{
   // Configure the direction of the pins
   // All inputs with internal pullups enabled
   pinMode(pinDpadU, INPUT_PULLUP);
@@ -338,10 +380,16 @@ void setupPins() {
   if (accelerometerEnabled) {
     Wire.setPins(pinACC_SDA, pinACC_SCL);
   }
+
+  if (solenoidsEnabled) {
+    solLeft.setup();
+    solRight.setup();
+  }
 }
 
 
-void flashStartButton() {
+void flashStartButton()
+{
   for (int i = 0; i < 10; i++) {
     LED_Set(pinLEDStart, HIGH);
     vTaskDelay_ms(50);
@@ -360,18 +408,19 @@ uint16_t readingToDistance(int16_t reading) {
 }
 
 
-void getPlungerSamples() {
+void getPlungerSamples()
+{
   int total = 0;
 
   for (int i = 0; i < numSamples; i++) {
     total += analogRead(pinPlunger);
   }
   plungerAverage = (total+numSamples/2)/numSamples;
-  lastPlungerReading = plungerAverage;
 }
 
 
-void getPlungerMax() {
+void getPlungerMax()
+{
   printf("Plunger calibration: starting...\n");
 
   flashStartButton();
@@ -385,7 +434,7 @@ void getPlungerMax() {
   while (plungerAverage < plungerMin + 100) {
     // wait for the plunger to be pulled
     getPlungerSamples();
-    vTaskDelay_ms(10);
+    vTaskDelay_ms(16);
   }
 
   while (plungerAverage > plungerMin) {
@@ -394,7 +443,7 @@ void getPlungerMax() {
     if (plungerAverage > plungerMax) {
       plungerMax = plungerAverage;
     }
-    vTaskDelay_ms(10);
+    vTaskDelay_ms(16);
   }
 
   printf("Plunger calibration: recorded max.\n");
@@ -403,54 +452,48 @@ void getPlungerMax() {
   preferences.putInt("plungerMax", plungerMax);
   printf("Plunger calibration data stored to flash.\n");
   printf("---- min: %d, max: %d\n", plungerMin, plungerMax);
-  
+  printf("Waiting for Dead Zone calibration.  Adjust plunger and press Start to set it...\n");
+  waitingForDeadzoneSetting = true;
+
   flashStartButton();
 }
 
 
 // Handle Vibrate/Rumble events
-void OnVibrateEvent(XboxGamepadOutputReportData data) {
+void OnVibrateEvent(XboxGamepadOutputReportData data)
+{
   analogWrite(rumbleSmall, data.weakMotorMagnitude);
   analogWrite(rumbleLarge, data.strongMotorMagnitude);
 }
 
 
-void setup() {
-  // delay(2000);
-  printf("\n\n");
-  printf("PinSim ESP32 Starting up\n");
-  uint8_t mac_bytes[6];
-  esp_efuse_mac_get_default(mac_bytes);
-  printf("MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
-
-  preferences.begin("PinSimESP32");
-  setupPins();
-
-  // Set up vibration event handler
-  FunctionSlot<XboxGamepadOutputReportData> vibrationSlot(OnVibrateEvent);
-  gamepad.onVibrate.attach(vibrationSlot);
-  gamepad.startServer(XB_NAME, XB_MANUFACTURER);
-
-  for (int i = 0; i < 20; i++) {
-    delay(5);
-    buttonUpdate();
-  }
-
-  // Hold Back on boot to clear BLE paired devices
-  if (buttonStatus[POSBK]) {
+void checkForConfigButtonPresses()
+{
+  // Hold Back and dPad Down on boot to clear BLE paired devices
+  if (buttonStatus[POSBK] && buttonStatus[POSDN]) {
     gamepad.clearWhitelist();
+    flashStartButton();
+    // Wait for button release
+    while (buttonStatus[POSDN]) {
+      delay(16);
+      buttonUpdate();
+    }
   }
 
-  // Hold Guide on boot to allow pairing a new device
-  if (buttonStatus[POSXB]) {
+  // Hold Back and dPad Up on boot to allow pairing a new device
+  if (buttonStatus[POSBK] && buttonStatus[POSUP]) {
     printf("Allow new devices to connect...\n");
     gamepad.allowNewConnections(true);
+    flashStartButton();
+    // Wait for button release
+    while (buttonStatus[POSUP]) {
+      delay(16);
+      buttonUpdate();
+    }
   }
 
-  gamepad.startAdvertising();
-
-  // rumble test (hold Left Flipper on boot)
-  if (buttonStatus[POSL1]) {
+  // rumble test (hold Back and Left Flipper on boot)
+  if (buttonStatus[POSBK] && buttonStatus[POSL1]) {
     printf("Left Flipper down at start - Rumble Test\n");
     for (int i = 0; i < 256; i++) {
       analogWrite(rumbleSmall, i);
@@ -469,26 +512,90 @@ void setup() {
       analogWrite(rumbleLarge, i);
       vTaskDelay_ms(10);
     }
-  }
-
-  // Hold Right Flipper on boot to disable accelerometer
-  if (buttonStatus[POSR1]) {
-    printf("Right Flipper down at start - Disable Accelerometer\n");
-    accelerometerEnabled = false;
-    leftStickJoy = true;
-  }
-
-  /* Initialise the sensor */
-  if (accelerometerEnabled) {
-    if (!accel.begin()) {
-      printf("Accelerometer setup failed\n");
-      /* There was a problem detecting the ADXL345 ... check your connections */
-      accelerometerEnabled = false;
-      flashStartButton();
+    // Wait for button release
+    while (buttonStatus[POSL1]) {
+      delay(16);
+      buttonUpdate();
     }
   }
 
   if (accelerometerEnabled) {
+    if (buttonStatus[POSBK] && buttonStatus[POSRT]) {
+      waitingForAccelSetting = true;
+      printf("Waiting for Accelerometer calibration.  Close lid and press Start to set it...\n");
+      flashStartButton();
+      // Wait for button release
+      while (buttonStatus[POSRT]) {
+        delay(16);
+        buttonUpdate();
+      }
+    }
+  }
+
+  // If BACK and Left D-Pad are pressed simultaneously, toggle controlShuffle, and persist that value
+  if (buttonStatus[POSBK] && buttonStatus[POSLT]) {
+    controlShuffle = !controlShuffle;
+    preferences.putBool("controlShuffle", controlShuffle);
+    if (controlShuffle) {
+      printf("Control Shuffle Enabled: Plunge with Left Stick, Tilt with D-Pad.\n");
+      flashStartButton();
+      flashStartButton();
+    }
+    else {
+      printf("Control Shuffle Disabled: Plunge with Right Stick, Tilt with Left Stick.\n");
+      flashStartButton();
+    }
+    // Wait for button release
+    while (buttonStatus[POSLT]) {
+      delay(16);
+      buttonUpdate();
+    }
+  }
+  
+  if (plungerEnabled) {
+    // to calibrate, hold Back and Start
+    if (buttonStatus[POSBK] && buttonStatus[POSST]) {
+      printf("Begin Plunger Calibration\n");
+      getPlungerMax();
+      // Wait for button release
+      while (buttonStatus[POSST]) {
+        delay(16);
+        buttonUpdate();
+      }
+    }
+  }
+}
+
+void setup()
+{
+  setupPins();
+  preferences.begin("PinSimESP32");
+
+  // delay(2000);
+  printf("\n\n");
+  printf("PinSim ESP32 Starting up\n");
+
+  uint8_t mac_bytes[6];
+  esp_efuse_mac_get_default(mac_bytes);
+  printf("MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
+
+  // Set up vibration event handler
+  FunctionSlot<XboxGamepadOutputReportData> vibrationSlot(OnVibrateEvent);
+  gamepad.onVibrate.attach(vibrationSlot);
+
+  gamepad.startServer(XB_NAME, XB_MANUFACTURER);
+
+  for (int i = 0; i < 6; i++) {
+    delay(16);
+    buttonUpdate();
+  }
+
+  /* Initialise the sensor */
+  if (!accel.begin()) {
+    printf("Accelerometer setup failed\n");
+    /* There was a problem detecting the ADXL345 ... check your connections */
+    accelerometerEnabled = false;
+
     accel.setRange(ADXL345_RANGE_2_G);
     delay(100);
     
@@ -496,25 +603,32 @@ void setup() {
     zeroY = preferences.getInt("accelZeroY", 0);
   }
 
-  controlShuffle = preferences.getBool("controlShuffle", false);
-
-  // plunger setup
-  plungerMin = plungerAverage;
   if (plungerEnabled) {
     plungerMin = preferences.getInt("plungerMin", plungerMin);  // With default value
     plungerMax = preferences.getInt("plungerMax", plungerMax);  // With default value
     zeroValue  = preferences.getInt("plungerZero", zeroValue);  // With default value
+  }
 
-    // to calibrate, hold A or START when powering up the PinSim ESP32 board
-    if (digitalRead(pinB1) == LOW) {
-      printf("A Button down at start - Begin Plunger Calibration\n");
-      getPlungerMax();
-    }
-    else if (digitalRead(pinST) == LOW) {
-      printf("Start Button down at start - Begin Plunger Calibration\n");
-      getPlungerMax();
-    }
+  controlShuffle = preferences.getBool("controlShuffle", false);
 
+  // Hold Back button on boot to enter config mode
+  if (buttonStatus[POSBK]) {
+    static uint8_t ledON = 0;
+    if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
+    while (buttonStatus[POSBK]) {
+      LED_Set(pinLEDStart, (ledON & 0x02)!=0);
+      ledON++;
+      checkForConfigButtonPresses();
+      delay(16);
+      buttonUpdate();
+    }
+    if (pinLEDBG) LED_Set(pinLEDBG, LOW);
+  }
+
+  gamepad.startAdvertising();
+
+  // plunger setup
+  if (plungerEnabled) {
     // linear conversions
     plungerMaxDistance = readingToDistance(plungerMin);
     plungerMinDistance = readingToDistance(plungerMax);
@@ -529,7 +643,8 @@ void loop() {}
 
 
 // Update the debounced button statuses
-void buttonUpdate() {
+void buttonUpdate()
+{
   dpadUP.loop();
   dpadDOWN.loop();
   dpadLEFT.loop();
@@ -584,25 +699,21 @@ void buttonUpdate() {
 }
 
 
-void deadZoneCompensation() {
+void deadZoneCompensation()
+{
   zeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
   if (zeroValue < 0) zeroValue = 0;
   preferences.putInt("plungerZero", zeroValue);
   printf("Plunger deadzone data stored to flash.\n");
   printf("---- zeroValue: %d\n", zeroValue);
   flashStartButton();
-  buttonUpdate();
-  // ensure just one calibration per button press
-  while (digitalRead(pinBK) == LOW) {
-    // wait...
-    vTaskDelay_ms(50);
-  }
 }
 
 
 // Process Home button press delay
 // Wait until DELAY_HOME ms after button inisially pressed to start sending the button press
-void pressHome(bool isPressed) {
+void pressHome(bool isPressed)
+{
   static int wasPressed = 0;  // 0 = was up, 1 = was waiting, 2 = was pressed
   static long lastPress = 0;
   long currentTime = millis();
@@ -655,7 +766,8 @@ void pressStart(bool isPressed) {
 
 
 // ProcessInputs
-void processInputs() {
+void processInputs()
+{
   uint8_t direction = XboxDpadFlags::NONE;
   
   // Use -1 instead of 0 for non-moving thumb/stick axes to fix right stick stuck to top-left
@@ -664,25 +776,11 @@ void processInputs() {
   center[0] = -1;
   center[1] = -1;
 
-  if (leftStickJoy) {
-    int leftStickX = buttonStatus[POSLT] * -30000 + buttonStatus[POSRT] * 30000;
-    int leftStickY = buttonStatus[POSDN] * -30000 + buttonStatus[POSUP] * 30000;
-    gamepad.setLeftThumb(leftStickX, leftStickY);
-  } else {
-    // Update the DPAD
-    if (buttonStatus[POSUP]) direction |= XboxDpadFlags::NORTH;
-    if (buttonStatus[POSRT]) direction |= XboxDpadFlags::EAST;
-    if (buttonStatus[POSDN]) direction |= XboxDpadFlags::SOUTH;
-    if (buttonStatus[POSLT]) direction |= XboxDpadFlags::WEST;
-  }
-
-  // If Xbox "Back" and joystick Up pressed simultaneously, map joystick to Xbox Left Stick
-  // If Xbox "Back" and joystick Down pressed, map joystick to D-pad
-  if (leftStickJoy && buttonStatus[POSDN] && buttonStatus[POSBK]) {
-    leftStickJoy = false;
-  } else if (!leftStickJoy && buttonStatus[POSUP] && buttonStatus[POSBK]) {
-    leftStickJoy = true;
-  }
+  // Update the DPAD
+  if (buttonStatus[POSUP]) direction |= XboxDpadFlags::NORTH;
+  if (buttonStatus[POSRT]) direction |= XboxDpadFlags::EAST;
+  if (buttonStatus[POSDN]) direction |= XboxDpadFlags::SOUTH;
+  if (buttonStatus[POSLT]) direction |= XboxDpadFlags::WEST;
 
   // Buttons
   if (buttonStatus[POSB1]) gamepad.press(XBOX_BUTTON_A);
@@ -701,31 +799,14 @@ void processInputs() {
     else gamepad.release(XBOX_BUTTON_RS);
   }
 
-  // If BACK and Left Flipper are pressed simultaneously, set new plunger dead zone
+  // If we're still waiting for DeadZone calibration, and Start is pressed, set new plunger dead zone
   // Compensates for games where the in-game plunger doesn't begin pulling back until
   // the gamepad is pulled back ~half way. Just pull the plunger to the point just before
-  // it begins to move in-game, and then press BACK & LB.
-  if (buttonStatus[POSBK] && buttonStatus[POSL1]) {
-    printf("Back and Left Flipper pressed - Calibrate Plunger Dead Zone\n");
+  // it begins to move in-game, and then press START.
+  if (waitingForDeadzoneSetting && buttonStatus[POSST]) {
     deadZoneCompensation();
-  }
-
-  // If BACK and Left D-Pad are pressed simultaneously, toggle controlShuffle, and persist that value
-  if (buttonStatus[POSBK] && buttonStatus[POSLT]) {
-    controlShuffle = !controlShuffle;
-    preferences.putBool("controlShuffle", controlShuffle);
-    if (controlShuffle) {
-      printf("Back and Left D-Pad pressed - Control Shuffle Enabled: Plunge with Left Stick, Tilt with D-Pad.\n");
-    }
-    else {
-      printf("Back and Left D-Pad pressed - Control Shuffle Disabled: Plunge with Right Stick, Tilt with Left Stick.\n");
-    }
-    flashStartButton();
-    // ensure just one toggle per button press
-    while (digitalRead(pinBK) == LOW) {
-      // wait...
-      vTaskDelay_ms(50);
-    }
+    printf("Calibrated Plunger Dead Zone\n");
+    waitingForDeadzoneSetting = false;
   }
 
   // Bumpers
@@ -758,7 +839,7 @@ void processInputs() {
   }
 
   // Tilt
-  if (accelerometerEnabled && !leftStickJoy) {
+  if (accelerometerEnabled) {
     /* Get a new sensor event */
     sensors_event_t event;
     accel.getEvent(&event);
@@ -766,19 +847,15 @@ void processInputs() {
     int32_t accX = event.acceleration.x * nudgeMultiplier * -1;
     int32_t accY = event.acceleration.y * nudgeMultiplier * -1;
 
-    // Re-calibrate accelerometer if both BACK and RIGHT FLIPPER pressed
-    if (buttonStatus[POSBK] && buttonStatus[POSR1]) {
+    // Re-calibrate accelerometer if we're waiting for Accel setting, and Start is pressed
+    if (waitingForAccelSetting && buttonStatus[POSST]) {
       zeroX = accX;
       zeroY = accY;
       preferences.putInt("accelZeroX", zeroX);
       preferences.putInt("accelZeroY", zeroY);
       printf("Recalibrated accelerometers.\n");
-
-      // Ensure just one calibration per button press
-      while (digitalRead(pinBK) == LOW) {
-        // wait...
-        vTaskDelay_ms(50);
-      }
+      printf("---- accelZeroX: %d, accelZeroY: %d\n", zeroX, zeroY);
+      waitingForAccelSetting = false;
     }
 
     if (millis() > tiltEnableTime) {
@@ -808,64 +885,60 @@ void processInputs() {
   if (plungerEnabled) {
     getPlungerSamples();
 
-    // it appears the distance sensor updates at about 60hz, no point in checking more often than that
-    if (millis() > plungerReportTime) {
-      // restore zero value after a plunge
-      if (zeroValueBuffer) {
-        zeroValue = zeroValueBuffer;
-        zeroValueBuffer = 0;
-      }
-      plungerReportTime = millis() + plungerReportDelay;
-      int16_t currentDistance = readingToDistance(plungerAverage);
-      distanceBuffer = currentDistance;
-
-      if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance + 20) {
-        // if plunger is pulled
-        currentlyPlunging = true;
-        // Attempt to detect plunge
-        int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance, plungeTrigger / 2, plungeTrigger);
-        if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
-          // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
-          if (controlShuffle) {
-            gamepad.setLeftThumb(center[0], center[1]);
-            gamepad.setRightThumb(center[0], center[1]);
-          }
-          else {
-            gamepad.setRightThumb(center[0], center[1]);
-          }
-          // disable plunger momentarily to compensate for spring bounce
-          plungerReportTime = millis() + 1000;
-          distanceBuffer = plungerMaxDistance;
-          lastDistance = plungerMaxDistance;
-          if (zeroValue) {
-            zeroValueBuffer = zeroValue;
-            zeroValue = 0;
-          }
-          return;
-        }
-        lastDistance = currentDistance;
-
-        // Disable accelerometer while plunging and for 1 second afterwards.
-        if (currentDistance < plungerMaxDistance - 20)
-          tiltEnableTime = millis() + 1000;
-      } else if (currentDistance <= plungerMinDistance + 20) {
-        // cap max
-        currentlyPlunging = true;
-        distanceBuffer = plungerMinDistance;
-        tiltEnableTime = millis() + 1000;
-      } else if (currentDistance > plungerMaxDistance) {
-        // cap min
-        currentlyPlunging = false;
-        distanceBuffer = plungerMaxDistance;
-      } else if (currentlyPlunging) {
-        currentlyPlunging = false;
-      }
-    }
-
     // // Automatically move the plunger, for testing without a plunger
     // static int16_t pCnt = 0;
     // pCnt = (++pCnt)%1024;
-    // gamepad.setLeftThumb(0, (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128);
+    // plungerAverage = (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128;
+    // gamepad.setRightThumb(0, plungerAverage);
+
+    // restore zero value after a plunge
+    if (zeroValueBuffer) {
+      zeroValue = zeroValueBuffer;
+      zeroValueBuffer = 0;
+    }
+    int16_t currentDistance = readingToDistance(plungerAverage);
+    distanceBuffer = currentDistance;
+
+    if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance + 20) {
+      // if plunger is pulled
+      currentlyPlunging = true;
+      // Attempt to detect plunge
+      int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance, plungeTrigger / 2, plungeTrigger);
+      if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
+        // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
+        if (controlShuffle) {
+          gamepad.setLeftThumb(center[0], center[1]);
+          gamepad.setRightThumb(center[0], center[1]);
+        }
+        else {
+          gamepad.setRightThumb(center[0], center[1]);
+        }
+        // disable plunger momentarily to compensate for spring bounce
+        distanceBuffer = plungerMaxDistance;
+        lastDistance = plungerMaxDistance;
+        if (zeroValue) {
+          zeroValueBuffer = zeroValue;
+          zeroValue = 0;
+        }
+        return;
+      }
+      lastDistance = currentDistance;
+
+      // Disable accelerometer while plunging and for 1 second afterwards.
+      if (currentDistance < plungerMaxDistance - 20)
+        tiltEnableTime = millis() + 1000;
+    } else if (currentDistance <= plungerMinDistance + 20) {
+      // cap max
+      currentlyPlunging = true;
+      distanceBuffer = plungerMinDistance;
+      tiltEnableTime = millis() + 1000;
+    } else if (currentDistance > plungerMaxDistance) {
+      // cap min
+      currentlyPlunging = false;
+      distanceBuffer = plungerMaxDistance;
+    } else if (currentlyPlunging) {
+      currentlyPlunging = false;
+    }
 
     if (controlShuffle) {
       if (currentlyPlunging) {
@@ -971,7 +1044,9 @@ void handle_main_task(void *arg)
     ledUpdate();
 
     // Update Solenoids
-    solenoidUpdate();
+    if (solenoidsEnabled) {
+      solenoidUpdate();
+    }
 
     if (gamepad.isConnected()) {
       // Process all inputs and load up the usbData registers correctly

@@ -8,6 +8,7 @@ class Solenoid
 {
   public:
     Solenoid(int In1pin, int In2pin, int STBYpin);      
+    void setup();
 
 	  void fwd();
 	  void rev();
