@@ -26,46 +26,44 @@
     - NimBLE-Arduino
 
     Configuration:
-    During Startup Hold Back button to enter Config mode.
+    During Startup Hold Back button to enter Config mode.  Continue holding Back while you press other buttons.
     • While in Config mode:
-      - Menu+Guide button LEDs turn on
+      - Menu + Guide button LEDs turn on
       - Start button LED flashes fast
-      - Continue holding Back while you press other buttons
-    • Press Left Flipper -- Rumble Test
-    • Press DPad Up  -- Clear all BLE Pairings
-    • Press DPad Down -- Enter pairing mode to add a device
-    • Press DPad Left -- Swap plunger controls
-      - Start LED will flash 5x for plunger on Right stick, or 10x for Left stick
-    • Press DPad Right -- Begin accelerometer calibration
-      - After also releasing
-      - Now close the lid and press Start to calibrate.
-    • Press Start -- Begin Plunger calibration
+
+    • Press Left Flipper -- Rumble Test (1 blink before starting)
+    • Press Right Flipper -- Enable/Disable Solenoids (1 blink for Disabled, 2 for Enabled)
+    • Press DPad Down  -- Clear all BLE Pairings (1 blink)
+    • Press DPad Up -- Enter pairing mode to add a device (2 blinks)
+    • Press DPad Left -- Swap plunger controls (1 blink for Right stick plunger, 2 for Left stick)
+    • Press DPad Right -- Prepare for accelerometer calibration (1 blink now to confirm)
+      - After exiting config mode, close the lid and press Start to calibrate. (1 blink again)
+    • Press Start -- Begin Plunger calibration (1 blink to confirm, 2 blinks after pulling and
       - Reboot with plunger slack/neautral and Back held down
       - Press Start
-      - Start LED will immediately flash 5x
+      - Start LED will immediately blink 1 time
       - Slowly pull plunger all the way out, and then slowly push all the way in.
-      - Start will flash 5x again
+      - Start will blink 2 times
       - After also releasing Back button, controls will work, but it's still waiting for you to choose the plunger deadzone.
         - For no deadzone, just press Start now, while leaving the plunger alone.
         - Or to add a deadzone, like for Pinball FX VR, pull the plunger out part-way until it just starts to show as moving, and then press Start.
-      - Start will flash 5x again.  Done.
+      - Start will now blink 3 times.
 
     For example:
     - Hold Back while booting
     - Config mode LEDs turn on
-    - Press and release DPad Down to allow pairing a new device
-    - Start button flashes 5x
+    - Press and release DPad Up to allow pairing a new device
+    - Start button and Back and Menu blink 2 times
     - Press and release DPad Right to signal that you want to calibrate the accelerometer when you next press Start
-    - Start button flashes 5x
+    - Buttons blink 1 time
     - Press DPad Left to swap plunger control.
-    - Start button flashes 10x to show that you're now in plunger on Left stick mode
+    - Start button blink 2 times, to show that you're now in plunger on Left stick mode
     - Finally Release Back button
     - Config mode LEDs turn off
     - Close LID
     - Gently press Start to calibrate the accelerometer
-    - Start button flashes 5x
+    - Start button blinks 1 time
     - Done
-
 */
 
 
@@ -105,7 +103,7 @@ const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 // configure these
 boolean accelerometerEnabled = true;
 boolean plungerEnabled = true;
-boolean solenoidsEnabled = true;
+boolean solenoidEnabled = true;
 
 boolean waitingForDeadzoneSetting = false;
 boolean waitingForAccelSetting = false;
@@ -116,7 +114,10 @@ int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITH
 
 
 // Store settings to EEPROM using preferences storage name: PinSimESP32
-// Fields: (int)plungerMin, (int)plungerMax, (int)plungerZero, (bool)controlShuffle
+// Fields: (int)plungerMin, (int)plungerMax, (int)plungerZero,
+//         (int)accelZeroX, (int)accelZeroY,
+//         (bool)controlShuffle, (bool)solenoidEnabled
+// NOTE: field names have max length of 15 chars!!!
 static Preferences preferences;
 
 int numSamples = 12;
@@ -134,14 +135,14 @@ int16_t zeroValueBuffer = 0;        // save zero value during plunge
 int16_t plungerMin = 780;           // default min plunger analog sensor value
 int16_t plungerZeroValue = 780;     // zero value for the plunger, to set the deadzone (don't show movement between min and zero)
 int16_t plungerMinOffset = 50;      // add this to the measured min value, to give wiggle room for vibrations to not start a pliunge
-int16_t plungerMax = 2610;          // default max plunger analog sensor value
+int16_t plungerMax = 2700;          // default max plunger analog sensor value
 int16_t plungerMaxDistance = 0;     // sensor value converted to actual distance
 int16_t plungerMinDistance = 0; 
 uint32_t tiltEnableTime = 0;
 int16_t lastDistance = 0;
 int16_t distanceBuffer = 0;
 int32_t zeroX = 0;                  // Accelerometer X calibration
-int32_t zeroY = 14000;              // Accelerometer Y calibration (non-zero due to tilted cabinet cover)
+int32_t zeroY = 15000;              // Accelerometer Y calibration (non-zero due to tilted cabinet cover)
 
 
 // Pin Declarations
@@ -380,23 +381,26 @@ void setupPins()
   if (accelerometerEnabled) {
     Wire.setPins(pinACC_SDA, pinACC_SCL);
   }
-
-  if (solenoidsEnabled) {
-    solLeft.setup();
-    solRight.setup();
-  }
 }
 
 
-void flashStartButton()
+void configFeedbackBlinks(int n)
 {
-  for (int i = 0; i < 10; i++) {
-    LED_Set(pinLEDStart, HIGH);
-    vTaskDelay_ms(50);
+  for (int i = 0; i < n-1; i++) {
     LED_Set(pinLEDStart, LOW);
-    vTaskDelay_ms(50);
+    if (pinLEDBG) LED_Set(pinLEDBG, LOW);
+    vTaskDelay_ms(300);
+    LED_Set(pinLEDStart, HIGH);
+    if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
+    vTaskDelay_ms(300);
   }
+  LED_Set(pinLEDStart, LOW);
+  if (pinLEDBG) LED_Set(pinLEDBG, LOW);
+  vTaskDelay_ms(300);
+  LED_Set(pinLEDStart, HIGH);
+  if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
 }
+
 
 
 uint16_t readingToDistance(int16_t reading) {
@@ -423,7 +427,7 @@ void getPlungerMax()
 {
   printf("Plunger calibration: starting...\n");
 
-  flashStartButton();
+  configFeedbackBlinks(1);
   getPlungerSamples();
   plungerMin = plungerAverage + plungerMinOffset;
   plungerMax = plungerMin + 1;
@@ -456,7 +460,7 @@ void getPlungerMax()
   printf("Waiting for Dead Zone calibration.  Adjust plunger and press Start to set it...\n");
   waitingForDeadzoneSetting = true;
 
-  flashStartButton();
+  configFeedbackBlinks(2);
 }
 
 
@@ -467,7 +471,7 @@ void deadZoneCompensation()
   preferences.putInt("plungerZero", plungerZeroValue);
   printf("Plunger deadzone data stored to flash.\n");
   printf("---- plungerZeroValue: %d\n", plungerZeroValue);
-  flashStartButton();
+  configFeedbackBlinks(3);
 }
 
 
@@ -476,6 +480,7 @@ void OnVibrateEvent(XboxGamepadOutputReportData data)
 {
   analogWrite(rumbleSmall, data.weakMotorMagnitude);
   analogWrite(rumbleLarge, data.strongMotorMagnitude);
+  printf("!!! Haptics: %d, %d\n", data.weakMotorMagnitude, data.weakMotorMagnitude, data.strongMotorMagnitude);
 }
 
 
@@ -484,7 +489,7 @@ void checkForConfigButtonPresses()
   // Hold Back and dPad Down on boot to clear BLE paired devices
   if (buttonStatus[POSBK] && buttonStatus[POSDN]) {
     gamepad.clearWhitelist();
-    flashStartButton();
+    configFeedbackBlinks(1);
     // Wait for button release
     while (buttonStatus[POSDN]) {
       delay(16);
@@ -496,7 +501,7 @@ void checkForConfigButtonPresses()
   if (buttonStatus[POSBK] && buttonStatus[POSUP]) {
     printf("Allow new devices to connect...\n");
     gamepad.allowNewConnections(true);
-    flashStartButton();
+    configFeedbackBlinks(2);
     // Wait for button release
     while (buttonStatus[POSUP]) {
       delay(16);
@@ -507,6 +512,7 @@ void checkForConfigButtonPresses()
   // rumble test (hold Back and Left Flipper on boot)
   if (buttonStatus[POSBK] && buttonStatus[POSL1]) {
     printf("Left Flipper down at start - Rumble Test\n");
+    configFeedbackBlinks(1);
     for (int i = 0; i < 256; i++) {
       analogWrite(rumbleSmall, i);
       vTaskDelay_ms(10);
@@ -535,7 +541,7 @@ void checkForConfigButtonPresses()
     if (buttonStatus[POSBK] && buttonStatus[POSRT]) {
       waitingForAccelSetting = true;
       printf("Waiting for Accelerometer calibration.  Close lid and press Start to set it...\n");
-      flashStartButton();
+      configFeedbackBlinks(1);
       // Wait for button release
       while (buttonStatus[POSRT]) {
         delay(16);
@@ -550,12 +556,11 @@ void checkForConfigButtonPresses()
     preferences.putBool("controlShuffle", controlShuffle);
     if (controlShuffle) {
       printf("Control Shuffle Enabled: Plunge with Left Stick, Tilt with D-Pad.\n");
-      flashStartButton();
-      flashStartButton();
+      configFeedbackBlinks(2);
     }
     else {
       printf("Control Shuffle Disabled: Plunge with Right Stick, Tilt with Left Stick.\n");
-      flashStartButton();
+      configFeedbackBlinks(1);
     }
     // Wait for button release
     while (buttonStatus[POSLT]) {
@@ -574,6 +579,25 @@ void checkForConfigButtonPresses()
         delay(16);
         buttonUpdate();
       }
+    }
+  }
+
+  // Solenoid toggle (hold Back and Right Flipper)
+  if (buttonStatus[POSBK] && buttonStatus[POSR1]) {
+    solenoidEnabled = !solenoidEnabled;
+    preferences.putBool("solenoidEnabled", solenoidEnabled);
+    if (solenoidEnabled) {
+      printf("Solenoids Enabled\n");
+      configFeedbackBlinks(2);
+    }
+    else {
+      printf("Solenoids Disabled\n");
+      configFeedbackBlinks(1);
+    }
+    // Wait for button release
+    while (buttonStatus[POSR1]) {
+      delay(16);
+      buttonUpdate();
     }
   }
 }
@@ -611,8 +635,8 @@ void setup()
     accel.setRange(ADXL345_RANGE_2_G);
     delay(100);
     
-    zeroX = preferences.getInt("accelZeroX", 0);
-    zeroY = preferences.getInt("accelZeroY", 0);
+    zeroX = preferences.getInt("accelZeroX", zeroX);
+    zeroY = preferences.getInt("accelZeroY", zeroY);
   }
 
   if (plungerEnabled) {
@@ -621,7 +645,8 @@ void setup()
     plungerZeroValue  = preferences.getInt("plungerZero", plungerZeroValue);  // With default value
   }
 
-  controlShuffle = preferences.getBool("controlShuffle", false);
+  controlShuffle = preferences.getBool("controlShuffle", controlShuffle);
+  solenoidEnabled = preferences.getBool("solenoidEnabled", solenoidEnabled);
 
   // Hold Back button on boot to enter config mode
   if (buttonStatus[POSBK]) {
@@ -645,6 +670,11 @@ void setup()
     plungerMaxDistance = readingToDistance(plungerMin);
     plungerMinDistance = readingToDistance(plungerMax);
     lastDistance = plungerMaxDistance;
+  }
+
+  if (solenoidEnabled) {
+    solLeft.setup();
+    solRight.setup();
   }
 
   xTaskCreatePinnedToCore(&handle_main_task, "mani_loop", 8192, NULL, 20, &mainTaskHandle, 1);
@@ -856,6 +886,7 @@ void processInputs()
       preferences.putInt("accelZeroY", zeroY);
       printf("Recalibrated accelerometers.\n");
       printf("---- accelZeroX: %d, accelZeroY: %d\n", zeroX, zeroY);
+      configFeedbackBlinks(1);
       waitingForAccelSetting = false;
     }
 
@@ -978,22 +1009,26 @@ void solenoidUpdate()
     // Left was just pressed
     lastStateLeft = 1;
     solLeft.fwd();
+    tiltEnableTime = millis() + 100;
   }
   else if (!buttonStatus[POSL1] && lastStateLeft) {
     // Left was just released
     lastStateLeft = 0;
     solLeft.coast();
+    tiltEnableTime = millis() + 100;
   }
 
   if (buttonStatus[POSR1] && !lastStateRight) {
     // Right was just pressed
     lastStateRight = 1;
     solRight.fwd();
+    tiltEnableTime = millis() + 100;
   }
   else if (!buttonStatus[POSR1] && lastStateRight) {
     // Right was just released
     lastStateRight = 0;
     solRight.coast();
+    tiltEnableTime = millis() + 100;
   }
 
   if (lastStateLeft == 0 && lastStateRight == 0) {
@@ -1024,16 +1059,17 @@ void handle_main_task(void *arg)
   while (true) {
     delay_since_last_delay(16);
 
+    // Update Solenoids
+    // Doing this before buttonUpdate() effectively adds a 16ms delay
+    if (solenoidEnabled) {
+      solenoidUpdate();
+    }
+
     // Poll Buttons
     buttonUpdate();
 
     // Update LEDs
     ledUpdate();
-
-    // Update Solenoids
-    if (solenoidsEnabled) {
-      solenoidUpdate();
-    }
 
     if (gamepad.isConnected()) {
       // Process all inputs and load up the usbData registers correctly

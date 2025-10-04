@@ -284,6 +284,7 @@ void XInput::onAdvComplete(NimBLEAdvertising *advertising)
     printf("Advertising stopped\n");
 
     // Restart advertising with whitelist filter
+    this->_allowNewConnections = false;
     this->startAdvertising();
 }
 
