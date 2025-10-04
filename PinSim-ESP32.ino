@@ -131,7 +131,6 @@ XInput gamepad;
 TaskHandle_t mainTaskHandle = NULL;
 void handle_main_task(void *arg);
 
-int16_t zeroValueBuffer = 0;        // save zero value during plunge
 int16_t plungerMin = 780;           // default min plunger analog sensor value
 int16_t plungerZeroValue = 780;     // zero value for the plunger, to set the deadzone (don't show movement between min and zero)
 int16_t plungerMinOffset = 50;      // add this to the measured min value, to give wiggle room for vibrations to not start a pliunge
@@ -923,11 +922,6 @@ void processInputs()
     // plungerAverage = (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128;
     // gamepad.setRightThumb(0, plungerAverage);
 
-    // restore zero value after a plunge
-    if (zeroValueBuffer) {
-      plungerZeroValue = zeroValueBuffer;
-      zeroValueBuffer = 0;
-    }
     int16_t currentDistance = readingToDistance(plungerAverage);
     distanceBuffer = currentDistance;
 
@@ -943,13 +937,8 @@ void processInputs()
         else {
           gamepad.setRightThumb(center[0], center[1]);
         }
-        // disable plunger momentarily to compensate for spring bounce
         distanceBuffer = plungerMaxDistance;
         lastDistance = plungerMaxDistance;
-        if (plungerZeroValue) {
-          zeroValueBuffer = plungerZeroValue;
-          plungerZeroValue = 0;
-        }
         return;
       }
       lastDistance = currentDistance;
