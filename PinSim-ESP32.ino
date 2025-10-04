@@ -130,18 +130,18 @@ XInput gamepad;
 TaskHandle_t mainTaskHandle = NULL;
 void handle_main_task(void *arg);
 
-int16_t zeroValue = 100;            // xbox 360 value for neutral analog stick
 int16_t zeroValueBuffer = 0;        // save zero value during plunge
-int16_t plungerMin = 1300;          // default min plunger analog sensor value
-int16_t plungerMax = 2950;          // default max plunger analog sensor value
+int16_t plungerMin = 780;           // default min plunger analog sensor value
+int16_t plungerZeroValue = 780;     // zero value for the plunger, to set the deadzone (don't show movement between min and zero)
+int16_t plungerMinOffset = 50;      // add this to the measured min value, to give wiggle room for vibrations to not start a pliunge
+int16_t plungerMax = 2610;          // default max plunger analog sensor value
 int16_t plungerMaxDistance = 0;     // sensor value converted to actual distance
 int16_t plungerMinDistance = 0; 
-boolean currentlyPlunging = false;
 uint32_t tiltEnableTime = 0;
 int16_t lastDistance = 0;
 int16_t distanceBuffer = 0;
-float zeroX = 0;
-float zeroY = 0;
+int32_t zeroX = 0;                  // Accelerometer X calibration
+int32_t zeroY = 14000;              // Accelerometer Y calibration (non-zero due to tilted cabinet cover)
 
 
 // Pin Declarations
@@ -425,7 +425,7 @@ void getPlungerMax()
 
   flashStartButton();
   getPlungerSamples();
-  plungerMin = plungerAverage;
+  plungerMin = plungerAverage + plungerMinOffset;
   plungerMax = plungerMin + 1;
 
   printf("Plunger calibration: recorded min.\n");
@@ -449,12 +449,24 @@ void getPlungerMax()
   printf("Plunger calibration: recorded max.\n");
 
   preferences.putInt("plungerMin", plungerMin);
+  preferences.putInt("plungerZero", plungerMin);
   preferences.putInt("plungerMax", plungerMax);
   printf("Plunger calibration data stored to flash.\n");
   printf("---- min: %d, max: %d\n", plungerMin, plungerMax);
   printf("Waiting for Dead Zone calibration.  Adjust plunger and press Start to set it...\n");
   waitingForDeadzoneSetting = true;
 
+  flashStartButton();
+}
+
+
+void deadZoneCompensation()
+{
+  plungerZeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
+  if (plungerZeroValue < 0) plungerZeroValue = 0;
+  preferences.putInt("plungerZero", plungerZeroValue);
+  printf("Plunger deadzone data stored to flash.\n");
+  printf("---- plungerZeroValue: %d\n", plungerZeroValue);
   flashStartButton();
 }
 
@@ -606,7 +618,7 @@ void setup()
   if (plungerEnabled) {
     plungerMin = preferences.getInt("plungerMin", plungerMin);  // With default value
     plungerMax = preferences.getInt("plungerMax", plungerMax);  // With default value
-    zeroValue  = preferences.getInt("plungerZero", zeroValue);  // With default value
+    plungerZeroValue  = preferences.getInt("plungerZero", plungerZeroValue);  // With default value
   }
 
   controlShuffle = preferences.getBool("controlShuffle", false);
@@ -696,17 +708,6 @@ void buttonUpdate()
   buttonStatus[POSXB] = buttonXBOX.isPressed();
   buttonStatus[POSB9] = button9.isPressed();
   buttonStatus[POSB10] = button10.isPressed();
-}
-
-
-void deadZoneCompensation()
-{
-  zeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
-  if (zeroValue < 0) zeroValue = 0;
-  preferences.putInt("plungerZero", zeroValue);
-  printf("Plunger deadzone data stored to flash.\n");
-  printf("---- zeroValue: %d\n", zeroValue);
-  flashStartButton();
 }
 
 
@@ -893,15 +894,13 @@ void processInputs()
 
     // restore zero value after a plunge
     if (zeroValueBuffer) {
-      zeroValue = zeroValueBuffer;
+      plungerZeroValue = zeroValueBuffer;
       zeroValueBuffer = 0;
     }
     int16_t currentDistance = readingToDistance(plungerAverage);
     distanceBuffer = currentDistance;
 
     if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance + 20) {
-      // if plunger is pulled
-      currentlyPlunging = true;
       // Attempt to detect plunge
       int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance, plungeTrigger / 2, plungeTrigger);
       if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
@@ -916,9 +915,9 @@ void processInputs()
         // disable plunger momentarily to compensate for spring bounce
         distanceBuffer = plungerMaxDistance;
         lastDistance = plungerMaxDistance;
-        if (zeroValue) {
-          zeroValueBuffer = zeroValue;
-          zeroValue = 0;
+        if (plungerZeroValue) {
+          zeroValueBuffer = plungerZeroValue;
+          plungerZeroValue = 0;
         }
         return;
       }
@@ -929,30 +928,18 @@ void processInputs()
         tiltEnableTime = millis() + 1000;
     } else if (currentDistance <= plungerMinDistance + 20) {
       // cap max
-      currentlyPlunging = true;
       distanceBuffer = plungerMinDistance;
       tiltEnableTime = millis() + 1000;
     } else if (currentDistance > plungerMaxDistance) {
       // cap min
-      currentlyPlunging = false;
       distanceBuffer = plungerMaxDistance;
-    } else if (currentlyPlunging) {
-      currentlyPlunging = false;
     }
 
     if (controlShuffle) {
-      if (currentlyPlunging) {
-        gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
-      } else {
-        gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
-      }
+      gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, plungerZeroValue, XBOX_STICK_MAX));
     }
     else {
-      if (currentlyPlunging) {
-        gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, zeroValue, XBOX_STICK_MAX));
-      } else {
-        gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX));
-      }
+      gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, plungerZeroValue, XBOX_STICK_MAX));
     }
   }
   if (controlShuffle) {
