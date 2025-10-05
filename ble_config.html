@@ -1,0 +1,115 @@
+<html>
+<head>
+    <title>PinSim BLE Web Configurator</title>
+    <style>
+        body { background: #EDC; }
+        .outer-section { background: #BDF; border: solid 1px; border-radius: 5px; padding: 0 20px 20px 10px; margin-bottom: 10px; }
+        .inner-section { padding-left: 20px; }
+        input[type="radio"]:checked + label { font-weight: bold; }
+        .disabled { color: grey; }
+    </style>
+</head>
+
+<body>
+<h1>PinSim BLE Web Configurator</h1>
+
+<div class="outer-section">
+    <h2>Connected Game Pads:</h2>
+    <div id="connStatus"><span class="disabled">No gamepads found</span></div>
+</div>
+
+<div class="outer-section">
+    <h2>Send Commands</h2>
+    <div class="inner-section">
+        <h3>Bluetooth Pairing</h3>
+        <div class="inner-section">
+            <button onclick="window.sendHapticCommand(RUMBLE_COMMAND_PAIR_START)">Start Pairing Mode</button>
+            <button onclick="window.sendHapticCommand(RUMBLE_COMMAND_PAIR_CLEAR)">Clear All Pairing Info (This may disconnect you!)</button>
+        </div>
+
+        <h3>Plunger</h3>
+        <div class="inner-section">
+            <button onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_MIN)">Set Plunger Min</button>
+            <button onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_MAX)">Set Plunger Max</button>
+            <button onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_ZERO)">Set Plunger Zero (Dead Zone)</button>
+        </div>
+
+        <h3>Tilt Sensor</h3>
+        <div class="inner-section">
+            <button onclick="sendHapticCommand(RUMBLE_COMMAND_ACCEL_CAL)">Calibrate Tilt Sensor</button>
+        </div>
+
+        <h3>Control Toggles</h3>
+        <div class="inner-section">
+            <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP)">Swap Plunger Controls</button>
+            <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
+        </div>
+    </div>
+</div>
+
+<script type="application/javascript">
+    const RUMBLE_COMMAND_MAGIC = 2
+    const RUMBLE_COMMAND_ACCEL_CAL = 3
+    const RUMBLE_COMMAND_PLUNGER_SET_MIN = 4
+    const RUMBLE_COMMAND_PLUNGER_SET_MAX = 5
+    const RUMBLE_COMMAND_PLUNGER_SET_ZERO = 6
+    const RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP = 7
+    const RUMBLE_COMMAND_TOGGLE_SOLENOIDS = 8
+    const RUMBLE_COMMAND_PAIR_CLEAR = 9
+    const RUMBLE_COMMAND_PAIR_START = 10
+
+    let gamepad = null
+
+    window.addEventListener("gamepadconnected", (event) => { updateGamepads() })
+    window.addEventListener("gamepaddisconnected", (event) => { updateGamepads() })
+
+    updateGamepads = function() {
+        const gamepads = navigator.getGamepads()
+
+        if (gamepad && !gamepads.includes(gamepad)) {
+            // Your selected gamepad disconnected
+            gamepad = null
+        }
+
+        if (gamepads.every(i => i === null)) {
+            // All items in gamepads array are null... so.... there are none.  (But then why is this not just empty!?!)
+            document.getElementById("connStatus").innerHTML = '<span class="disabled">No gamepads found</span>'
+        }
+        else {
+            // Build radio buttons
+            let pickerHtml = ""
+            for (let i = 0; i < gamepads.length; i++) {
+                const gp = gamepads[i]
+                if (gp) {
+                    const checked = ((i === 0) ? " checked" : "")
+                    if (!gamepad && i === 0) gamepad = gp
+                    pickerHtml += `<input type="radio" onchange="onChooseGamepad(this)" value="${gp.index}"${checked}/>`
+                    pickerHtml += `<label for="gamepad-${gp.index}">${gp.id}</label><br/>`
+                }
+            }
+            document.getElementById("connStatus").innerHTML = pickerHtml
+        }
+    }
+
+    onChooseGamepad = function(button) {
+        // User changed the current gamepad
+        const gamepads = navigator.getGamepads()
+        gamepad = gamepads[button.value];
+    }
+
+    sendHapticEvent = function (duration, wM, sM) {
+        if (gamepad) {
+            gamepad.vibrationActuator.playEffect("dual-rumble", {
+                startDelay: 0,
+                duration: duration,
+                weakMagnitude: wM,
+                strongMagnitude: sM,
+            })
+        }
+    }
+
+    sendHapticCommand = function (command) {
+        sendHapticEvent(50, command/255.0, RUMBLE_COMMAND_MAGIC/255.0)
+    }
+</script>
+</body>

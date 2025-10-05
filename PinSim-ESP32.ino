@@ -142,7 +142,8 @@ int16_t lastDistance = 0;
 int16_t distanceBuffer = 0;
 int32_t zeroX = 0;                  // Accelerometer X calibration
 int32_t zeroY = 15000;              // Accelerometer Y calibration (non-zero due to tilted cabinet cover)
-
+int32_t accX = 0;
+int32_t accY = 0;
 
 // Pin Declarations
 #if PCB_VERSION == 2
@@ -383,6 +384,7 @@ void setupPins()
 }
 
 
+// Blink when the LEDs are already on
 void configFeedbackBlinks(int n)
 {
   for (int i = 0; i < n-1; i++) {
@@ -400,6 +402,20 @@ void configFeedbackBlinks(int n)
   if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
 }
 
+
+// Blink when the LEDs are already off
+void runtimeFeedbackBlinks(int n)
+{
+  for (int i = 0; i < n; i++) {
+    LED_Set(pinLEDStart, HIGH);
+    if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
+    vTaskDelay_ms(300);
+    LED_Set(pinLEDStart, LOW);
+    if (pinLEDBG) LED_Set(pinLEDBG, LOW);
+    if (i == n-1) break; // Skip the last delay
+    vTaskDelay_ms(300);
+  }
+}
 
 
 uint16_t readingToDistance(int16_t reading) {
@@ -452,8 +468,12 @@ void getPlungerMax()
   printf("Plunger calibration: recorded max.\n");
 
   preferences.putInt("plungerMin", plungerMin);
-  preferences.putInt("plungerZero", plungerMin);
   preferences.putInt("plungerMax", plungerMax);
+
+  // Reset plungerZero to make sure we have full plunger movement so we can preperly set a new zero value
+  plungerZeroValue = plungerMin;
+  preferences.putInt("plungerZero", plungerMin);
+
   printf("Plunger calibration data stored to flash.\n");
   printf("---- min: %d, max: %d\n", plungerMin, plungerMax);
   printf("Waiting for Dead Zone calibration.  Adjust plunger and press Start to set it...\n");
@@ -474,12 +494,96 @@ void deadZoneCompensation()
 }
 
 
+// This value as the weak magnitude means the strong magnitude is a command
+#define RUMBLE_COMMAND_MAGIC 2
+
+// Commands in the strong magnitude field
+#define RUMBLE_COMMAND_ACCEL_CAL 3
+#define RUMBLE_COMMAND_PLUNGER_SET_MIN 4
+#define RUMBLE_COMMAND_PLUNGER_SET_MAX 5
+#define RUMBLE_COMMAND_PLUNGER_SET_ZERO 6
+#define RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP 7
+#define RUMBLE_COMMAND_TOGGLE_SOLENOIDS 8
+#define RUMBLE_COMMAND_PAIR_CLEAR 9
+#define RUMBLE_COMMAND_PAIR_START 10
+
+// Received a runmble event that encodes a pinsim command
+boolean handleRumbleCommand(uint8_t command)
+{
+  switch (command) {
+    case RUMBLE_COMMAND_ACCEL_CAL:
+      printf("Rumble Command: Calibrate Accels\n");
+      preferences.putInt("accelZeroX", accX);
+      preferences.putInt("accelZeroY", accY);
+      runtimeFeedbackBlinks(1);
+      break;
+    
+    case RUMBLE_COMMAND_PLUNGER_SET_MIN:
+      printf("Rumble Command: Plunger Set Min\n");
+      plungerMin = plungerAverage;
+      preferences.putInt("plungerMin", plungerMin);
+      runtimeFeedbackBlinks(1);
+      break;
+    
+    case RUMBLE_COMMAND_PLUNGER_SET_MAX:
+      printf("Rumble Command: Plunger Set Max\n");
+      plungerMax = plungerAverage;
+      preferences.putInt("plungerMax", plungerMax);
+      runtimeFeedbackBlinks(1);
+      break;
+    
+    case RUMBLE_COMMAND_PLUNGER_SET_ZERO:
+      printf("Rumble Command: Plunger Set Zero\n");
+      plungerZeroValue = plungerAverage;
+      preferences.putInt("plungerZero", plungerZeroValue);
+      runtimeFeedbackBlinks(1);
+      break;
+    
+    case RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP:
+      printf("Rumble Command: Control Swap\n");
+      controlShuffle = !controlShuffle;
+      preferences.putBool("controlShuffle", controlShuffle);
+      runtimeFeedbackBlinks(controlShuffle ? 2 : 1);
+      break;
+    
+    case RUMBLE_COMMAND_TOGGLE_SOLENOIDS:
+      printf("Rumble Command: Toggle Solenoids\n");
+      solenoidEnabled = !solenoidEnabled;
+      preferences.putBool("solenoidEnabled", solenoidEnabled);
+      runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
+      break;
+    
+    case RUMBLE_COMMAND_PAIR_CLEAR:
+      printf("Rumble Command: Clear Pairing\n");
+      gamepad.clearWhitelist();
+      runtimeFeedbackBlinks(1);
+      break;
+    
+    case RUMBLE_COMMAND_PAIR_START:
+      printf("Rumble Command: Pairing Mode\n");
+      gamepad.allowNewConnections(true);
+      gamepad.startAdvertising();
+      runtimeFeedbackBlinks(2);
+      break;
+    
+    default:
+      printf("Bad Rumble Command: %d\n", command);
+      return false;
+  }
+  return true;
+}
+
 // Handle Vibrate/Rumble events
 void OnVibrateEvent(XboxGamepadOutputReportData data)
 {
+  if (data.weakMotorMagnitude == RUMBLE_COMMAND_MAGIC) {
+    if (handleRumbleCommand(data.strongMotorMagnitude)) {
+      return;
+    }
+  }
+  printf("Rumble: %d, %d\n", data.weakMotorMagnitude, data.strongMotorMagnitude);
   analogWrite(rumbleSmall, data.weakMotorMagnitude);
   analogWrite(rumbleLarge, data.strongMotorMagnitude);
-  printf("!!! Haptics: %d, %d\n", data.weakMotorMagnitude, data.weakMotorMagnitude, data.strongMotorMagnitude);
 }
 
 
@@ -874,8 +978,8 @@ void processInputs()
     sensors_event_t event;
     accel.getEvent(&event);
 
-    int32_t accX = event.acceleration.x * nudgeMultiplier * -1;
-    int32_t accY = event.acceleration.y * nudgeMultiplier * -1;
+    accX = event.acceleration.x * nudgeMultiplier * -1;
+    accY = event.acceleration.y * nudgeMultiplier * -1;
 
     // Re-calibrate accelerometer if we're waiting for Accel setting, and Start is pressed
     if (waitingForAccelSetting && buttonStatus[POSST]) {
@@ -889,9 +993,10 @@ void processInputs()
       waitingForAccelSetting = false;
     }
 
+    accX = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
+    accY = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
+
     if (millis() > tiltEnableTime) {
-      accX = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
-      accY = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
       if (controlShuffle) {
         if (accY > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::NORTH;
         if (accX > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::EAST;
