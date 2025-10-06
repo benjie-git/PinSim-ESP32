@@ -1150,7 +1150,7 @@ boolean handleRumbleCommand(uint8_t command)
     case RUMBLE_COMMAND_PLUNGER_SET_MIN:
       printf("Rumble Command: Plunger Set Min\n");
       plungerMin = plungerAverage;
-      plungerMinDistance = readingToDistance(plungerMax);
+      plungerMaxDistance = readingToDistance(plungerMin);
       preferences.putInt("plungerMin", plungerMin);
       runtimeFeedbackBlinks(1);
       break;
@@ -1158,7 +1158,7 @@ boolean handleRumbleCommand(uint8_t command)
     case RUMBLE_COMMAND_PLUNGER_SET_MAX:
       printf("Rumble Command: Plunger Set Max\n");
       plungerMax = plungerAverage;
-      plungerMaxDistance = readingToDistance(plungerMin);
+      plungerMinDistance = readingToDistance(plungerMax);
       preferences.putInt("plungerMax", plungerMax);
       runtimeFeedbackBlinks(1);
       break;
