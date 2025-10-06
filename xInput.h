@@ -75,6 +75,7 @@ public:
     bool isAdvertising();
     bool isAdvertisingNewDevices();
     void clearWhitelist();
+    uint getPairCount();
 
     Signal<XboxGamepadOutputReportData> onVibrate;
 
@@ -105,6 +106,7 @@ private:
     HIDOutputCallbacks *_hidOutputCallbacks;
     bool _inputReportDirty;
     bool _allowNewConnections;
+    uint _dirtySkipCount;
 
     void pressDPadDirectionInternal(uint8_t direction = 0);
     bool isDPadPressedInternal(uint8_t direction = 0);

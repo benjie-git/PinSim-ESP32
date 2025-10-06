@@ -1,21 +1,124 @@
-<html>
+<html lang="en-US">
 <head>
-    <title>PinSim BLE Web Configurator</title>
+    <title>PinSim Web Configurator</title>
     <style>
-        body { background: #EDC; }
-        .outer-section { background: #BDF; border: solid 1px; border-radius: 5px; padding: 0 20px 20px 10px; margin-bottom: 10px; }
-        .inner-section { padding-left: 20px; }
-        input[type="radio"]:checked + label { font-weight: bold; }
-        .disabled { color: grey; }
+        body {
+            background: #EDC;
+        }
+        .outer-section {
+            background: #BDF;
+            border: solid 1px;
+            border-radius: 5px;
+            padding: 0 20px 20px 10px;
+            margin-bottom: 10px;
+        }
+        .inner-section {
+            padding-left: 20px;
+        }
+        .pinsim-box {
+            position: relative;
+            margin-top: 20px;
+            border: solid 2px #000;
+            border-radius: 10px;
+            background: #FFF;
+            height: 260px;
+            width: 650px;
+        }
+        div.button {
+            position: absolute;
+            background: #FFF;
+            border: solid 3px #000;
+            border-radius: 40px;
+            width: 40px;
+            height: 30px;
+            text-align: center;
+            padding-top: 10px;
+        }
+        div.pressed {
+            background: #38F;
+        }
+        input[type="radio"]:checked + label {
+            font-weight: bold;
+        }
+        .disabled {
+            color: grey;
+        }
+        .hbar-container {
+            position: absolute;
+            border: solid 1px #888;
+            width: 150px;
+            height: 10px;
+            background-color: #eef;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .hbar-fill {
+            height: 100%;
+            background-color: #38F;
+        }
+        .vbar-container {
+            position: absolute;
+            border: solid 1px #888;
+            width: 10px;
+            height: 150px;
+            background-color: #eef;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .vbar-fill {
+            width: 100%;
+            background-color: #38F;
+        }
     </style>
 </head>
 
 <body>
-<h1>PinSim BLE Web Configurator</h1>
+<h1>PinSim Web Configurator</h1>
 
 <div class="outer-section">
     <h2>Connected Gamepads:</h2>
     <div id="connStatus"><span class="disabled">No gamepads found</span></div>
+    <div class="inner-section">
+        <div class="pinsim-box">
+            <div id="button-status-l-flipper" class="button" style="left: 20px; top: 120px;">L</div>
+            <div id="button-status-r-flipper" class="button" style="left: 585px; top: 120px;">R</div>
+
+            <div id="button-status-back" class="button" style="left: 80px; top: 20px;">Back</div>
+            <div id="button-status-menu" class="button" style="left: 130px; top: 20px;">Menu</div>
+            <div id="button-status-start" class="button" style="left: 65px; top: 195px;">Start</div>
+
+            <div id="button-status-x" class="button" style="left: 400px; top: 20px;">X</div>
+            <div id="button-status-y" class="button" style="left: 450px; top: 20px;">Y</div>
+            <div id="button-status-z" class="button" style="left: 500px; top: 20px;">Z</div>
+            <div id="button-status-a" class="button" style="left: 400px; top: 70px;">A</div>
+            <div id="button-status-b" class="button" style="left: 450px; top: 70px;">B</div>
+            <div id="button-status-c" class="button" style="left: 500px; top: 70px;">C</div>
+
+            <div id="button-status-dpad-up" class="button" style="left: 270px; top: 30px;">Up</div>
+            <div id="button-status-dpad-down" class="button" style="left: 270px; top: 90px;">Down</div>
+            <div id="button-status-dpad-left" class="button" style="left: 240px; top: 60px;">Left</div>
+            <div id="button-status-dpad-right" class="button" style="left: 300px; top: 60px;">Right</div>
+
+            <div class="vbar-container" style="left: 560px; top: 50px;">
+                <div id="gamepad-status-plunger" class="vbar-fill"></div>
+            </div>
+            <div class="vbar-container" style="left: 200px; top: 50px;">
+                <div id="gamepad-status-left-stick-y" class="vbar-fill"></div>
+            </div>
+            <div class="hbar-container" style="left: 130px; top: 205px;">
+                <div id="gamepad-status-left-stick-x" class="hbar-fill"></div>
+            </div>
+
+            <div style="position: absolute; left: 330px; top:180px;">
+                <table>
+                    <tr><th align="right">Pairings:</th><td id="gamepad-status-pairings"></td></tr>
+                    <tr><th align="right">Plunger Stick:</th><td id="gamepad-status-plunger-stick"></td></tr>
+                    <tr><th align="right">Solenoids:</th><td id="gamepad-status-solenoids"></td></tr>
+                </table>
+            </div>
+            <div style="height: 180px;"></div>
+        </div>
+    </div>
 </div>
 
 <div class="outer-section">
@@ -23,15 +126,15 @@
     <div class="inner-section">
         <h3>Bluetooth Pairing</h3>
         <div class="inner-section">
-            <button onclick="window.sendHapticCommand(RUMBLE_COMMAND_PAIR_START)">Start Pairing Mode</button>
-            <button onclick="window.sendHapticCommand(RUMBLE_COMMAND_PAIR_CLEAR)">Clear All Pairing Info (This may disconnect you!)</button>
+            <button onclick="sendHapticCommand(RUMBLE_COMMAND_PAIR_START)">Start Pairing Mode</button>
+            <button onclick="sendHapticCommand(RUMBLE_COMMAND_PAIR_CLEAR)">Clear All Pairing Info (This may disconnect you!)</button>
         </div>
 
         <h3>Plunger</h3>
         <div class="inner-section">
-            <button onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_MIN)">Set Plunger Min</button>
-            <button onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_MAX)">Set Plunger Max</button>
-            <button onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_ZERO)">Set Plunger Zero (Dead Zone)</button>
+            <button id="button-plunger-min" onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_MIN); document.getElementById('button-plunger-max').focus();">Set Plunger Min</button>
+            <button id="button-plunger-max" onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_MAX); document.getElementById('button-plunger-zero').focus();">Set Plunger Max</button>
+            <button id="button-plunger-zero" onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_ZERO); document.getElementById('button-plunger-min').focus();">Set Plunger Zero (Dead Zone)</button>
         </div>
 
         <h3>Tilt Sensor</h3>
@@ -48,7 +151,10 @@
 </div>
 
 <script type="application/javascript">
+    // This value as the weak magnitude means the strong magnitude is a command
     const RUMBLE_COMMAND_MAGIC = 2
+
+    // Commands in the strong magnitude field
     const RUMBLE_COMMAND_ACCEL_CAL = 3
     const RUMBLE_COMMAND_PLUNGER_SET_MIN = 4
     const RUMBLE_COMMAND_PLUNGER_SET_MAX = 5
@@ -58,17 +164,20 @@
     const RUMBLE_COMMAND_PAIR_CLEAR = 9
     const RUMBLE_COMMAND_PAIR_START = 10
 
-    let gamepad = null
+    const RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT = 2
+    const RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED = 4
+
+    let gamepadIndex = null  // Index of the currently selected gamepad
 
     window.addEventListener("gamepadconnected", (event) => { updateGamepads() })
     window.addEventListener("gamepaddisconnected", (event) => { updateGamepads() })
 
-    updateGamepads = function() {
+    const updateGamepads = function() {
         const gamepads = navigator.getGamepads()
 
-        if (gamepad && !gamepads.includes(gamepad)) {
+        if (gamepadIndex !== null && !gamepads[gamepadIndex]) {
             // Your selected gamepad disconnected
-            gamepad = null
+            gamepadIndex = null
         }
 
         if (gamepads.every(i => i === null)) {
@@ -82,23 +191,25 @@
                 const gp = gamepads[i]
                 if (gp) {
                     const checked = ((i === 0) ? " checked" : "")
-                    if (!gamepad && i === 0) gamepad = gp
+                    if (gamepadIndex === null && i === 0) gamepadIndex = i
                     pickerHtml += `<input type="radio" onchange="onChooseGamepad(this)" value="${gp.index}"${checked}/>`
                     pickerHtml += `<label for="gamepad-${gp.index}">${gp.id}</label><br/>`
                 }
             }
             document.getElementById("connStatus").innerHTML = pickerHtml
         }
+        updateGamepadState();
     }
 
-    onChooseGamepad = function(button) {
+    const onChooseGamepad = function(button) {
         // User changed the current gamepad
         const gamepads = navigator.getGamepads()
-        gamepad = gamepads[button.value];
+        gamepadIndex = button.value;
     }
 
-    sendHapticEvent = function (duration, wM, sM) {
-        if (gamepad) {
+    const sendHapticEvent = function (duration, wM, sM) {
+        if (gamepadIndex !== null) {
+            const gamepad = navigator.getGamepads()[gamepadIndex]
             gamepad.vibrationActuator.playEffect("dual-rumble", {
                 startDelay: 0,
                 duration: duration,
@@ -108,8 +219,65 @@
         }
     }
 
-    sendHapticCommand = function (command) {
+    const sendHapticCommand = function (command) {
         sendHapticEvent(50, command/255.0, RUMBLE_COMMAND_MAGIC/255.0)
     }
+
+    const buttonMap = [
+        "button-status-a", "button-status-b", "button-status-x", "button-status-y",
+        "button-status-l-flipper", "button-status-r-flipper", "", "",
+        "button-status-back", "button-status-menu", "button-status-c", "button-status-z",
+        "button-status-dpad-up", "button-status-dpad-down", "button-status-dpad-left", "button-status-dpad-right"
+        ]
+    const leftTriggerIndex = 6
+    const rightTriggerIndex = 7
+
+    const updateGamepadState = function () {
+        let gamepad = null
+        if (gamepadIndex !== null)
+            gamepad = navigator.getGamepads()[gamepadIndex]
+
+        // Update buttons
+        for (let i = 0; i < buttonMap.length; i++) {
+            const buttonName = buttonMap[i]
+            if (buttonName) {
+                if (gamepad) {
+                    if (gamepad.buttons[i].pressed) {
+                        document.getElementById(buttonName).classList.add("pressed")
+                    } else {
+                        document.getElementById(buttonName).classList.remove("pressed")
+                    }
+                }
+            }
+        }
+        if (gamepad) {
+            // Check for PinSim Status data in Left and Right trigger values
+            const plungerOnLeftStick = ((gamepad.buttons[leftTriggerIndex].value*1024) & RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
+            const solenoidEnabled = ((gamepad.buttons[leftTriggerIndex].value*1024) & RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED)
+            const numPairs = (gamepad.buttons[rightTriggerIndex].value*512) & 3
+            document.getElementById("gamepad-status-pairings").innerHTML = numPairs
+            document.getElementById("gamepad-status-plunger-stick").innerHTML = plungerOnLeftStick ? "Left" : "Right"
+            document.getElementById("gamepad-status-solenoids").innerHTML = solenoidEnabled ? "On" : "Off"
+
+            // Update Plunger
+            const plungerVal = Math.round(gamepad.axes[(plungerOnLeftStick) ? 1 : 3]*10000)/100.0
+            document.getElementById("gamepad-status-plunger").style.height = `${plungerVal}%`
+            const leftX = Math.round(gamepad.axes[0]*10000)/200.0 + 50
+            document.getElementById("gamepad-status-left-stick-x").style.width = `${leftX}%`
+            const leftY = Math.round(gamepad.axes[1]*10000)/200.0 + 50
+            document.getElementById("gamepad-status-left-stick-y").style.height = `${leftY}%`
+        } else {
+            document.getElementById("gamepad-status-pairings").innerHTML = ""
+            document.getElementById("gamepad-status-plunger-stick").innerHTML = ""
+            document.getElementById("gamepad-status-solenoids").innerHTML = ""
+            document.getElementById("gamepad-status-plunger").style.height = "0"
+            document.getElementById("gamepad-status-left-stick-x").style.width = "0"
+            document.getElementById("gamepad-status-left-stick-y").style.height = "0"
+        }
+        requestAnimationFrame(updateGamepadState);
+    }
+
+    requestAnimationFrame(updateGamepadState);
 </script>
 </body>
+</html>

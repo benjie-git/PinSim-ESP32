@@ -192,6 +192,8 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     this->_hidOutputCallbacks = new HIDOutputCallbacks(this);
     this->_output->setCallbacks(this->_hidOutputCallbacks);
 
+    this->_dirtySkipCount = 0;
+
     // Create device UUID
     NimBLEService *service = this->_server->getServiceByUUID(SERVICE_UUID_DEVICE_INFORMATION);
   
@@ -286,6 +288,11 @@ void XInput::onAdvComplete(NimBLEAdvertising *advertising)
     // Restart advertising with whitelist filter
     this->_allowNewConnections = false;
     this->startAdvertising();
+}
+
+uint XInput::getPairCount()
+{
+    return pairedAddresses.size();
 }
 
 void XInput::clearWhitelist()
@@ -488,7 +495,12 @@ void XInput::sendGamepadReport()
         return;
     }
 
-    if (_inputReportDirty) {
+    if (++this->_dirtySkipCount >= 30) {
+        this->_dirtySkipCount = 0;
+        this->_inputReportDirty = true;
+    }
+
+    if (this->_inputReportDirty) {
         this->_input->setValue((uint8_t*)&_inputReport, sizeof(_inputReport));
         this->_input->notify();
         _inputReportDirty = false;

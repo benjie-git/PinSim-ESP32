@@ -127,6 +127,8 @@ int plungerAverage = 0;
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
 XInput gamepad;
+boolean handleRumbleCommand(uint8_t command);
+void updateTriggerStatus();
 
 TaskHandle_t mainTaskHandle = NULL;
 void handle_main_task(void *arg);
@@ -470,8 +472,12 @@ void getPlungerMax()
   preferences.putInt("plungerMin", plungerMin);
   preferences.putInt("plungerMax", plungerMax);
 
+  plungerMaxDistance = readingToDistance(plungerMin);
+  plungerMinDistance = readingToDistance(plungerMax);
+  lastDistance = plungerMaxDistance;
+
   // Reset plungerZero to make sure we have full plunger movement so we can preperly set a new zero value
-  plungerZeroValue = plungerMin;
+  plungerZeroValue = 0;
   preferences.putInt("plungerZero", plungerMin);
 
   printf("Plunger calibration data stored to flash.\n");
@@ -491,99 +497,6 @@ void deadZoneCompensation()
   printf("Plunger deadzone data stored to flash.\n");
   printf("---- plungerZeroValue: %d\n", plungerZeroValue);
   configFeedbackBlinks(3);
-}
-
-
-// This value as the weak magnitude means the strong magnitude is a command
-#define RUMBLE_COMMAND_MAGIC 2
-
-// Commands in the strong magnitude field
-#define RUMBLE_COMMAND_ACCEL_CAL 3
-#define RUMBLE_COMMAND_PLUNGER_SET_MIN 4
-#define RUMBLE_COMMAND_PLUNGER_SET_MAX 5
-#define RUMBLE_COMMAND_PLUNGER_SET_ZERO 6
-#define RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP 7
-#define RUMBLE_COMMAND_TOGGLE_SOLENOIDS 8
-#define RUMBLE_COMMAND_PAIR_CLEAR 9
-#define RUMBLE_COMMAND_PAIR_START 10
-
-// Received a runmble event that encodes a pinsim command
-boolean handleRumbleCommand(uint8_t command)
-{
-  switch (command) {
-    case RUMBLE_COMMAND_ACCEL_CAL:
-      printf("Rumble Command: Calibrate Accels\n");
-      preferences.putInt("accelZeroX", accX);
-      preferences.putInt("accelZeroY", accY);
-      runtimeFeedbackBlinks(1);
-      break;
-    
-    case RUMBLE_COMMAND_PLUNGER_SET_MIN:
-      printf("Rumble Command: Plunger Set Min\n");
-      plungerMin = plungerAverage;
-      preferences.putInt("plungerMin", plungerMin);
-      runtimeFeedbackBlinks(1);
-      break;
-    
-    case RUMBLE_COMMAND_PLUNGER_SET_MAX:
-      printf("Rumble Command: Plunger Set Max\n");
-      plungerMax = plungerAverage;
-      preferences.putInt("plungerMax", plungerMax);
-      runtimeFeedbackBlinks(1);
-      break;
-    
-    case RUMBLE_COMMAND_PLUNGER_SET_ZERO:
-      printf("Rumble Command: Plunger Set Zero\n");
-      plungerZeroValue = plungerAverage;
-      preferences.putInt("plungerZero", plungerZeroValue);
-      runtimeFeedbackBlinks(1);
-      break;
-    
-    case RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP:
-      printf("Rumble Command: Control Swap\n");
-      controlShuffle = !controlShuffle;
-      preferences.putBool("controlShuffle", controlShuffle);
-      runtimeFeedbackBlinks(controlShuffle ? 2 : 1);
-      break;
-    
-    case RUMBLE_COMMAND_TOGGLE_SOLENOIDS:
-      printf("Rumble Command: Toggle Solenoids\n");
-      solenoidEnabled = !solenoidEnabled;
-      preferences.putBool("solenoidEnabled", solenoidEnabled);
-      runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
-      break;
-    
-    case RUMBLE_COMMAND_PAIR_CLEAR:
-      printf("Rumble Command: Clear Pairing\n");
-      gamepad.clearWhitelist();
-      runtimeFeedbackBlinks(1);
-      break;
-    
-    case RUMBLE_COMMAND_PAIR_START:
-      printf("Rumble Command: Pairing Mode\n");
-      gamepad.allowNewConnections(true);
-      gamepad.startAdvertising();
-      runtimeFeedbackBlinks(2);
-      break;
-    
-    default:
-      printf("Bad Rumble Command: %d\n", command);
-      return false;
-  }
-  return true;
-}
-
-// Handle Vibrate/Rumble events
-void OnVibrateEvent(XboxGamepadOutputReportData data)
-{
-  if (data.weakMotorMagnitude == RUMBLE_COMMAND_MAGIC) {
-    if (handleRumbleCommand(data.strongMotorMagnitude)) {
-      return;
-    }
-  }
-  printf("Rumble: %d, %d\n", data.weakMotorMagnitude, data.strongMotorMagnitude);
-  analogWrite(rumbleSmall, data.weakMotorMagnitude);
-  analogWrite(rumbleLarge, data.strongMotorMagnitude);
 }
 
 
@@ -993,20 +906,20 @@ void processInputs()
       waitingForAccelSetting = false;
     }
 
-    accX = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
-    accY = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
+    int32_t accXcon = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
+    int32_t accYcon = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
 
     if (millis() > tiltEnableTime) {
       if (controlShuffle) {
-        if (accY > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::NORTH;
-        if (accX > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::EAST;
-        if (accY < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::SOUTH;
-        if (accX < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::WEST;
+        if (accYcon > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::NORTH;
+        if (accXcon > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::EAST;
+        if (accYcon < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::SOUTH;
+        if (accXcon < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::WEST;
       }
       else {
         // Add a big dead zone for Left-stick analog accelerometer movements
-        if (abs(accX) > XBOX_STICK_MAX * 0.6 || abs(accY) > XBOX_STICK_MAX * 0.6) {
-          gamepad.setLeftThumb(accX, accY);
+        if (abs(accXcon) > XBOX_STICK_MAX * 0.6 || abs(accYcon) > XBOX_STICK_MAX * 0.6) {
+          gamepad.setLeftThumb(accXcon, accYcon);
         }
         else {
           gamepad.setLeftThumb(0, 0);
@@ -1169,8 +1082,125 @@ void handle_main_task(void *arg)
       // Process all inputs and load up the usbData registers correctly
       processInputs();
 
+      // Add status data into trigger values as small movements
+      updateTriggerStatus();
+
       // Send controller data
       gamepad.sendGamepadReport();
     }
   }
+}
+
+
+// This value as the weak magnitude means the strong magnitude is a command
+#define RUMBLE_COMMAND_MAGIC 2
+
+// Commands in the strong magnitude field
+#define RUMBLE_COMMAND_ACCEL_CAL 3
+#define RUMBLE_COMMAND_PLUNGER_SET_MIN 4
+#define RUMBLE_COMMAND_PLUNGER_SET_MAX 5
+#define RUMBLE_COMMAND_PLUNGER_SET_ZERO 6
+#define RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP 7
+#define RUMBLE_COMMAND_TOGGLE_SOLENOIDS 8
+#define RUMBLE_COMMAND_PAIR_CLEAR 9
+#define RUMBLE_COMMAND_PAIR_START 10
+
+#define RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT 2
+#define RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED 4
+
+
+// Handle Vibrate/Rumble events
+void OnVibrateEvent(XboxGamepadOutputReportData data)
+{
+  if (data.weakMotorMagnitude == RUMBLE_COMMAND_MAGIC) {
+    if (handleRumbleCommand(data.strongMotorMagnitude)) {
+      return;
+    }
+  }
+  printf("Rumble: %d, %d\n", data.weakMotorMagnitude, data.strongMotorMagnitude);
+  analogWrite(rumbleSmall, data.weakMotorMagnitude);
+  analogWrite(rumbleLarge, data.strongMotorMagnitude);
+}
+
+
+void updateTriggerStatus()
+{
+  int leftStatus = 0;
+  if (controlShuffle) leftStatus += RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT;
+  if (solenoidEnabled) leftStatus += RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED;
+  gamepad.setLeftTrigger(leftStatus);
+
+  int rightStatus = gamepad.getPairCount() * 2;
+  gamepad.setRightTrigger(rightStatus);
+}
+
+// Received a runmble event that encodes a pinsim command
+boolean handleRumbleCommand(uint8_t command)
+{
+  switch (command) {
+    case RUMBLE_COMMAND_ACCEL_CAL:
+      printf("Rumble Command: Calibrate Accels\n");
+      zeroX = accX;
+      zeroY = accY;
+      preferences.putInt("accelZeroX", zeroX);
+      preferences.putInt("accelZeroY", zeroY);
+      runtimeFeedbackBlinks(1);
+      break;
+    
+    case RUMBLE_COMMAND_PLUNGER_SET_MIN:
+      printf("Rumble Command: Plunger Set Min\n");
+      plungerMin = plungerAverage;
+      plungerMinDistance = readingToDistance(plungerMax);
+      preferences.putInt("plungerMin", plungerMin);
+      runtimeFeedbackBlinks(1);
+      break;
+    
+    case RUMBLE_COMMAND_PLUNGER_SET_MAX:
+      printf("Rumble Command: Plunger Set Max\n");
+      plungerMax = plungerAverage;
+      plungerMaxDistance = readingToDistance(plungerMin);
+      preferences.putInt("plungerMax", plungerMax);
+      runtimeFeedbackBlinks(1);
+      break;
+    
+    case RUMBLE_COMMAND_PLUNGER_SET_ZERO:
+      printf("Rumble Command: Plunger Set Zero\n");
+      plungerZeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
+      if (plungerZeroValue < 0) plungerZeroValue = 0;
+      preferences.putInt("plungerZero", plungerZeroValue);
+      runtimeFeedbackBlinks(1);
+      break;
+    
+    case RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP:
+      printf("Rumble Command: Control Swap\n");
+      controlShuffle = !controlShuffle;
+      preferences.putBool("controlShuffle", controlShuffle);
+      runtimeFeedbackBlinks(controlShuffle ? 2 : 1);
+      break;
+    
+    case RUMBLE_COMMAND_TOGGLE_SOLENOIDS:
+      printf("Rumble Command: Toggle Solenoids\n");
+      solenoidEnabled = !solenoidEnabled;
+      preferences.putBool("solenoidEnabled", solenoidEnabled);
+      runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
+      break;
+    
+    case RUMBLE_COMMAND_PAIR_CLEAR:
+      printf("Rumble Command: Clear Pairing\n");
+      gamepad.clearWhitelist();
+      runtimeFeedbackBlinks(1);
+      break;
+    
+    case RUMBLE_COMMAND_PAIR_START:
+      printf("Rumble Command: Pairing Mode\n");
+      gamepad.allowNewConnections(true);
+      gamepad.startAdvertising();
+      runtimeFeedbackBlinks(2);
+      break;
+
+    default:
+      printf("Bad Rumble Command: %d\n", command);
+      return false;
+  }
+  return true;
 }
