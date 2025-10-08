@@ -116,7 +116,8 @@ int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITH
 // Store settings to EEPROM using preferences storage name: PinSimESP32
 // Fields: (int)plungerMin, (int)plungerMax, (int)plungerZero,
 //         (int)accelZeroX, (int)accelZeroY,
-//         (bool)controlShuffle, (bool)solenoidEnabled
+//         (bool)controlShuffle, (bool)solenoidEnabled,
+//         (uint8_t)pinsimID
 // NOTE: field names have max length of 15 chars!!!
 static Preferences preferences;
 
@@ -146,6 +147,7 @@ int32_t zeroX = 0;                  // Accelerometer X calibration
 int32_t zeroY = 15000;              // Accelerometer Y calibration (non-zero due to tilted cabinet cover)
 int32_t accX = 0;
 int32_t accY = 0;
+uint8_t pinsimID = 0;
 
 // Pin Declarations
 #if PCB_VERSION == 2
@@ -278,10 +280,10 @@ Solenoid solRight(pinGPIO35, pinGPIO36, pinGPIO37);
 #define POSXB  12
 #define POSB9  13
 #define POSB10 14
-#define NUMBUTTONS 15   // Total number of buttons
+#define NUM_BUTTONS 15   // Total number of buttons
 
 
-uint8_t buttonStatus[NUMBUTTONS];  // array Holds a "Snapshot" of the button status to parse and manipulate
+uint8_t buttonStatus[NUM_BUTTONS];  // array Holds a "Snapshot" of the button status to parse and manipulate
 
 // Setup Button Debouncing
 Button2 dpadUP = Button2(pinDpadU);
@@ -622,6 +624,7 @@ void setup()
 {
   setupPins();
   preferences.begin("PinSimESP32");
+  pinsimID = preferences.getUChar("pinsimID", 0);
 
   // delay(2000);
   printf("\n\n");
@@ -1104,9 +1107,10 @@ void handle_main_task(void *arg)
 #define RUMBLE_COMMAND_TOGGLE_SOLENOIDS 8
 #define RUMBLE_COMMAND_PAIR_CLEAR 9
 #define RUMBLE_COMMAND_PAIR_START 10
+#define RUMBLE_COMMAND_SET_PINSIM_ID 32 // (32-63 & 0x11111 for a 5-bit value)
 
-#define RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT 2
-#define RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED 4
+#define RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT 1
+#define RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED 2
 
 
 // Handle Vibrate/Rumble events
@@ -1128,9 +1132,10 @@ void updateTriggerStatus()
   int leftStatus = 0;
   if (controlShuffle) leftStatus += RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT;
   if (solenoidEnabled) leftStatus += RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED;
+  leftStatus += gamepad.getPairCount() * 4;
   gamepad.setLeftTrigger(leftStatus);
 
-  int rightStatus = gamepad.getPairCount() * 2;
+  int rightStatus = pinsimID; // 5 bits
   gamepad.setRightTrigger(rightStatus);
 }
 
@@ -1199,8 +1204,15 @@ boolean handleRumbleCommand(uint8_t command)
       break;
 
     default:
-      printf("Bad Rumble Command: %d\n", command);
-      return false;
+      if (command >= RUMBLE_COMMAND_SET_PINSIM_ID && command < RUMBLE_COMMAND_SET_PINSIM_ID+32) {
+        pinsimID = command & 0b11111;
+        preferences.putUChar("pinsimID", pinsimID);
+        runtimeFeedbackBlinks(1);
+      }
+      else {
+        printf("Bad Rumble Command: %d\n", command);
+        return false;
+      }
   }
   return true;
 }

@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en-US">
 <head>
     <title>PinSim Web Configurator</title>
@@ -109,11 +110,13 @@
                 <div id="gamepad-status-left-stick-x" class="hbar-fill"></div>
             </div>
 
-            <div style="position: absolute; left: 330px; top:180px;">
+            <div style="position: absolute; left: 330px; top:140px;">
                 <table>
+                    <tr><th align="right">PinSim ID:</th><td id="gamepad-status-pinsimID"></td></tr>
                     <tr><th align="right">Pairings:</th><td id="gamepad-status-pairings"></td></tr>
                     <tr><th align="right">Plunger Stick:</th><td id="gamepad-status-plunger-stick"></td></tr>
                     <tr><th align="right">Solenoids:</th><td id="gamepad-status-solenoids"></td></tr>
+                    <tr><th align="right">Timestamp:</th><td id="gamepad-status-timestamp"></td></tr>
                 </table>
             </div>
             <div style="height: 180px;"></div>
@@ -126,6 +129,7 @@
     <div class="inner-section">
         <h3>Bluetooth Pairing</h3>
         <div class="inner-section">
+            <button onclick="const i = Math.min(31, prompt('New PinSim ID (0-31)')); sendHapticCommand(RUMBLE_COMMAND_SET_PINSIM_ID + i);">Set PinSim ID...</button>
             <button onclick="sendHapticCommand(RUMBLE_COMMAND_PAIR_START)">Start Pairing Mode</button>
             <button onclick="sendHapticCommand(RUMBLE_COMMAND_PAIR_CLEAR)">Clear All Pairing Info (This may disconnect you!)</button>
         </div>
@@ -163,14 +167,25 @@
     const RUMBLE_COMMAND_TOGGLE_SOLENOIDS = 8
     const RUMBLE_COMMAND_PAIR_CLEAR = 9
     const RUMBLE_COMMAND_PAIR_START = 10
+    const RUMBLE_COMMAND_SET_PINSIM_ID = 32 // (32-63 & 0x11111 for a 5-bit value)
 
-    const RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT = 2
-    const RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED = 4
+    const RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT = 1
+    const RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED = 2
 
     let gamepadIndex = null  // Index of the currently selected gamepad
+    let lastTimestamp = 0
 
-    window.addEventListener("gamepadconnected", (event) => { updateGamepads() })
-    window.addEventListener("gamepaddisconnected", (event) => { updateGamepads() })
+    let scaleTriggerToInt = function(v) {
+        return Math.round(v*1023);
+    }
+
+    let scaleIntToRumble = function(v) {
+        return v/255.0;
+    }
+
+    window.addEventListener("gamepadconnected", (event) => { updateGamepads(); })
+    window.addEventListener("gamepaddisconnected", (event) => { updateGamepads(); })
+    window.setInterval(() => { updateGamepads(); }, 1000)
 
     const updateGamepads = function() {
         const gamepads = navigator.getGamepads()
@@ -192,35 +207,40 @@
                 if (gp) {
                     const checked = ((i === 0) ? " checked" : "")
                     if (gamepadIndex === null && i === 0) gamepadIndex = i
+                    const pinsimID = scaleTriggerToInt(gp.buttons[rightTriggerIndex].value)
                     pickerHtml += `<input type="radio" onchange="onChooseGamepad(this)" value="${gp.index}"${checked}/>`
-                    pickerHtml += `<label for="gamepad-${gp.index}">${gp.id}</label><br/>`
+                    pickerHtml += `<label for="gamepad-${gp.index}">PinSim ID:${pinsimID} - ${gp.id}</label><br/>`
                 }
             }
             document.getElementById("connStatus").innerHTML = pickerHtml
         }
-        updateGamepadState();
     }
 
     const onChooseGamepad = function(button) {
         // User changed the current gamepad
         const gamepads = navigator.getGamepads()
-        gamepadIndex = button.value;
+        gamepadIndex = button.value
+        lastTimestamp = 0
     }
 
     const sendHapticEvent = function (duration, wM, sM) {
         if (gamepadIndex !== null) {
             const gamepad = navigator.getGamepads()[gamepadIndex]
-            gamepad.vibrationActuator.playEffect("dual-rumble", {
-                startDelay: 0,
-                duration: duration,
-                weakMagnitude: wM,
-                strongMagnitude: sM,
-            })
+            if (gamepad.vibrationActuator) {
+                gamepad.vibrationActuator.playEffect("dual-rumble", {
+                    startDelay: 0,
+                    duration: duration,
+                    weakMagnitude: wM,
+                    strongMagnitude: sM,
+                })
+            } else {
+                console.log("gamepad.vibrationActuator undefined.  This browser does not fully support this gamepad.")
+            }
         }
     }
 
     const sendHapticCommand = function (command) {
-        sendHapticEvent(50, command/255.0, RUMBLE_COMMAND_MAGIC/255.0)
+        sendHapticEvent(250, scaleIntToRumble(command), scaleIntToRumble(RUMBLE_COMMAND_MAGIC))
     }
 
     const buttonMap = [
@@ -234,15 +254,21 @@
     const rightTriggerIndex = 7
 
     const updateGamepadState = function () {
-        let gamepad = null
-        if (gamepadIndex !== null)
-            gamepad = navigator.getGamepads()[gamepadIndex]
+        requestAnimationFrame(updateGamepadState);
+        if (gamepadIndex == null) return
 
-        // Update buttons
-        for (let i = 0; i < buttonMap.length; i++) {
-            const buttonName = buttonMap[i]
-            if (buttonName) {
-                if (gamepad) {
+        let gamepad = null
+        gamepad = navigator.getGamepads()[gamepadIndex]
+
+        if (gamepad) {
+            const newTimestamp = Math.round(gamepad.timestamp)
+            if (newTimestamp === lastTimestamp) return
+            lastTimestamp = newTimestamp
+
+            // Update buttons
+            for (let i = 0; i < buttonMap.length; i++) {
+                const buttonName = buttonMap[i]
+                if (buttonName) {
                     if (gamepad.buttons[i].pressed) {
                         document.getElementById(buttonName).classList.add("pressed")
                     } else {
@@ -250,22 +276,26 @@
                     }
                 }
             }
-        }
-        if (gamepad) {
+
             // Check for PinSim Status data in Left and Right trigger values
-            const plungerOnLeftStick = ((gamepad.buttons[leftTriggerIndex].value*1024) & RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
-            const solenoidEnabled = ((gamepad.buttons[leftTriggerIndex].value*1024) & RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED)
-            const numPairs = (gamepad.buttons[rightTriggerIndex].value*512) & 3
+            let leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
+            let rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
+            const plungerOnLeftStick = (leftVal & RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
+            const solenoidEnabled = (leftVal & RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED)
+            const numPairs = (leftVal & 0b11100) >> 2
+            const pinsimID = rightVal & 0b11111
             document.getElementById("gamepad-status-pairings").innerHTML = numPairs
             document.getElementById("gamepad-status-plunger-stick").innerHTML = plungerOnLeftStick ? "Left" : "Right"
             document.getElementById("gamepad-status-solenoids").innerHTML = solenoidEnabled ? "On" : "Off"
+            document.getElementById("gamepad-status-pinsimID").innerHTML = pinsimID
+            document.getElementById("gamepad-status-timestamp").innerHTML = newTimestamp
 
             // Update Plunger
-            const plungerVal = Math.round(gamepad.axes[(plungerOnLeftStick) ? 1 : 3]*10000)/100.0
+            const plungerVal = gamepad.axes[(plungerOnLeftStick) ? 1 : 3]*100   // 0 - 1.0  ==> 0-100
             document.getElementById("gamepad-status-plunger").style.height = `${plungerVal}%`
-            const leftX = Math.round(gamepad.axes[0]*10000)/200.0 + 50
+            const leftX = gamepad.axes[0]*50 + 50   // -1.0 - 1.0  ==> 0-100
             document.getElementById("gamepad-status-left-stick-x").style.width = `${leftX}%`
-            const leftY = Math.round(gamepad.axes[1]*10000)/200.0 + 50
+            const leftY = gamepad.axes[1]*50 + 50   // -1.0 - 1.0  ==> 0-100
             document.getElementById("gamepad-status-left-stick-y").style.height = `${leftY}%`
         } else {
             document.getElementById("gamepad-status-pairings").innerHTML = ""
@@ -274,8 +304,8 @@
             document.getElementById("gamepad-status-plunger").style.height = "0"
             document.getElementById("gamepad-status-left-stick-x").style.width = "0"
             document.getElementById("gamepad-status-left-stick-y").style.height = "0"
+            document.getElementById("gamepad-status-timestamp").innerHTML = ""
         }
-        requestAnimationFrame(updateGamepadState);
     }
 
     requestAnimationFrame(updateGamepadState);
