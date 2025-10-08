@@ -129,7 +129,7 @@
     <div class="inner-section">
         <h3>Bluetooth Pairing</h3>
         <div class="inner-section">
-            <button onclick="const i = Math.min(31, prompt('New PinSim ID (0-31)')); sendHapticCommand(RUMBLE_COMMAND_SET_PINSIM_ID + i);">Set PinSim ID...</button>
+            <button onclick="const i = Math.max(0, Math.min(31, prompt('New PinSim ID (0-31)'))); sendHapticCommand(RUMBLE_COMMAND_SET_PINSIM_ID + i);">Set PinSim ID...</button>
             <button onclick="sendHapticCommand(RUMBLE_COMMAND_PAIR_START)">Start Pairing Mode</button>
             <button onclick="sendHapticCommand(RUMBLE_COMMAND_PAIR_CLEAR)">Clear All Pairing Info (This may disconnect you!)</button>
         </div>
@@ -301,10 +301,11 @@
             document.getElementById("gamepad-status-pairings").innerHTML = ""
             document.getElementById("gamepad-status-plunger-stick").innerHTML = ""
             document.getElementById("gamepad-status-solenoids").innerHTML = ""
+            document.getElementById("gamepad-status-timestamp").innerHTML = ""
+
             document.getElementById("gamepad-status-plunger").style.height = "0"
             document.getElementById("gamepad-status-left-stick-x").style.width = "0"
             document.getElementById("gamepad-status-left-stick-y").style.height = "0"
-            document.getElementById("gamepad-status-timestamp").innerHTML = ""
         }
     }
 
