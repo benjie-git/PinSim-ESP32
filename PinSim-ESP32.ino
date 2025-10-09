@@ -1116,12 +1116,12 @@ void handle_main_task(void *arg)
 // Handle Vibrate/Rumble events
 void OnVibrateEvent(XboxGamepadOutputReportData data)
 {
+  printf("Rumble: %d, %d\n", data.weakMotorMagnitude, data.strongMotorMagnitude);
   if (data.weakMotorMagnitude == RUMBLE_COMMAND_MAGIC) {
     if (handleRumbleCommand(data.strongMotorMagnitude)) {
       return;
     }
   }
-  printf("Rumble: %d, %d\n", data.weakMotorMagnitude, data.strongMotorMagnitude);
   analogWrite(rumbleSmall, data.weakMotorMagnitude);
   analogWrite(rumbleLarge, data.strongMotorMagnitude);
 }

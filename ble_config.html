@@ -148,6 +148,9 @@
 
         <h3>Control Toggles</h3>
         <div class="inner-section">
+            <button onclick="sendHapticEvent(200, 1.0, prompt('Rumble Val:', '0.5'))">Send Rumble Val</button>
+            <button onclick="rumbleMin = Math.max(0, prompt('Rumble Min:', `${rumbleMin}`)); sendTest(); ">Set Rumble Min</button>
+            <button onclick="rumbleMax = Math.max(0, prompt('Rumble Max:', `${rumbleMax}`)); sendTest(); ">Set Rumble Max</button>
             <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP)">Swap Plunger Controls</button>
             <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
         </div>
@@ -169,6 +172,20 @@
     const RUMBLE_COMMAND_PAIR_START = 10
     const RUMBLE_COMMAND_SET_PINSIM_ID = 32 // (32-63 & 0x11111 for a 5-bit value)
 
+    // Sketchy Safari mapping from trigger values 0-255, may to 0.0-1.0 values from safari.  Nonlinearly. ???
+    const SAFARI_COMMAND_MAP = new Map([
+        [RUMBLE_COMMAND_MAGIC, 0.15],
+        [RUMBLE_COMMAND_ACCEL_CAL, 0.18],
+        [RUMBLE_COMMAND_PLUNGER_SET_MIN, 0.2],
+        [RUMBLE_COMMAND_PLUNGER_SET_MAX, 0.24],
+        [RUMBLE_COMMAND_PLUNGER_SET_ZERO, 0.26],
+        [RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP, 0.27],
+        [RUMBLE_COMMAND_TOGGLE_SOLENOIDS, 0.29],
+        [RUMBLE_COMMAND_PAIR_CLEAR, 0.31],
+        [RUMBLE_COMMAND_PAIR_START, 0.33],
+        [RUMBLE_COMMAND_SET_PINSIM_ID, 0.57]]) // 0.57 - 0.80]
+
+
     const RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT = 1
     const RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED = 2
 
@@ -180,7 +197,23 @@
     }
 
     let scaleIntToRumble = function(v) {
-        return v/255.0;
+        if (window.safari) {
+            if (SAFARI_COMMAND_MAP.has(v)) {
+                return SAFARI_COMMAND_MAP.get(v)
+            } else {
+                if (v >= RUMBLE_COMMAND_SET_PINSIM_ID && v < RUMBLE_COMMAND_SET_PINSIM_ID*2) {
+                    return SAFARI_COMMAND_MAP.get(RUMBLE_COMMAND_SET_PINSIM_ID) + (v-RUMBLE_COMMAND_SET_PINSIM_ID)*0.0074
+                }
+                return 0
+            }
+        }
+        else {
+            return v/255.0;
+        }
+    }
+
+    let sendTest = function() {
+        sendHapticEvent(200, scaleIntToRumble(2), scaleIntToRumble(32))
     }
 
     window.addEventListener("gamepadconnected", (event) => { updateGamepads(); })
@@ -233,6 +266,7 @@
                     weakMagnitude: wM,
                     strongMagnitude: sM,
                 })
+                console.log(`duration: ${duration}, weakMagnitude: ${wM}, strongMagnitude: ${sM}`)
             } else {
                 console.log("gamepad.vibrationActuator undefined.  This browser does not fully support this gamepad.")
             }
