@@ -83,7 +83,7 @@ const char *XB_NAME = "Xbox Wireless Controller";  // "PinSimESP32 Xbox Controll
 const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 
 // Define this as 2 for v0.2, or 3 for v0.3/v0.4, , or 5 for v0.5 as a few connections have changed
-#define PCB_VERSION 5
+#define PCB_VERSION 3
 
 // LED Brightness for the Red and Green LEDs onboard the PCB.  255 is full, 5 is dim, 0 disables them.
 #define PCB_LED_BRIGHTNESS 6
@@ -1109,8 +1109,8 @@ void handle_main_task(void *arg)
 #define RUMBLE_COMMAND_PAIR_START 10
 #define RUMBLE_COMMAND_SET_PINSIM_ID 32 // (32-63 & 0x11111 for a 5-bit value)
 
-#define RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT 1
-#define RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED 2
+#define RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT 4
+#define RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED 8
 
 
 // Handle Vibrate/Rumble events
@@ -1132,11 +1132,11 @@ void updateTriggerStatus()
   int leftStatus = 0;
   if (controlShuffle) leftStatus += RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT;
   if (solenoidEnabled) leftStatus += RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED;
-  leftStatus += gamepad.getPairCount() * 4;
-  gamepad.setLeftTrigger(leftStatus);
+  leftStatus += gamepad.getPairCount() << 4;
+  gamepad.setLeftTrigger(leftStatus);  // Using bits 0x000XXXXX00
 
-  int rightStatus = pinsimID; // 5 bits
-  gamepad.setRightTrigger(rightStatus);
+  int rightStatus = pinsimID << 2;
+  gamepad.setRightTrigger(rightStatus);  // Using bits 0x000XXXXX00
 }
 
 // Received a runmble event that encodes a pinsim command

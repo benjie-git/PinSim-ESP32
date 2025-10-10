@@ -148,9 +148,6 @@
 
         <h3>Control Toggles</h3>
         <div class="inner-section">
-            <button onclick="sendHapticEvent(200, 1.0, prompt('Rumble Val:', '0.5'))">Send Rumble Val</button>
-            <button onclick="rumbleMin = Math.max(0, prompt('Rumble Min:', `${rumbleMin}`)); sendTest(); ">Set Rumble Min</button>
-            <button onclick="rumbleMax = Math.max(0, prompt('Rumble Max:', `${rumbleMax}`)); sendTest(); ">Set Rumble Max</button>
             <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP)">Swap Plunger Controls</button>
             <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
         </div>
@@ -185,19 +182,22 @@
         [RUMBLE_COMMAND_PAIR_START, 0.33],
         [RUMBLE_COMMAND_SET_PINSIM_ID, 0.57]]) // 0.57 - 0.80]
 
-
-    const RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT = 1
-    const RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED = 2
+    const RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT = 4
+    const RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED = 8
 
     let gamepadIndex = null  // Index of the currently selected gamepad
     let lastTimestamp = 0
+
 
     let scaleTriggerToInt = function(v) {
         return Math.round(v*1023);
     }
 
     let scaleIntToRumble = function(v) {
-        if (window.safari) {
+        if (navigator.platform.startsWith("Win")) {
+            return (v+0.5)/100.0
+        }
+        else if (window.safari) {
             if (SAFARI_COMMAND_MAP.has(v)) {
                 return SAFARI_COMMAND_MAP.get(v)
             } else {
@@ -212,13 +212,9 @@
         }
     }
 
-    let sendTest = function() {
-        sendHapticEvent(200, scaleIntToRumble(2), scaleIntToRumble(32))
-    }
-
     window.addEventListener("gamepadconnected", (event) => { updateGamepads(); })
     window.addEventListener("gamepaddisconnected", (event) => { updateGamepads(); })
-    window.setInterval(() => { updateGamepads(); }, 1000)
+    window.setInterval(() => { updateGamepads(); }, 2000)
 
     const updateGamepads = function() {
         const gamepads = navigator.getGamepads()
@@ -238,10 +234,11 @@
             for (let i = 0; i < gamepads.length; i++) {
                 const gp = gamepads[i]
                 if (gp) {
-                    const checked = ((i === 0) ? " checked" : "")
-                    if (gamepadIndex === null && i === 0) gamepadIndex = i
-                    const pinsimID = scaleTriggerToInt(gp.buttons[rightTriggerIndex].value)
-                    pickerHtml += `<input type="radio" onchange="onChooseGamepad(this)" value="${gp.index}"${checked}/>`
+                    if (gamepadIndex === null) gamepadIndex = i
+                    const checked = ((i === gamepadIndex) ? " checked" : "")
+                    const rightVal = scaleTriggerToInt(gp.buttons[rightTriggerIndex].value)
+                    const pinsimID = (rightVal & 0b0001111100) >> 2
+                    pickerHtml += `<input type="radio" id="gamepad-${gp.index}" onchange="onChooseGamepad(this)" value="${gp.index}"${checked}/>`
                     pickerHtml += `<label for="gamepad-${gp.index}">PinSim ID:${pinsimID} - ${gp.id}</label><br/>`
                 }
             }
@@ -316,8 +313,8 @@
             let rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
             const plungerOnLeftStick = (leftVal & RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
             const solenoidEnabled = (leftVal & RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED)
-            const numPairs = (leftVal & 0b11100) >> 2
-            const pinsimID = rightVal & 0b11111
+            const numPairs = (leftVal & 0b0001110000) >> 4
+            const pinsimID = (rightVal & 0b0001111100) >> 2
             document.getElementById("gamepad-status-pairings").innerHTML = numPairs
             document.getElementById("gamepad-status-plunger-stick").innerHTML = plungerOnLeftStick ? "Left" : "Right"
             document.getElementById("gamepad-status-solenoids").innerHTML = solenoidEnabled ? "On" : "Off"
