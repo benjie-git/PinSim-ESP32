@@ -83,7 +83,7 @@ const char *XB_NAME = "Xbox Wireless Controller";  // "PinSimESP32 Xbox Controll
 const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 
 // Define this as 2 for v0.2, or 3 for v0.3/v0.4, , or 5 for v0.5 as a few connections have changed
-#define PCB_VERSION 3
+#define PCB_VERSION 5
 
 // LED Brightness for the Red and Green LEDs onboard the PCB.  255 is full, 5 is dim, 0 disables them.
 #define PCB_LED_BRIGHTNESS 6
