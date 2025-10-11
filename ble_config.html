@@ -68,8 +68,8 @@
             height: 16px;
             background-color: red;
             border-radius: 50%;
-            top: 41px;
-            left: 41px;
+            top: 42px;
+            left: 42px;
             transform: translate(0, 0);
             transition: background-color 0.1s;
         }
@@ -201,7 +201,7 @@
     }
 
     let scaleIntToRumble = function(v) {
-        if (navigator.platform.startsWith("Win")) {
+        if (!navigator.platform.startsWith("Mac")) {
             return (v+0.5)/100.0
         }
         else if (window.safari) {
@@ -293,53 +293,53 @@
 
     const updateGamepadState = function () {
         requestAnimationFrame(updateGamepadState);
-        if (gamepadIndex == null) return
+        if (gamepadIndex !== null) {
+            let gamepad = null
+            gamepad = navigator.getGamepads()[gamepadIndex]
+            if (gamepad) {
+                const newTimestamp = Math.round(gamepad.timestamp)
+                if (newTimestamp === lastTimestamp) return
+                lastTimestamp = newTimestamp
 
-        let gamepad = null
-        gamepad = navigator.getGamepads()[gamepadIndex]
-
-        if (gamepad) {
-            const newTimestamp = Math.round(gamepad.timestamp)
-            if (newTimestamp === lastTimestamp) return
-            lastTimestamp = newTimestamp
-
-            // Update buttons
-            for (let i = 0; i < buttonMap.length; i++) {
-                const buttonName = buttonMap[i]
-                if (buttonName) {
-                    if (gamepad.buttons[i].pressed) {
-                        document.getElementById(buttonName).classList.add("pressed")
-                    } else {
-                        document.getElementById(buttonName).classList.remove("pressed")
+                // Update buttons
+                for (let i = 0; i < buttonMap.length; i++) {
+                    const buttonName = buttonMap[i]
+                    if (buttonName) {
+                        if (gamepad.buttons[i].pressed) {
+                            document.getElementById(buttonName).classList.add("pressed")
+                        } else {
+                            document.getElementById(buttonName).classList.remove("pressed")
+                        }
                     }
                 }
+
+                // Check for PinSim Status data in Left and Right trigger values
+                let leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
+                let rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
+                const plungerOnLeftStick = (leftVal & RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
+                const solenoidEnabled = (leftVal & RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED)
+                const numPairs = (leftVal & 0b0001110000) >> 4
+                const pinsimID = (rightVal & 0b0001111100) >> 2
+                document.getElementById("gamepad-status-pinsimID").innerHTML = pinsimID
+                document.getElementById("gamepad-status-pairings").innerHTML = numPairs
+                document.getElementById("gamepad-status-plunger-stick").innerHTML = plungerOnLeftStick ? "Left" : "Right"
+                document.getElementById("gamepad-status-solenoids").innerHTML = solenoidEnabled ? "On" : "Off"
+                document.getElementById("gamepad-status-timestamp").innerHTML = newTimestamp
+
+                // Update Plunger
+                updateStick(leftStickElement, gamepad.axes[0], gamepad.axes[1], 40)
+                updateStick(rightStickElement, 0, gamepad.axes[(plungerOnLeftStick) ? 1 : 3], 100)
+                return
             }
-
-            // Check for PinSim Status data in Left and Right trigger values
-            let leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
-            let rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
-            const plungerOnLeftStick = (leftVal & RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
-            const solenoidEnabled = (leftVal & RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED)
-            const numPairs = (leftVal & 0b0001110000) >> 4
-            const pinsimID = (rightVal & 0b0001111100) >> 2
-            document.getElementById("gamepad-status-pairings").innerHTML = numPairs
-            document.getElementById("gamepad-status-plunger-stick").innerHTML = plungerOnLeftStick ? "Left" : "Right"
-            document.getElementById("gamepad-status-solenoids").innerHTML = solenoidEnabled ? "On" : "Off"
-            document.getElementById("gamepad-status-pinsimID").innerHTML = pinsimID
-            document.getElementById("gamepad-status-timestamp").innerHTML = newTimestamp
-
-            // Update Plunger
-            updateStick(leftStickElement, gamepad.axes[0], gamepad.axes[1], 40)
-            updateStick(rightStickElement, 0, gamepad.axes[(plungerOnLeftStick) ? 1 : 3], 100)
-        } else {
-            document.getElementById("gamepad-status-pairings").innerHTML = ""
-            document.getElementById("gamepad-status-plunger-stick").innerHTML = ""
-            document.getElementById("gamepad-status-solenoids").innerHTML = ""
-            document.getElementById("gamepad-status-timestamp").innerHTML = ""
-
-            updateStick(leftStickElement, 0, 0, 40)
-            updateStick(rightStickElement, 0, 0, 100)
         }
+        document.getElementById("gamepad-status-pinsimID").innerHTML = ""
+        document.getElementById("gamepad-status-pairings").innerHTML = ""
+        document.getElementById("gamepad-status-plunger-stick").innerHTML = ""
+        document.getElementById("gamepad-status-solenoids").innerHTML = ""
+        document.getElementById("gamepad-status-timestamp").innerHTML = ""
+
+        updateStick(leftStickElement, 0, 0, 40)
+        updateStick(rightStickElement, 0, 0, 100)
     }
 
     function updateStick(stickElement, x, y, m) {
@@ -349,7 +349,7 @@
         stickElement.style.transform = `translate(${xOffset}px, ${yOffset}px)`;
     }
 
-    requestAnimationFrame(updateGamepadState);
+    requestAnimationFrame(updateGamepadState)
 </script>
 </body>
 </html>
