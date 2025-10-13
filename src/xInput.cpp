@@ -3,6 +3,12 @@
 #include <Preferences.h>
 #include <NimBLEDevice.h>
 
+// Changed NimBLE-Arduino/src/nimble/nimble/host/store/config/src/ble_store_nvs.c
+// to make this an external string, defined here, so we can change it!
+// After reinstalling nimble, need to replace first NIMBLE_NVS_NAMESPACE line in ble_store_nvs.c with:
+// const char* NIMBLE_NVS_NAMESPACE = "nimble_bond";
+extern const char* NIMBLE_NVS_NAMESPACE;
+
 #define MAX_CLIENTS 3
 
 
@@ -170,6 +176,8 @@ private:
 
 void XInput::startServer(const char *device_name, const char *manufacturer)
 {
+    NIMBLE_NVS_NAMESPACE = "nim_bond_xb";
+
     NimBLEDevice::init(device_name);
     NimBLEDevice::setSecurityAuth(true, false, false);
 

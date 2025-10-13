@@ -79,13 +79,6 @@
 #include "xInput.h"
 #include "keyboard.h"
 
-// Changed NimBLE-Arduino/src/nimble/nimble/host/store/config/src/ble_store_nvs.c
-// to make this an external string, defined here, so we can change it!
-// Replaced first NIMBLE_NVS_NAMESPACE line in ble_store_nvs.c with:
-// extern const char* NIMBLE_NVS_NAMESPACE;
-
-const char* NIMBLE_NVS_NAMESPACE = "nim_bond_xb";
-
 const char *XB_NAME = "Xbox Wireless Controller";  // "PinSimESP32 Xbox Controller";
 const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 
@@ -154,7 +147,8 @@ int16_t plungerZeroValue = 780;     // zero value for the plunger, to set the de
 int16_t plungerMinOffset = 50;      // add this to the measured min value, to give wiggle room for vibrations to not start a pliunge
 int16_t plungerMax = 2700;          // default max plunger analog sensor value
 int16_t plungerMaxDistance = 0;     // sensor value converted to actual distance
-int16_t plungerMinDistance = 0; 
+int16_t plungerMinDistance = 0;
+uint32_t plungerEnableTime = 0;
 uint32_t tiltEnableTime = 0;
 int16_t lastDistance = 0;
 int16_t distanceBuffer = 0;
@@ -696,7 +690,6 @@ void setup()
   esp_efuse_mac_get_default(mac_bytes);
   printf("HW MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
   if (useKeyboardMode) {
-    NIMBLE_NVS_NAMESPACE = "nim_bond_kb";
     preferences.putBool("useKeyboardMode", !useKeyboardMode); // Only stay in KB mode for one boot, for now
     esp_base_mac_addr_get(mac_bytes);
     mac_bytes[5]++;
@@ -936,7 +929,7 @@ void processInputs()
   setButton(XBOX_BUTTON_RB,  POSR1, buttonStatus[POSR1]);
 
   // Middle Buttons: Start, Select, Home
-  pressHome(buttonStatus[POSST]);
+  pressHome(buttonStatus[POSXB]);
   pressStart(buttonStatus[POSST]);
   setButton(XBOX_BUTTON_SELECT,  POSBK, buttonStatus[POSBK]);
 
@@ -1001,39 +994,44 @@ void processInputs()
 
     int16_t currentDistance = readingToDistance(plungerAverage);
     distanceBuffer = currentDistance;
-
-    if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance + 20) {
-      // Attempt to detect plunge
-      int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance, plungeTrigger / 2, plungeTrigger);
-      if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
-        // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
-        if (!useKeyboardMode) {
-          if (controlShuffle) {
-            gamepad.setLeftThumb(center[0], center[1]);
-            gamepad.setRightThumb(center[0], center[1]);
-          }
-          else {
-            gamepad.setRightThumb(center[0], center[1]);
-          }
-        } else {
-          kb.release(kbMap[POSPLUNGER]);
-        }
-        distanceBuffer = plungerMaxDistance;
-        lastDistance = plungerMaxDistance;
-        return;
-      }
-      lastDistance = currentDistance;
-
-      // Disable accelerometer while plunging and for 1 second afterwards.
-      if (currentDistance < plungerMaxDistance - 20)
-        tiltEnableTime = millis() + 1000;
-    } else if (currentDistance <= plungerMinDistance + 20) {
-      // cap max
-      distanceBuffer = plungerMinDistance;
-      tiltEnableTime = millis() + 1000;
-    } else if (currentDistance > plungerMaxDistance) {
-      // cap min
+    if (plungerEnableTime > millis()) {
       distanceBuffer = plungerMaxDistance;
+    }
+    else {
+      if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance) {
+        // Attempt to detect plunge
+        int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance, plungeTrigger / 2, plungeTrigger);
+        if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
+          // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
+          if (!useKeyboardMode) {
+            if (controlShuffle) {
+              gamepad.setLeftThumb(center[0], center[1]);
+              gamepad.setRightThumb(center[0], center[1]);
+            }
+            else {
+              gamepad.setRightThumb(center[0], center[1]);
+            }
+          } else {
+            kb.release(kbMap[POSPLUNGER]);
+          }
+          distanceBuffer = plungerMaxDistance;
+          lastDistance = plungerMaxDistance;
+          printf("Plunge!  millis=%lu  plungerEnableTime=%lu\n", millis(), plungerEnableTime);
+          plungerEnableTime = millis() + 1000;
+          return;
+        }
+        lastDistance = currentDistance;
+
+        // Disable accelerometer while plunging and for 1 second afterwards.
+        if (currentDistance < plungerMaxDistance - 20)
+          tiltEnableTime = millis() + 1000;
+      } else if (currentDistance <= plungerMinDistance) {
+        // cap max
+        tiltEnableTime = millis() + 1000;
+      } else if (currentDistance > plungerMaxDistance) {
+        // cap min
+        distanceBuffer = plungerMaxDistance;
+      }
     }
 
     if (!useKeyboardMode) {

@@ -4,46 +4,61 @@
 #include <NimBLECharacteristic.h>
 #include "HIDTypes.h"
 
+// Changed NimBLE-Arduino/src/nimble/nimble/host/store/config/src/ble_store_nvs.c
+// to make this an external string, defined here, so we can change it!
+// After reinstalling nimble, need to replace first NIMBLE_NVS_NAMESPACE line in ble_store_nvs.c with:
+// const char* NIMBLE_NVS_NAMESPACE = "nimble_bond";
+extern const char* NIMBLE_NVS_NAMESPACE;
+
 // Report IDs:
 #define KEYBOARD_ID 0x01
 
 static const uint8_t _hidKBReportDescriptor[] = {
-	USAGE_PAGE(1),      0x01,          // USAGE_PAGE (Generic Desktop Ctrls)
-	USAGE(1),           0x06,          // USAGE (Keyboard)
-	COLLECTION(1),      0x01,          // COLLECTION (Application)
-	// ------------------------------------------------- Keyboard
-	REPORT_ID(1),       KEYBOARD_ID,   //   REPORT_ID (1)
-	USAGE_PAGE(1),      0x07,          //   USAGE_PAGE (Kbrd/Keypad)
-	USAGE_MINIMUM(1),   0xE0,          //   USAGE_MINIMUM (0xE0)
-	USAGE_MAXIMUM(1),   0xE7,          //   USAGE_MAXIMUM (0xE7)
-	LOGICAL_MINIMUM(1), 0x00,          //   LOGICAL_MINIMUM (0)
-	LOGICAL_MAXIMUM(1), 0x01,          //   Logical Maximum (1)
-	REPORT_SIZE(1),     0x01,          //   REPORT_SIZE (1)
-	REPORT_COUNT(1),    0x08,          //   REPORT_COUNT (8)
-	HIDINPUT(1),        0x02,          //   INPUT (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
-	REPORT_COUNT(1),    0x01,          //   REPORT_COUNT (1) ; 1 byte (Reserved)
-	REPORT_SIZE(1),     0x08,          //   REPORT_SIZE (8)
-	HIDINPUT(1),        0x01,          //   INPUT (Const,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
-	REPORT_COUNT(1),    0x05,          //   REPORT_COUNT (5) ; 5 bits (Num lock, Caps lock, Scroll lock, Compose, Kana)
-	REPORT_SIZE(1),     0x01,          //   REPORT_SIZE (1)
-	USAGE_PAGE(1),      0x08,          //   USAGE_PAGE (LEDs)
-	USAGE_MINIMUM(1),   0x01,          //   USAGE_MINIMUM (0x01) ; Num Lock
-	USAGE_MAXIMUM(1),   0x05,          //   USAGE_MAXIMUM (0x05) ; Kana
-	HIDOUTPUT(1),       0x02,          //   OUTPUT (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
-	REPORT_COUNT(1),    0x01,          //   REPORT_COUNT (1) ; 3 bits (Padding)
-	REPORT_SIZE(1),     0x03,          //   REPORT_SIZE (3)
-	HIDOUTPUT(1),       0x01,          //   OUTPUT (Const,Array,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
-	REPORT_COUNT(1),    0x06,          //   REPORT_COUNT (6) ; 6 bytes (Keys)
-	REPORT_SIZE(1),     0x08,          //   REPORT_SIZE(8)
-	LOGICAL_MINIMUM(1), 0x00,          //   LOGICAL_MINIMUM(0)
-	LOGICAL_MAXIMUM(1), 0x65,          //   LOGICAL_MAXIMUM(0x65) ; 101 keys
-	USAGE_PAGE(1),      0x07,          //   USAGE_PAGE (Kbrd/Keypad)
-	USAGE_MINIMUM(1),   0x00,          //   USAGE_MINIMUM (0)
-	USAGE_MAXIMUM(1),   0x65,          //   USAGE_MAXIMUM (0x65)
-	HIDINPUT(1),        0x00,          //   INPUT (Data,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
-	END_COLLECTION(0),                 // END_COLLECTION
-};
+    USAGE_PAGE(1),      0x01,       // USAGE_PAGE (Generic Desktop Ctrls)
+    USAGE(1),           0x06,       // USAGE (Keyboard)
+    COLLECTION(1),      0x01,       // COLLECTION (Application)
+    // -------------------------------------------------
+    REPORT_ID(1),       KEYBOARD_ID,// REPORT_ID (1)
 
+    // All INPUT items are grouped here
+    // -------------------------------------------------
+    USAGE_PAGE(1),      0x07,       // USAGE_PAGE (Kbrd/Keypad)
+    USAGE_MINIMUM(1),   0xE0,       // USAGE_MINIMUM (0xE0) - Left Control
+    USAGE_MAXIMUM(1),   0xE7,       // USAGE_MAXIMUM (0xE7) - Right GUI
+    LOGICAL_MINIMUM(1), 0x00,       // LOGICAL_MINIMUM (0)
+    LOGICAL_MAXIMUM(1), 0x01,       // LOGICAL_MAXIMUM (1)
+    REPORT_SIZE(1),     0x01,       // REPORT_SIZE (1)
+    REPORT_COUNT(1),    0x08,       // REPORT_COUNT (8)
+    HIDINPUT(1),        0x02,       // INPUT (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
+
+    REPORT_COUNT(1),    0x01,       // REPORT_COUNT (1) ; 1 byte (Reserved)
+    REPORT_SIZE(1),     0x08,       // REPORT_SIZE (8)
+    HIDINPUT(1),        0x01,       // INPUT (Const,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
+
+    REPORT_COUNT(1),    0x06,       // REPORT_COUNT (6) ; 6 bytes (Keys)
+    REPORT_SIZE(1),     0x08,       // REPORT_SIZE(8)
+    LOGICAL_MINIMUM(1), 0x00,       // LOGICAL_MINIMUM(0)
+    LOGICAL_MAXIMUM(1), 0x65,       // LOGICAL_MAXIMUM(0x65) ; 101 keys
+    USAGE_PAGE(1),      0x07,       // USAGE_PAGE (Kbrd/Keypad)
+    USAGE_MINIMUM(1),   0x00,       // USAGE_MINIMUM (0)
+    USAGE_MAXIMUM(1),   0x65,       // USAGE_MAXIMUM (0x65)
+    HIDINPUT(1),        0x00,       // INPUT (Data,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
+
+    // All OUTPUT items are grouped here
+    // -------------------------------------------------
+    REPORT_COUNT(1),    0x05,       // REPORT_COUNT (5) ; 5 bits (Num lock, Caps lock, Scroll lock, Compose, Kana)
+    REPORT_SIZE(1),     0x01,       // REPORT_SIZE (1)
+    USAGE_PAGE(1),      0x08,       // USAGE_PAGE (LEDs)
+    USAGE_MINIMUM(1),   0x01,       // USAGE_MINIMUM (0x01) ; Num Lock
+    USAGE_MAXIMUM(1),   0x05,       // USAGE_MAXIMUM (0x05) ; Kana
+    HIDOUTPUT(1),       0x02,       // OUTPUT (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
+
+    REPORT_COUNT(1),    0x01,       // REPORT_COUNT (1) ; 3 bits (Padding)
+    REPORT_SIZE(1),     0x03,       // REPORT_SIZE (3)
+    HIDOUTPUT(1),       0x01,       // OUTPUT (Const,Array,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
+
+    END_COLLECTION(0)               // END_COLLECTION
+};
 
 class HIDKBOutputCallbacks : public NimBLECharacteristicCallbacks
 {
@@ -119,6 +134,8 @@ void BLEKeyboard::begin(const std::string& deviceName,
 						const std::string& manufacturer,
 						void (*ledCallback)(uint8_t))
 {
+	NIMBLE_NVS_NAMESPACE = "nim_bond_kb";
+
     NimBLEDevice::init(deviceName);
     NimBLEDevice::setSecurityAuth(true, true, true);
 
