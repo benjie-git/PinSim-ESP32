@@ -3,7 +3,7 @@
 #include <Preferences.h>
 #include <NimBLEDevice.h>
 
-#define MAX_CLIENTS 4
+#define MAX_CLIENTS 3
 
 
 
@@ -201,19 +201,19 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     BLECharacteristic* characteristic_Model_Number = service->createCharacteristic(
       CHARACTERISTIC_UUID_MODEL_NUMBER,
       NIMBLE_PROPERTY::READ);
-    static char* modelNumber = XBOX_MODEL;
+    static const char* modelNumber = XBOX_MODEL;
     characteristic_Model_Number->setValue((const uint8_t*)modelNumber, strlen(modelNumber));
   
     BLECharacteristic* characteristic_Serial_Number = service->createCharacteristic(
       CHARACTERISTIC_UUID_SERIAL_NUMBER,
       NIMBLE_PROPERTY::READ);
-    static char* serialNumber = XBOX_SERIAL;
+    static const char* serialNumber = XBOX_SERIAL;
     characteristic_Serial_Number->setValue((const uint8_t*)serialNumber, strlen(serialNumber));
   
     BLECharacteristic* characteristic_Firmware_Revision = service->createCharacteristic(
       CHARACTERISTIC_UUID_FIRMWARE_REVISION,
       NIMBLE_PROPERTY::READ);
-    static char* firmwareRevision = XBOX_FW_VER;
+    static const char* firmwareRevision = XBOX_FW_VER;
     characteristic_Firmware_Revision->setValue((const uint8_t*)firmwareRevision, strlen(firmwareRevision));
   
     this->_hid->setBatteryLevel(100);
@@ -322,6 +322,14 @@ void XInput::release(uint16_t button)
         _inputReport.buttons ^= button;
         _inputReportDirty = true;
     }
+}
+
+void XInput::setButton(uint16_t button, bool pressed)
+{
+    if (pressed)
+        press(button);
+    else
+        release(button);
 }
 
 bool XInput::isPressed(uint16_t button)

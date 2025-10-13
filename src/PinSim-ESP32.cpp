@@ -68,7 +68,6 @@
 
 
 #include <Arduino.h>
-#include <bootloader_random.h>
 #include <esp_mac.h>
 #include <Preferences.h>
 #include <Button2.h>
@@ -78,12 +77,22 @@
 #include <Adafruit_ADXL345_U.h>
 
 #include "xInput.h"
+#include "keyboard.h"
+
+// Changed NimBLE-Arduino/src/nimble/nimble/host/store/config/src/ble_store_nvs.c
+// to make this an external string, defined here, so we can change it!
+// Replaced first NIMBLE_NVS_NAMESPACE line in ble_store_nvs.c with:
+// extern const char* NIMBLE_NVS_NAMESPACE;
+
+const char* NIMBLE_NVS_NAMESPACE = "nim_bond_xb";
 
 const char *XB_NAME = "Xbox Wireless Controller";  // "PinSimESP32 Xbox Controller";
 const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 
 // Define this as 2 for v0.2, or 3 for v0.3/v0.4, , or 5 for v0.5 as a few connections have changed
+#ifndef PCB_VERSION
 #define PCB_VERSION 5
+#endif
 
 // LED Brightness for the Red and Green LEDs onboard the PCB.  255 is full, 5 is dim, 0 disables them.
 #define PCB_LED_BRIGHTNESS 6
@@ -107,6 +116,7 @@ boolean solenoidEnabled = true;
 
 boolean waitingForDeadzoneSetting = false;
 boolean waitingForAccelSetting = false;
+boolean useKeyboardMode = false;
 boolean controlShuffle = false;         // When enabled, move Tilt to D-Pad, and move plunger to Left Stick, to get around a Pinball FX2 VR bug
 int16_t nudgeMultiplier = 8000;         // accelerometer multiplier (higher = more sensitive)
 int16_t plungeTrigger = 60;             // threshold to trigger a plunge (lower = more sensitive)
@@ -117,7 +127,7 @@ int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITH
 // Fields: (int)plungerMin, (int)plungerMax, (int)plungerZero,
 //         (int)accelZeroX, (int)accelZeroY,
 //         (bool)controlShuffle, (bool)solenoidEnabled,
-//         (uint8_t)pinsimID
+//         (uint8_t)pinsimID, (bool)useKeyboardMode
 // NOTE: field names have max length of 15 chars!!!
 static Preferences preferences;
 
@@ -128,8 +138,13 @@ int plungerAverage = 0;
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
 XInput gamepad;
+BLEKeyboard kb;
+
+void OnKbLedEvent(uint8_t ledStatus);
+void OnVibrateEvent(XboxGamepadOutputReportData data);
 boolean handleRumbleCommand(uint8_t command);
 void updateTriggerStatus();
+void buttonUpdate();
 
 TaskHandle_t mainTaskHandle = NULL;
 void handle_main_task(void *arg);
@@ -282,6 +297,40 @@ Solenoid solRight(pinGPIO35, pinGPIO36, pinGPIO37);
 #define POSB10 14
 #define NUM_BUTTONS 15   // Total number of buttons
 
+#define POSPLUNGER 15
+
+/*
+A: Nudge Up
+S: Nudge Down
+F: Nudge Left
+D: Nudge Right
+U: Left Flipper
+6: Right Flipper
+I: Pause
+8: Launch Ball
+*/
+const char* kbMap = "asfd....u6.i...8";
+//const char* kbMap = "udlrabxy[]skmczp"; // the above buttons as keyboard keys, respectively, plus plunger
+
+
+void setButton(uint16_t xbButton, uint8_t buttonIndex, boolean pressed)
+{
+  if (!useKeyboardMode) {
+    gamepad.setButton(xbButton, pressed);
+  } else {
+    if (kbMap[buttonIndex] != '.') {
+      kb.set(kbMap[buttonIndex], pressed);
+    }
+  }
+}
+
+void sendKbDPad(uint8_t direction)
+{
+  kb.set(kbMap[POSUP], direction & XboxDpadFlags::NORTH);
+  kb.set(kbMap[POSDN], direction & XboxDpadFlags::SOUTH);
+  kb.set(kbMap[POSLT], direction & XboxDpadFlags::WEST);
+  kb.set(kbMap[POSRT], direction & XboxDpadFlags::EAST);
+}
 
 uint8_t buttonStatus[NUM_BUTTONS];  // array Holds a "Snapshot" of the button status to parse and manipulate
 
@@ -307,7 +356,7 @@ bool LED_states[50];
 
 // Use LED_Set() and LED_SetAnalog() to control LEDS.
 // These will ignore LEDs with pin numbers set to 0 (not used on the current board revision)
-void LED_Set(int pin, bool state, bool skipSetState=0) {
+void LED_Set(int pin, bool state, bool skipSetState=false) {
   if (pin) {
     digitalWrite(pin, state);
   }
@@ -504,8 +553,19 @@ void deadZoneCompensation()
 
 void checkForConfigButtonPresses()
 {
+  // Hold Back and A and B on boot to toggle useKeyboardMode.  Reboots into new mode.
+  if (buttonStatus[POSBK] && buttonStatus[POSB1] && buttonStatus[POSB2]) {
+    useKeyboardMode = !useKeyboardMode;
+    preferences.putBool("useKeyboardMode", useKeyboardMode);
+    while (buttonStatus[POSBK]) {
+      delay(16);
+      buttonUpdate();
+    }
+    ESP.restart();
+  }
+
   // Hold Back and dPad Down on boot to clear BLE paired devices
-  if (buttonStatus[POSBK] && buttonStatus[POSDN]) {
+  if (buttonStatus[POSBK] && buttonStatus[POSDN] && !useKeyboardMode) {
     gamepad.clearWhitelist();
     configFeedbackBlinks(1);
     // Wait for button release
@@ -516,7 +576,7 @@ void checkForConfigButtonPresses()
   }
 
   // Hold Back and dPad Up on boot to allow pairing a new device
-  if (buttonStatus[POSBK] && buttonStatus[POSUP]) {
+  if (buttonStatus[POSBK] && buttonStatus[POSUP] && !useKeyboardMode) {
     printf("Allow new devices to connect...\n");
     gamepad.allowNewConnections(true);
     configFeedbackBlinks(2);
@@ -630,15 +690,30 @@ void setup()
   printf("\n\n");
   printf("PinSim ESP32 Starting up\n");
 
+  useKeyboardMode = preferences.getBool("useKeyboardMode", useKeyboardMode);
+
   uint8_t mac_bytes[6];
   esp_efuse_mac_get_default(mac_bytes);
-  printf("MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
+  printf("HW MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
+  if (useKeyboardMode) {
+    NIMBLE_NVS_NAMESPACE = "nim_bond_kb";
+    preferences.putBool("useKeyboardMode", !useKeyboardMode); // Only stay in KB mode for one boot, for now
+    esp_base_mac_addr_get(mac_bytes);
+    mac_bytes[5]++;
+    esp_base_mac_addr_set(mac_bytes);
+    printf("KB using MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
+  }
 
   // Set up vibration event handler
   FunctionSlot<XboxGamepadOutputReportData> vibrationSlot(OnVibrateEvent);
   gamepad.onVibrate.attach(vibrationSlot);
 
-  gamepad.startServer(XB_NAME, XB_MANUFACTURER);
+  if (!useKeyboardMode) {
+    gamepad.startServer(XB_NAME, XB_MANUFACTURER);
+  }
+  else {
+    kb.begin("PinSim KB Controller", "Octopilot", OnKbLedEvent);
+  }
 
   for (int i = 0; i < 6; i++) {
     delay(16);
@@ -681,7 +756,11 @@ void setup()
     if (pinLEDBG) LED_Set(pinLEDBG, LOW);
   }
 
-  gamepad.startAdvertising();
+  if (!useKeyboardMode) {
+    gamepad.startAdvertising();
+  } else {
+    kb.startAdvertising();
+  }
 
   // plunger setup
   if (plungerEnabled) {
@@ -712,32 +791,32 @@ void buttonUpdate()
   dpadRIGHT.loop();
 
   // Disable button LEDs while testing the buttons
-  LED_Set(pinLEDABC, LOW, 1);
+  LED_Set(pinLEDABC, LOW, true);
   button1.loop();
   button2.loop();
   button9.loop();
   LED_Set(pinLEDABC, LED_states[pinLEDABC]);
 
   // Disable button LEDs while testing the buttons
-  LED_Set(pinLEDXYZ, LOW, 1);
+  LED_Set(pinLEDXYZ, LOW, true);
   button3.loop();
   button4.loop();
   button10.loop();
   LED_Set(pinLEDXYZ, LED_states[pinLEDXYZ]);
 
   // Disable button LEDs while testing the buttons
-  LED_Set(pinLEDLR, LOW, 1);
+  LED_Set(pinLEDLR, LOW, true);
   buttonLT.loop();
   buttonRT.loop();
   LED_Set(pinLEDLR, LED_states[pinLEDLR]);
 
   // Disable button LEDs while testing the buttons
-  LED_Set(pinLEDStart, LOW, 1);
+  LED_Set(pinLEDStart, LOW, true);
   buttonSTART.loop();
   LED_Set(pinLEDStart, LED_states[pinLEDStart]);
 
   // Disable button LEDs while testing the buttons
-  LED_Set(pinLEDBG, LOW, 1);
+  LED_Set(pinLEDBG, LOW, true);
   buttonBACK.loop();
   buttonXBOX.loop();
   LED_Set(pinLEDBG, LED_states[pinLEDBG]);
@@ -761,7 +840,7 @@ void buttonUpdate()
 
 
 // Process Home button press delay
-// Wait until DELAY_HOME ms after button inisially pressed to start sending the button press
+// Wait until DELAY_HOME ms after button initially pressed to start sending the button press
 void pressHome(bool isPressed)
 {
   static int wasPressed = 0;  // 0 = was up, 1 = was waiting, 2 = was pressed
@@ -775,12 +854,12 @@ void pressHome(bool isPressed)
   else if (wasPressed == 1 && isPressed) {
     long currentTime = millis();
     if (currentTime > lastPress + DELAY_HOME) {
-      gamepad.press(XBOX_BUTTON_HOME);
+      setButton(XBOX_BUTTON_HOME, POSBK, true);
       wasPressed = 2;
     }
   }
   else if (wasPressed != 0 && !isPressed) {
-    gamepad.release(XBOX_BUTTON_HOME);
+      setButton(XBOX_BUTTON_HOME, POSBK, false);
     wasPressed = 0;
   }
 }
@@ -794,22 +873,22 @@ void pressStart(bool isPressed) {
   long currentTime = millis();
 
   if (wasPressed == 0 && isPressed) {
-    gamepad.press(XBOX_BUTTON_START);
+    setButton(XBOX_BUTTON_START, POSST, true);
     lastPress = currentTime;
     wasPressed = 1;
   }
   else if (wasPressed == 1 && isPressed) {
     long currentTime = millis();
     if (currentTime > lastPress + DELAY_L3R3) {
-      gamepad.press(XBOX_BUTTON_LS);
-      gamepad.press(XBOX_BUTTON_RS);
+      setButton(XBOX_BUTTON_LS, POSB9, true);
+      setButton(XBOX_BUTTON_RS, POSB10, true);
       wasPressed = 2;
     }
   }
   else if (wasPressed != 0 && !isPressed) {
-    gamepad.release(XBOX_BUTTON_START);
-    gamepad.release(XBOX_BUTTON_LS);
-    gamepad.release(XBOX_BUTTON_RS);
+    setButton(XBOX_BUTTON_START, POSST, false);
+    setButton(XBOX_BUTTON_LS, POSB9, false);
+    setButton(XBOX_BUTTON_RS, POSB10, false);
     wasPressed = 0;
   }
 }
@@ -833,20 +912,13 @@ void processInputs()
   if (buttonStatus[POSLT]) direction |= XboxDpadFlags::WEST;
 
   // Buttons
-  if (buttonStatus[POSB1]) gamepad.press(XBOX_BUTTON_A);
-  else gamepad.release(XBOX_BUTTON_A);
-  if (buttonStatus[POSB2]) gamepad.press(XBOX_BUTTON_B);
-  else gamepad.release(XBOX_BUTTON_B);
-  if (buttonStatus[POSB3]) gamepad.press(XBOX_BUTTON_X);
-  else gamepad.release(XBOX_BUTTON_X);
-  if (buttonStatus[POSB4]) gamepad.press(XBOX_BUTTON_Y);
-  else gamepad.release(XBOX_BUTTON_Y);
-
+  setButton(XBOX_BUTTON_A,  POSB1, buttonStatus[POSB1]);
+  setButton(XBOX_BUTTON_B,  POSB2, buttonStatus[POSB2]);
+  setButton(XBOX_BUTTON_X,  POSB3, buttonStatus[POSB3]);
+  setButton(XBOX_BUTTON_Y,  POSB4, buttonStatus[POSB4]);
   if (!buttonStatus[POSST]) {
-    if (buttonStatus[POSB9]) gamepad.press(XBOX_BUTTON_LS);
-    else gamepad.release(XBOX_BUTTON_LS);
-    if (buttonStatus[POSB10]) gamepad.press(XBOX_BUTTON_RS);
-    else gamepad.release(XBOX_BUTTON_RS);
+    setButton(XBOX_BUTTON_LS, POSB9, buttonStatus[POSB9]);
+    setButton(XBOX_BUTTON_RS, POSB10,buttonStatus[POSB10]);
   }
 
   // If we're still waiting for DeadZone calibration, and Start is pressed, set new plunger dead zone
@@ -860,33 +932,13 @@ void processInputs()
   }
 
   // Bumpers
-  if (buttonStatus[POSL1]) gamepad.press(XBOX_BUTTON_LB);
-  else gamepad.release(XBOX_BUTTON_LB);
-  if (buttonStatus[POSR1]) gamepad.press(XBOX_BUTTON_RB);
-  else gamepad.release(XBOX_BUTTON_RB);
+  setButton(XBOX_BUTTON_LB,  POSL1, buttonStatus[POSL1]);
+  setButton(XBOX_BUTTON_RB,  POSR1, buttonStatus[POSR1]);
 
   // Middle Buttons: Start, Select, Home
-  if (buttonStatus[POSST] && buttonStatus[POSBK]) {
-    pressStart(0);
-    gamepad.release(XBOX_BUTTON_SELECT);
-    pressHome(1);
-  } else if (buttonStatus[POSST]) {
-    pressHome(0);
-    gamepad.release(XBOX_BUTTON_SELECT);
-    pressStart(1);
-  } else if (buttonStatus[POSBK]) {
-    pressHome(0);
-    pressStart(0);
-    gamepad.press(XBOX_BUTTON_SELECT);
-  } else if (buttonStatus[POSXB]) {
-    pressStart(0);
-    gamepad.release(XBOX_BUTTON_SELECT);
-    pressHome(1);
-  } else {
-    pressHome(0);
-    pressStart(0);
-    gamepad.release(XBOX_BUTTON_SELECT);
-  }
+  pressHome(buttonStatus[POSST]);
+  pressStart(buttonStatus[POSST]);
+  setButton(XBOX_BUTTON_SELECT,  POSBK, buttonStatus[POSBK]);
 
   // Tilt
   if (accelerometerEnabled) {
@@ -913,7 +965,7 @@ void processInputs()
     int32_t accYcon = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
 
     if (millis() > tiltEnableTime) {
-      if (controlShuffle) {
+      if (controlShuffle || useKeyboardMode) {
         if (accYcon > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::NORTH;
         if (accXcon > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::EAST;
         if (accYcon < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::SOUTH;
@@ -929,7 +981,11 @@ void processInputs()
         }
       }
     }
-    gamepad.pressDPadDirection(XboxDpadFlags(direction));
+    if (!useKeyboardMode) {
+      gamepad.pressDPadDirection(XboxDpadFlags(direction));
+    } else {
+      sendKbDPad(direction);
+    }
   }
 
   // Plunger
@@ -951,12 +1007,16 @@ void processInputs()
       int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance, plungeTrigger / 2, plungeTrigger);
       if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
         // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
-        if (controlShuffle) {
-          gamepad.setLeftThumb(center[0], center[1]);
-          gamepad.setRightThumb(center[0], center[1]);
-        }
-        else {
-          gamepad.setRightThumb(center[0], center[1]);
+        if (!useKeyboardMode) {
+          if (controlShuffle) {
+            gamepad.setLeftThumb(center[0], center[1]);
+            gamepad.setRightThumb(center[0], center[1]);
+          }
+          else {
+            gamepad.setRightThumb(center[0], center[1]);
+          }
+        } else {
+          kb.release(kbMap[POSPLUNGER]);
         }
         distanceBuffer = plungerMaxDistance;
         lastDistance = plungerMaxDistance;
@@ -976,14 +1036,18 @@ void processInputs()
       distanceBuffer = plungerMaxDistance;
     }
 
-    if (controlShuffle) {
-      gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, plungerZeroValue, XBOX_STICK_MAX));
-    }
-    else {
-      gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, plungerZeroValue, XBOX_STICK_MAX));
+    if (!useKeyboardMode) {
+      if (controlShuffle) {
+        gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, plungerZeroValue, XBOX_STICK_MAX));
+      }
+      else {
+        gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, plungerZeroValue, XBOX_STICK_MAX));
+      }
+    } else {
+      kb.set(kbMap[POSPLUNGER], distanceBuffer < plungerMaxDistance - 20);
     }
   }
-  if (controlShuffle) {
+  if (controlShuffle && !useKeyboardMode) {
     gamepad.setRightThumb(center[0], center[1]);
   }
 }
@@ -991,14 +1055,14 @@ void processInputs()
 
 void ledUpdate()
 {
-  if (!gamepad.isAdvertisingNewDevices()) {
+  if ((!useKeyboardMode && !gamepad.isAdvertisingNewDevices()) || (useKeyboardMode && kb.isConnected())) {
     // Connected!  So LEDs On Solid
     LED_SetAnalog(pinLEDg, PCB_LED_BRIGHTNESS);
     LED_Set(pinLEDStart, HIGH);
   } else {
     // BLE Pairing mode -- So Flash LEDs
     static uint8_t blinkCounter = 0;
-    static bool ledOn = 0;
+    static bool ledOn = false;
     if (blinkCounter++ >= 30) {
       ledOn = !ledOn;
       blinkCounter = 0;
@@ -1012,31 +1076,31 @@ void ledUpdate()
 void solenoidUpdate()
 {
   // Last state is the previous button state, to help notice state changes
-  static bool lastStateLeft  = 0;
-  static bool lastStateRight = 0;
+  static bool lastStateLeft  = false;
+  static bool lastStateRight = false;
 
   if (buttonStatus[POSL1] && !lastStateLeft) {
     // Left was just pressed
-    lastStateLeft = 1;
+    lastStateLeft = true;
     solLeft.fwd();
     tiltEnableTime = millis() + 100;
   }
   else if (!buttonStatus[POSL1] && lastStateLeft) {
     // Left was just released
-    lastStateLeft = 0;
+    lastStateLeft = false;
     solLeft.coast();
     tiltEnableTime = millis() + 100;
   }
 
   if (buttonStatus[POSR1] && !lastStateRight) {
     // Right was just pressed
-    lastStateRight = 1;
+    lastStateRight = true;
     solRight.fwd();
     tiltEnableTime = millis() + 100;
   }
   else if (!buttonStatus[POSR1] && lastStateRight) {
     // Right was just released
-    lastStateRight = 0;
+    lastStateRight = false;
     solRight.coast();
     tiltEnableTime = millis() + 100;
   }
@@ -1081,15 +1145,20 @@ void handle_main_task(void *arg)
     // Update LEDs
     ledUpdate();
 
-    if (gamepad.isConnected()) {
+    if ((!useKeyboardMode && gamepad.isConnected()) || (useKeyboardMode && kb.isConnected())) {
       // Process all inputs and load up the usbData registers correctly
       processInputs();
 
-      // Add status data into trigger values as small movements
-      updateTriggerStatus();
+      if (useKeyboardMode) {
+        // Send keyboard state
+        kb.sendReport();
+      } else {
+        // Add status data into trigger values as small movements
+        updateTriggerStatus();
 
-      // Send controller data
-      gamepad.sendGamepadReport();
+        // Send controller
+        gamepad.sendGamepadReport();
+      }
     }
   }
 }
@@ -1107,6 +1176,7 @@ void handle_main_task(void *arg)
 #define RUMBLE_COMMAND_TOGGLE_SOLENOIDS 8
 #define RUMBLE_COMMAND_PAIR_CLEAR 9
 #define RUMBLE_COMMAND_PAIR_START 10
+#define RUMBLE_COMMAND_TOGGLE_KEYBOARD 11
 #define RUMBLE_COMMAND_SET_PINSIM_ID 32 // (32-63 & 0x11111 for a 5-bit value)
 
 #define RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT 4
@@ -1126,6 +1196,11 @@ void OnVibrateEvent(XboxGamepadOutputReportData data)
   analogWrite(rumbleLarge, data.strongMotorMagnitude);
 }
 
+void OnKbLedEvent(uint8_t ledStatus)
+{
+  // Make use of the LED status bits to run commands?
+  // Bits from 0-5: Num, Caps, Scroll, Compose, Kana
+}
 
 void updateTriggerStatus()
 {
@@ -1202,6 +1277,15 @@ boolean handleRumbleCommand(uint8_t command)
       gamepad.startAdvertising();
       runtimeFeedbackBlinks(2);
       break;
+
+    case RUMBLE_COMMAND_TOGGLE_KEYBOARD:
+      printf("Rumble Command: Toggle Keyboard\n");
+      useKeyboardMode = !useKeyboardMode;
+      preferences.putBool("useKeyboardMode", useKeyboardMode);
+      runtimeFeedbackBlinks(2);
+      delay(500);
+      ESP.restart();
+      break; // LOL not needed
 
     default:
       if (command >= RUMBLE_COMMAND_SET_PINSIM_ID && command < RUMBLE_COMMAND_SET_PINSIM_ID+32) {

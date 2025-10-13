@@ -79,8 +79,9 @@ public:
 
     Signal<XboxGamepadOutputReportData> onVibrate;
 
-    void press(uint16_t button = XBOX_BUTTON_A);    
-    void release(uint16_t button = XBOX_BUTTON_A); 
+    void press(uint16_t button = XBOX_BUTTON_A);
+    void release(uint16_t button = XBOX_BUTTON_A);
+    void setButton(uint16_t button = XBOX_BUTTON_A, bool pressed = true);
     bool isPressed(uint16_t button = XBOX_BUTTON_A);
     void setLeftThumb(int16_t x = 0, int16_t y = 0);
     void setRightThumb(int16_t z = 0, int16_t rZ = 0);

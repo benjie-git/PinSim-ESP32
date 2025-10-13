@@ -154,6 +154,7 @@
         <div class="inner-section">
             <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP)">Swap Plunger Controls</button>
             <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
+            <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_KEYBOARD)">Switch to Keyboard Mode</button>
         </div>
     </div>
 </div>
@@ -171,6 +172,7 @@
     const RUMBLE_COMMAND_TOGGLE_SOLENOIDS = 8
     const RUMBLE_COMMAND_PAIR_CLEAR = 9
     const RUMBLE_COMMAND_PAIR_START = 10
+    const RUMBLE_COMMAND_TOGGLE_KEYBOARD = 11
     const RUMBLE_COMMAND_SET_PINSIM_ID = 32 // (32-63 & 0x11111 for a 5-bit value)
 
     // Sketchy Safari mapping from trigger values 0-255, may to 0.0-1.0 values from safari.  Nonlinearly. ???
