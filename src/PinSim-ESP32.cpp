@@ -48,6 +48,7 @@
         - For no deadzone, just press Start now, while leaving the plunger alone.
         - Or to add a deadzone, like for Pinball FX VR, pull the plunger out part-way until it just starts to show as moving, and then press Start.
       - Start will now blink 3 times.
+    • Press A and B: Switch to Keyboard mode until next reboot
 
     For example:
     - Hold Back while booting
