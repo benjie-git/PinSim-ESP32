@@ -1199,6 +1199,7 @@ void OnKbLedEvent(uint8_t ledStatus)
 {
   // Make use of the LED status bits to run commands?
   // Bits from 0-5: Num, Caps, Scroll, Compose, Kana
+  printf("ledData - %d\n", ledStatus);
 }
 
 void updateTriggerStatus()
