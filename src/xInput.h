@@ -1,8 +1,12 @@
+#ifndef PINSIM_ESP32_PLATFORMIO_XINPUT_H
+#define PINSIM_ESP32_PLATFORMIO_XINPUT_H
+
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
 #include <NimBLEAdvertising.h>
 #include <Callback.h>
 #include "xInput_defs.h"
+#include "command.h"
 
 class HIDOutputCallbacks;
 class ServerCallbacks;
@@ -67,7 +71,7 @@ struct XboxGamepadOutputReportData {
 class XInput
 {
 public:
-    void startServer(const char *device_name, const char *manufacturer);
+    void startServer(const char *device_name, const char *manufacturer, CommandCallback_t commandCallback);
     void startAdvertising();
     void allowNewConnections(bool allow);
     void onAdvComplete(NimBLEAdvertising *advertising);
@@ -95,6 +99,11 @@ public:
     void releaseShare();
     
     void sendGamepadReport();
+    void send_command(uint8_t* data);
+
+    void loadWhitelist();
+    void saveWhitelist();
+    void clearWhitelistInternal();
 
 private:
     NimBLEServer *_server;
@@ -105,6 +114,9 @@ private:
     NimBLECharacteristic *_output;
     XboxGamepadInputReportData _inputReport;
     HIDOutputCallbacks *_hidOutputCallbacks;
+    CommandHandler *_commandHandler;
+    CommandCallback_t _commandCallback;
+
     bool _inputReportDirty;
     bool _allowNewConnections;
     uint _dirtySkipCount;
@@ -112,3 +124,5 @@ private:
     void pressDPadDirectionInternal(uint8_t direction = 0);
     bool isDPadPressedInternal(uint8_t direction = 0);
 };
+
+#endif //PINSIM_ESP32_PLATFORMIO_XINPUT_H

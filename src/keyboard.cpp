@@ -2,6 +2,7 @@
 #include <NimBLEDevice.h>
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
+#include <Preferences.h>
 #include "HIDTypes.h"
 
 // Changed NimBLE-Arduino/src/nimble/nimble/host/store/config/src/ble_store_nvs.c
@@ -9,6 +10,13 @@
 // After reinstalling nimble, need to replace first NIMBLE_NVS_NAMESPACE line in ble_store_nvs.c with:
 // const char* NIMBLE_NVS_NAMESPACE = "nimble_bond";
 extern const char* NIMBLE_NVS_NAMESPACE;
+
+#define MAX_CLIENTS 3
+
+#define PREFS_NAME "Keyboard_BLE"
+static Preferences preferences;
+#define MAX_ADDRESSES 4
+static std::vector<uint64_t> pairedAddresses;
 
 // Report IDs:
 #define KEYBOARD_ID 0x01
@@ -60,22 +68,6 @@ static const uint8_t _hidKBReportDescriptor[] = {
     END_COLLECTION(0)               // END_COLLECTION
 };
 
-class HIDKBOutputCallbacks : public NimBLECharacteristicCallbacks
-{
-public:
-    HIDKBOutputCallbacks(BLEKeyboard *k) : _keyboard(k) {}
-
-    void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override
-    {
-    	// HID Report characteristic (for LED status)
-        uint8_t ledData = pCharacteristic->getValue<uint8_t>();
-        _keyboard->sendLedStatus(ledData);
-    }
-private:
-    BLEKeyboard* _keyboard;
-};
-
-
 class KBServerCallbacks : public NimBLEServerCallbacks
 {
 public:
@@ -91,6 +83,19 @@ public:
                                                        connInfo.getIdAddress().toString().c_str());
     }
 
+    void saveIdentity(NimBLEConnInfo& connInfo)
+    {
+        NimBLEAddress addr = NimBLEAddress(connInfo.getIdAddress());
+        uint64_t addrInt = uint64_t(addr);
+        if (std::find(pairedAddresses.begin(), pairedAddresses.end(), addrInt) == pairedAddresses.end()) {
+            pairedAddresses.push_back(addrInt);
+            NimBLEDevice::whiteListAdd(connInfo.getIdAddress());
+            // this->_xInput->allowNewConnections(false);
+            this->_keyboard->saveWhitelist();
+            printf("Added paired address         (%s) (%s)\n", connInfo.getAddress().toString().c_str(), connInfo.getIdAddress().toString().c_str());
+        }
+    }
+
     void onAuthenticationComplete(NimBLEConnInfo& connInfo) override
     {
         if (!connInfo.isEncrypted()) {
@@ -100,8 +105,23 @@ public:
             return;
         }
 
+        uint8_t t = connInfo.getIdAddress().getType();
+
+        if ((t & 0x01) == 0) {
+            // If this is not a random address, save it now
+            // If it is random, save it later, when onIdentity() is called
+            saveIdentity(connInfo);
+        }
+
         this->is_connected = true;
         printf("Auth complete                (%s)\n", connInfo.getIdAddress().toString().c_str());
+
+        this->_keyboard->startAdvertising();
+    }
+
+    void onIdentity(NimBLEConnInfo& connInfo) override
+    {
+        saveIdentity(connInfo);
     }
 
     void onDisconnect(NimBLEServer *server, NimBLEConnInfo& connInfo, int reason) override
@@ -115,24 +135,69 @@ public:
     }
 
 private:
-    BLEKeyboard* _keyboard;
+    BLEKeyboard* _keyboard = nullptr;
 };
 
 
-BLEKeyboard::BLEKeyboard() : _server(nullptr),
-							 _advertising(nullptr),
-							 _hid(nullptr),
-                             _inputKeyboard(nullptr),
-                             _outputKeyboard(nullptr),
-							 _keyReport(),
-                             _serverCallbacks(nullptr),
-                             _hidOutputCallbacks(nullptr),
-                             _inputReportDirty(false),
-							 _ledStatusCallback(nullptr) {}
+void BLEKeyboard::loadWhitelist()
+{
+    pairedAddresses.reserve(MAX_ADDRESSES+1);
+
+    preferences.begin(PREFS_NAME);
+    int numBytes = preferences.getBytesLength("pairedAddresses");
+    if (numBytes) {
+        uint8_t *bytes = (uint8_t*)malloc(numBytes);
+        if (bytes) {
+            preferences.getBytes("pairedAddresses", bytes, numBytes);
+            int pos = 0;
+            while (pos < numBytes) {
+                uint64_t *addrInt = (uint64_t*)(bytes+pos);
+                pairedAddresses.push_back(*addrInt);
+                NimBLEDevice::whiteListAdd(NimBLEAddress(*addrInt, BLE_ADDR_PUBLIC));
+                pos += sizeof(uint64_t);
+            }
+            free(bytes);
+        }
+    }
+}
+
+void BLEKeyboard::saveWhitelist()
+{
+    // Keep within MAX_ADDRESSES addresses
+    while (pairedAddresses.size() > MAX_ADDRESSES) {
+        pairedAddresses.erase(pairedAddresses.begin());
+    }
+
+    int numBytes = pairedAddresses.size() * sizeof(uint64_t);
+    uint8_t *bytes = (uint8_t*)malloc(numBytes);
+    if (bytes) {
+        int pos = 0;
+        for (uint64_t addrInt : pairedAddresses) {
+            ((uint64_t*)bytes)[pos++] = addrInt;
+        }
+        preferences.putBytes("pairedAddresses", bytes, numBytes);
+        free(bytes);
+    }
+}
+
+void BLEKeyboard::clearWhitelistInternal()
+{
+    printf("--- Clear whitelist and delete all bonds.\n");
+    NimBLEDevice::deleteAllBonds();
+
+    // Iterate over all whitelist addresses, removing each one
+    for (int i=0; i< NimBLEDevice::getWhiteListCount(); i++) {
+        NimBLEDevice::whiteListRemove(NimBLEDevice::getWhiteListAddress(0));
+    }
+
+    pairedAddresses.clear();
+    saveWhitelist();
+    preferences.remove("pairedAddresses");
+}
 
 void BLEKeyboard::begin(const std::string& deviceName,
 						const std::string& manufacturer,
-						void (*ledCallback)(uint8_t))
+						CommandCallback_t commandCallback)
 {
 	NIMBLE_NVS_NAMESPACE = "nim_bond_kb";
 
@@ -153,11 +218,7 @@ void BLEKeyboard::begin(const std::string& deviceName,
     this->_inputKeyboard = this->_hid->getInputReport(KEYBOARD_ID);
     this->_inputKeyboard->setValue((uint8_t*)&_keyReport, sizeof(_keyReport));
 
-
-    this->_outputKeyboard = this->_hid->getOutputReport(KEYBOARD_ID);
-    this->_hidOutputCallbacks = new HIDKBOutputCallbacks(this);
-    this->_outputKeyboard->setCallbacks(this->_hidOutputCallbacks);
-    this->_ledStatusCallback = ledCallback;
+	this->_commandHandler = new CommandHandler(this->_server, commandCallback);
 
     this->_hid->setBatteryLevel(100);
 
@@ -170,25 +231,13 @@ void BLEKeyboard::begin(const std::string& deviceName,
     this->_advertising->setAdvertisementData(ad);
     this->_advertising->setAppearance(HID_KEYBOARD);
     this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
+    this->_advertising->addServiceUUID(COMMAND_SERVICE_ID);
     this->_advertising->enableScanResponse(true);
-	printf("KB is set up\n");
-}
+    this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });
+    this->_advertising->setScanFilter(true, true);
+    printf("KB is set up\n");
 
-bool BLEKeyboard::isAdvertising()
-{
-	return this->_advertising->isAdvertising();
-}
-
-void BLEKeyboard::startAdvertising()
-{
-	printf("KB is advertising\n");
-	this->_advertising->start();
-}
-
-void BLEKeyboard::sendLedStatus(uint8_t ledStatus) {
-    if (_ledStatusCallback) {
-        _ledStatusCallback(ledStatus);
-    }
+    this->loadWhitelist();
 }
 
 bool BLEKeyboard::isConnected()
@@ -196,6 +245,70 @@ bool BLEKeyboard::isConnected()
     return this->_serverCallbacks->is_connected;
 }
 
+bool BLEKeyboard::isAdvertising()
+{
+    return this->_advertising->isAdvertising();
+}
+
+bool BLEKeyboard::isAdvertisingNewDevices()
+{
+    return this->_advertising->isAdvertising() && this->_allowNewConnections;
+}
+
+void BLEKeyboard::startAdvertising()
+{
+    if (this->_server->getConnectedCount() >= MAX_CLIENTS) {
+        printf("Skip Starting Advertising - already connected to MAX_CLIENTS\n");
+        return;
+    }
+
+    int cnt = pairedAddresses.size();
+    if (this->_allowNewConnections == false && cnt == 0) {
+        this->_allowNewConnections = true;
+    }
+
+    if (this->_allowNewConnections == false) {
+        printf("Start Advertising (whitelist only)\n");
+        this->_advertising->stop();
+        this->_advertising->setScanFilter(true, true);
+        this->_advertising->start();
+    }
+    else {
+        printf("Start Advertising (allow all - 30sec)\n");
+        this->_advertising->stop();  // 30 sec
+        this->_advertising->setScanFilter(false, false);
+        this->_advertising->start(30000);  // 30 sec
+    }
+}
+
+void BLEKeyboard::allowNewConnections(bool allow)
+{
+    this->_allowNewConnections = allow;
+}
+
+void BLEKeyboard::onAdvComplete(NimBLEAdvertising *advertising)
+{
+    printf("Advertising stopped\n");
+
+    // Restart advertising with whitelist filter
+    this->_allowNewConnections = false;
+    this->startAdvertising();
+}
+
+uint BLEKeyboard::getPairCount()
+{
+    return pairedAddresses.size();
+}
+
+void BLEKeyboard::clearWhitelist()
+{
+    this->clearWhitelistInternal();
+}
+
+void BLEKeyboard::send_command(uint8_t* data)
+{
+    this->_commandHandler->send_command(data);
+}
 
 extern
 const uint8_t _asciimap[128] PROGMEM;

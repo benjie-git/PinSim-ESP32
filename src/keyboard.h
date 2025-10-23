@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <NimBLEHIDDevice.h>
+#include "command.h"
 
 class HIDKBOutputCallbacks;
 class KBServerCallbacks;
@@ -93,34 +94,43 @@ class ServerCallbacks;
 
 class BLEKeyboard {
 public:
-    BLEKeyboard();
-
-    void begin(const std::string& deviceName = "Keyboard",
-               const std::string& manufacturer = "Generic",
-               void (*ledCallback)(uint8_t) = nullptr);
+    void begin(const std::string& deviceName,
+               const std::string& manufacturer,
+               CommandCallback_t commandCallback);
     void startAdvertising();
+    void allowNewConnections(bool allow);
+    void onAdvComplete(NimBLEAdvertising *advertising);
+    bool isConnected();
     bool isAdvertising();
+    bool isAdvertisingNewDevices();
+    void clearWhitelist();
+    uint getPairCount();
 
-    void sendReport();
     size_t press(uint8_t k);
     size_t release(uint8_t k);
     size_t set(uint8_t k, bool pressed);
     void releaseAll();
-    bool isConnected();
-    void sendLedStatus(uint8_t ledStatus);
+
+    void sendReport();
+    void send_command(uint8_t* data);
+
+    void loadWhitelist();
+    void saveWhitelist();
+    void clearWhitelistInternal();
 
 private:
     NimBLEServer *_server;
     NimBLEAdvertising *_advertising;
     NimBLEHIDDevice *_hid;
     NimBLECharacteristic *_inputKeyboard;
-    NimBLECharacteristic *_outputKeyboard;
     KeyReport          _keyReport;
     KBServerCallbacks *_serverCallbacks;
     HIDKBOutputCallbacks *_hidOutputCallbacks;
-    bool _inputReportDirty;
+    CommandHandler *_commandHandler;
+    CommandCallback_t _commandCallback;
 
-    void (*_ledStatusCallback)(uint8_t);
+    bool _inputReportDirty;
+    bool _allowNewConnections;
 };
 
 #endif //PINSIM_ESP32_PLATFORMIO_KEYBOARD_H

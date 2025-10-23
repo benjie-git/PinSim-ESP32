@@ -44,6 +44,13 @@
         .disabled {
             color: grey;
         }
+        div.disabled button {
+            opacity: 0.6; /* Make it slightly transparent */
+            cursor: not-allowed; /* Change cursor on hover */
+            background-color: #ccc; /* Gray background */
+            color: #222; /* Lighter text color */
+            pointer-events: none; /* Prevent click events */
+        }
         .vbar-container {
             position: absolute;
             border: solid 2px #555;
@@ -73,7 +80,6 @@
             transform: translate(0, 0);
             transition: background-color 0.1s;
         }
-
     </style>
 </head>
 
@@ -83,7 +89,8 @@
 <div class="outer-section">
     <h2>Connected Gamepads:</h2>
     <div id="connStatus"><span class="disabled">No gamepads found</span></div>
-    <div class="inner-section">
+    <div id="gamepad-controls" class="inner-section disabled">
+        <h3>Gamepad Controls <span id="gamepad-label-pinsimID"></span></h3>
         <div class="pinsim-box">
             <div id="button-status-l-flipper" class="button" style="left: 20px; top: 120px;">L</div>
             <div id="button-status-r-flipper" class="button" style="left: 585px; top: 120px;">R</div>
@@ -112,176 +119,83 @@
             <div class="vbar-container" style="left: 530px; top: 143px;">
                 <div id="right-stick" class="thumbstick" style="left: 0; top: 0;"></div>
             </div>
-            <span style="position: absolute; left: 555px; top: 240px;">Plunger</span>
-
-            <div style="position: absolute; left: 330px; top:140px;">
-                <table>
-                    <tr><th align="right">PinSim ID:</th><td id="gamepad-status-pinsimID"></td></tr>
-                    <tr><th align="right">Pairings:</th><td id="gamepad-status-pairings"></td></tr>
-                    <tr><th align="right">Plunger Stick:</th><td id="gamepad-status-plunger-stick"></td></tr>
-                    <tr><th align="right">Solenoids:</th><td id="gamepad-status-solenoids"></td></tr>
-                    <tr><th align="right">Timestamp:</th><td id="gamepad-status-timestamp"></td></tr>
-                </table>
-            </div>
+            <span style="position: absolute; left: 555px; top: 240px;">Right Stick</span>
             <div style="height: 180px;"></div>
         </div>
     </div>
 </div>
 
 <div class="outer-section">
-    <h2>Send Commands</h2>
-    <div class="inner-section">
-        <h3>Bluetooth Pairing</h3>
-        <div class="inner-section">
-            <button onclick="const i = Math.max(0, Math.min(31, prompt('New PinSim ID (0-31)'))); sendHapticCommand(RUMBLE_COMMAND_SET_PINSIM_ID + i);">Set PinSim ID...</button>
-            <button onclick="sendHapticCommand(RUMBLE_COMMAND_PAIR_START)">Start Pairing Mode</button>
-            <button onclick="sendHapticCommand(RUMBLE_COMMAND_PAIR_CLEAR)">Clear All Pairing Info (This may disconnect you!)</button>
-        </div>
+    <h2>Gamepad Status and Configuration</h2>
+    <button id="connect_button" onclick="scanForDevices()">Connect...</button>
+    <button id="disconnect_button" style="display: none;" onclick="disconnect()">Disconnect</button>
+    <div id="ble-section" class="inner-section disabled">
+        <table><tr>
+            <td>
+                <h3>Bluetooth Pairing</h3>
+                <div class="inner-section">
+                    <button onclick="const i = Math.max(0, Math.min(255, prompt('New PinSim ID (0-255)'))); sendCommand(COMMAND_SET_PINSIM_ID, i);">Set PinSim ID...</button>
+                    <button onclick="sendCommand(COMMAND_PAIR_START)">Start Pairing Mode</button>
+                    <button onclick="sendCommand(COMMAND_PAIR_CLEAR)">Clear All Pairing Info</button>
+                </div>
 
-        <h3>Plunger</h3>
-        <div class="inner-section">
-            <button id="button-plunger-min" onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_MIN); document.getElementById('button-plunger-max').focus();">Set Plunger Min</button>
-            <button id="button-plunger-max" onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_MAX); document.getElementById('button-plunger-zero').focus();">Set Plunger Max</button>
-            <button id="button-plunger-zero" onclick="sendHapticCommand(RUMBLE_COMMAND_PLUNGER_SET_ZERO); document.getElementById('button-plunger-min').focus();">Set Plunger Zero (Dead Zone)</button>
-        </div>
+                <h3>Plunger</h3>
+                <div class="inner-section">
+                    <button id="button-plunger-min" onclick="sendCommand(COMMAND_PLUNGER_SET_MIN); document.getElementById('button-plunger-max').focus();">Set Plunger Min</button>
+                    <button id="button-plunger-max" onclick="sendCommand(COMMAND_PLUNGER_SET_MAX); document.getElementById('button-plunger-zero').focus();">Set Plunger Max</button>
+                    <button id="button-plunger-zero" onclick="sendCommand(COMMAND_PLUNGER_SET_ZERO); document.getElementById('button-plunger-min').focus();">Set Plunger Zero (Dead Zone)</button>
+                </div>
 
-        <h3>Tilt Sensor</h3>
-        <div class="inner-section">
-            <button onclick="sendHapticCommand(RUMBLE_COMMAND_ACCEL_CAL)">Calibrate Tilt Sensor</button>
-        </div>
+                <h3>Tilt Sensor</h3>
+                <div class="inner-section">
+                    <button onclick="sendCommand(COMMAND_ACCEL_CAL)">Calibrate Tilt Sensor</button>
+                </div>
 
-        <h3>Control Toggles</h3>
-        <div class="inner-section">
-            <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP)">Swap Plunger Controls</button>
-            <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
-            <button onclick="sendHapticCommand(RUMBLE_COMMAND_TOGGLE_KEYBOARD)">Switch to Keyboard Mode</button>
-        </div>
+                <h3>Control Toggles</h3>
+                <div class="inner-section">
+                    <button onclick="sendCommand(COMMAND_TOGGLE_CONTROL_SWAP)">Swap Plunger Controls</button>
+                    <button onclick="sendCommand(COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
+                    <button onclick="sendCommand(COMMAND_TOGGLE_KEYBOARD)">Toggle Keyboard/Gamepad Mode</button><br/>
+                    <button onclick="sendCommand(COMMAND_SEND_STATUS)">Request Status Update</button>
+                </div>
+            </td>
+            <td style="vertical-align:top;">
+
+                <table>
+                    <tr><th id="ble-label-pinsimID" align="right">PinSim ID:</th><td id="gamepad-status-pinsimID"></td></tr>
+                    <tr><th align="right">Pairings:</th><td id="gamepad-status-pairings"></td></tr>
+                    <tr><th align="right">Plunger Stick:</th><td id="gamepad-status-plunger-stick"></td></tr>
+                    <tr><th align="right">Solenoids:</th><td id="gamepad-status-solenoids"></td></tr>
+                    <tr><th align="right">Device Mode:</th><td id="gamepad-status-device-mode"></td></tr>
+                </table>
+            </td>
+        </tr></table>
     </div>
 </div>
 
 <script type="application/javascript">
-    // This value as the weak magnitude means the strong magnitude is a command
-    const RUMBLE_COMMAND_MAGIC = 2
+    // Command num goes in commandData[0]
+    const COMMAND_ACCEL_CAL           = 3
+    const COMMAND_PLUNGER_SET_MIN     = 4
+    const COMMAND_PLUNGER_SET_MAX     = 5
+    const COMMAND_PLUNGER_SET_ZERO    = 6
+    const COMMAND_TOGGLE_CONTROL_SWAP = 7
+    const COMMAND_TOGGLE_SOLENOIDS    = 8
+    const COMMAND_PAIR_CLEAR          = 9
+    const COMMAND_PAIR_START          = 10
+    const COMMAND_TOGGLE_KEYBOARD     = 11
+    const COMMAND_SEND_STATUS         = 12
+    const COMMAND_SET_PINSIM_ID       = 13  // commandData[1] contains id
 
-    // Commands in the strong magnitude field
-    const RUMBLE_COMMAND_ACCEL_CAL = 3
-    const RUMBLE_COMMAND_PLUNGER_SET_MIN = 4
-    const RUMBLE_COMMAND_PLUNGER_SET_MAX = 5
-    const RUMBLE_COMMAND_PLUNGER_SET_ZERO = 6
-    const RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP = 7
-    const RUMBLE_COMMAND_TOGGLE_SOLENOIDS = 8
-    const RUMBLE_COMMAND_PAIR_CLEAR = 9
-    const RUMBLE_COMMAND_PAIR_START = 10
-    const RUMBLE_COMMAND_TOGGLE_KEYBOARD = 11
-    const RUMBLE_COMMAND_SET_PINSIM_ID = 32 // (32-63 & 0x11111 for a 5-bit value)
+    // Command response num in commandData[0]
+    const COMMAND_RESPONSE_STATUS     = 2
 
-    // Sketchy Safari mapping from trigger values 0-255, may to 0.0-1.0 values from safari.  Nonlinearly. ???
-    const SAFARI_COMMAND_MAP = new Map([
-        [RUMBLE_COMMAND_MAGIC, 0.15],
-        [RUMBLE_COMMAND_ACCEL_CAL, 0.18],
-        [RUMBLE_COMMAND_PLUNGER_SET_MIN, 0.2],
-        [RUMBLE_COMMAND_PLUNGER_SET_MAX, 0.24],
-        [RUMBLE_COMMAND_PLUNGER_SET_ZERO, 0.26],
-        [RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP, 0.27],
-        [RUMBLE_COMMAND_TOGGLE_SOLENOIDS, 0.29],
-        [RUMBLE_COMMAND_PAIR_CLEAR, 0.31],
-        [RUMBLE_COMMAND_PAIR_START, 0.33],
-        [RUMBLE_COMMAND_SET_PINSIM_ID, 0.57]]) // 0.57 - 0.80]
-
-    const RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT = 4
-    const RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED = 8
+    const COMMAND_STATUS_PLUNGER_CONTROL_RIGHT    = 1
+    const COMMAND_STATUS_SOLENOIDS_ENABLED        = 2
+    const COMMAND_STATUS_KEYBOARD_MODE            = 4
 
     const leftStickElement = document.getElementById('left-stick')
     const rightStickElement = document.getElementById('right-stick')
-
-    let gamepadIndex = null  // Index of the currently selected gamepad
-    let lastTimestamp = 0
-
-
-    let scaleTriggerToInt = function(v) {
-        return Math.round(v*1023);
-    }
-
-    let scaleIntToRumble = function(v) {
-        if (!navigator.platform.startsWith("Mac")) {
-            return (v+0.5)/100.0
-        }
-        else if (window.safari) {
-            if (SAFARI_COMMAND_MAP.has(v)) {
-                return SAFARI_COMMAND_MAP.get(v)
-            } else {
-                if (v >= RUMBLE_COMMAND_SET_PINSIM_ID && v < RUMBLE_COMMAND_SET_PINSIM_ID*2) {
-                    return SAFARI_COMMAND_MAP.get(RUMBLE_COMMAND_SET_PINSIM_ID) + (v-RUMBLE_COMMAND_SET_PINSIM_ID)*0.0074
-                }
-                return 0
-            }
-        }
-        else {
-            return v/255.0;
-        }
-    }
-
-    window.addEventListener("gamepadconnected", (event) => { updateGamepads(); })
-    window.addEventListener("gamepaddisconnected", (event) => { updateGamepads(); })
-    window.setInterval(() => { updateGamepads(); }, 2000)
-
-    const updateGamepads = function() {
-        const gamepads = navigator.getGamepads()
-
-        if (gamepadIndex !== null && !gamepads[gamepadIndex]) {
-            // Your selected gamepad disconnected
-            gamepadIndex = null
-        }
-
-        if (gamepads.every(i => i === null)) {
-            // All items in gamepads array are null... so.... there are none.  (But then why is this not just empty!?!)
-            document.getElementById("connStatus").innerHTML = '<span class="disabled">No gamepads found</span>'
-        }
-        else {
-            // Build radio buttons
-            let pickerHtml = ""
-            for (let i = 0; i < gamepads.length; i++) {
-                const gp = gamepads[i]
-                if (gp) {
-                    if (gamepadIndex === null) gamepadIndex = i
-                    const checked = ((i === gamepadIndex) ? " checked" : "")
-                    const rightVal = scaleTriggerToInt(gp.buttons[rightTriggerIndex].value)
-                    const pinsimID = (rightVal & 0b0001111100) >> 2
-                    pickerHtml += `<input type="radio" id="gamepad-${gp.index}" onchange="onChooseGamepad(this)" value="${gp.index}"${checked}/>`
-                    pickerHtml += `<label for="gamepad-${gp.index}">PinSim ID:${pinsimID} - ${gp.id}</label><br/>`
-                }
-            }
-            document.getElementById("connStatus").innerHTML = pickerHtml
-        }
-    }
-
-    const onChooseGamepad = function(button) {
-        // User changed the current gamepad
-        const gamepads = navigator.getGamepads()
-        gamepadIndex = button.value
-        lastTimestamp = 0
-    }
-
-    const sendHapticEvent = function (duration, wM, sM) {
-        if (gamepadIndex !== null) {
-            const gamepad = navigator.getGamepads()[gamepadIndex]
-            if (gamepad.vibrationActuator) {
-                gamepad.vibrationActuator.playEffect("dual-rumble", {
-                    startDelay: 0,
-                    duration: duration,
-                    weakMagnitude: wM,
-                    strongMagnitude: sM,
-                })
-                console.log(`duration: ${duration}, weakMagnitude: ${wM}, strongMagnitude: ${sM}`)
-            } else {
-                console.log("gamepad.vibrationActuator undefined.  This browser does not fully support this gamepad.")
-            }
-        }
-    }
-
-    const sendHapticCommand = function (command) {
-        sendHapticEvent(250, scaleIntToRumble(command), scaleIntToRumble(RUMBLE_COMMAND_MAGIC))
-    }
 
     const buttonMap = [
         "button-status-a", "button-status-b", "button-status-x", "button-status-y",
@@ -289,9 +203,180 @@
         "button-status-back", "button-status-start", "button-status-c", "button-status-z",
         "button-status-dpad-up", "button-status-dpad-down", "button-status-dpad-left", "button-status-dpad-right",
         "button-status-menu"
-        ]
+    ]
     const leftTriggerIndex = 6
     const rightTriggerIndex = 7
+
+    let gamepadIndex = null  // Index of the currently selected gamepad
+    let cmdCharacteristic = null
+    let cmdDevice = null
+    let plungerOnLeftStick = false
+    let solenoidEnabled = false
+    let keyboardMode = false
+    let lastTimestamp = 0
+    let gp_pinsimID = null
+    let ble_pinsimID = null
+
+    function scanForDevices() {
+        const COMMAND_SERVICE_ID =        "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
+        const COMMAND_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
+
+        console.log('Requesting Bluetooth Device...')
+        navigator.bluetooth.requestDevice({ acceptAllDevices: true,
+            optionalServices: [COMMAND_SERVICE_ID]
+        }).then(device => {
+            return device.gatt.connect()
+        }).then(gatt => {
+            cmdDevice = gatt.device
+            gatt.device.addEventListener('gattserverdisconnected', onDisconnect)
+            console.log('Getting Service...')
+            return gatt.getPrimaryService(COMMAND_SERVICE_ID)
+        }).then(service => {
+            console.log('Getting Characteristic...')
+            return service.getCharacteristic(COMMAND_CHARACTERISTIC_ID)
+        }).then(characteristic => {
+            cmdCharacteristic = characteristic
+            console.log('Requesting Notifications...')
+            return cmdCharacteristic.startNotifications()
+        }).then(_ => {
+            if (cmdCharacteristic.properties.notify) {
+                onConnect()
+            }
+            else {
+                console.log('Notifications not available.')
+                onDisconnect(null)
+            }
+        }).catch((error) => {
+            console.log(error)
+            if (error.name === "NetworkError")
+                scanForDevices()
+        })
+    }
+
+    function onConnect() {
+        cmdCharacteristic.addEventListener("characteristicvaluechanged", onRxCommand);
+        console.log('Notifications started.')
+        document.getElementById("ble-section").classList.remove("disabled")
+        document.getElementById("connect_button").style.display = "none"
+        document.getElementById("disconnect_button").style.display = "block"
+        sendCommand(COMMAND_SEND_STATUS)
+    }
+
+    function onDisconnect(event) {
+        cmdCharacteristic = null
+        cmdDevice = null
+
+        document.getElementById("gamepad-status-pinsimID").innerHTML = ""
+        document.getElementById("gamepad-status-pairings").innerHTML = ""
+        document.getElementById("gamepad-status-plunger-stick").innerHTML = ""
+        document.getElementById("gamepad-status-solenoids").innerHTML = ""
+        document.getElementById("gamepad-status-device-mode").innerHTML = ""
+        document.getElementById("ble-section").classList.add("disabled")
+        document.getElementById("connect_button").style.display = "block"
+        document.getElementById("disconnect_button").style.display = "none"
+        updateStick(leftStickElement, 0, 0, 40)
+        updateStick(rightStickElement, 0, 0, 100)
+    }
+
+    function disconnect() {
+        cmdDevice.gatt.disconnect()
+    }
+
+    function sendCommand(b0, b1=0, b2=0, b3=0) {
+        if (cmdCharacteristic) {
+            console.log(`Sending Command ${b0} (${b1}, ${b2}, ${b3})`)
+            const arr = new Uint8Array([b0, b1, b2, b3])
+            cmdCharacteristic.writeValueWithoutResponse(arr)
+        }
+    }
+
+    function onRxCommand(event) {
+        let value = event.target.value
+        if (value.byteLength === 4) {
+            const command = value.getUint8(0)
+            console.log(`Command Response: ${command} ${value.getUint8(1)} ${value.getUint8(2)} ${value.getUint8(3)}`)
+
+            if (command === COMMAND_RESPONSE_STATUS) {
+                // Extract PinSim Status data from command
+                ble_pinsimID = value.getUint8(1)
+                const numPairs = value.getUint8(2)
+                const flags = value.getUint8(3)
+                plungerOnLeftStick = (flags & COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
+                solenoidEnabled = (flags & COMMAND_STATUS_SOLENOIDS_ENABLED)
+                keyboardMode = (flags & COMMAND_STATUS_KEYBOARD_MODE)
+
+                document.getElementById("gamepad-status-pinsimID").innerHTML = ble_pinsimID
+                document.getElementById("gamepad-status-pairings").innerHTML = numPairs
+                document.getElementById("gamepad-status-plunger-stick").innerHTML = plungerOnLeftStick ? "Left" : "Right"
+                document.getElementById("gamepad-status-solenoids").innerHTML = solenoidEnabled ? "On" : "Off"
+                document.getElementById("gamepad-status-device-mode").innerHTML = keyboardMode ? "Keyboard" : "Gamepad"
+
+                const mismatch = (gamepadIndex !== null) && cmdDevice && (ble_pinsimID !== gp_pinsimID)
+                document.getElementById("gamepad-status-pinsimID").style.color = (mismatch) ? "#FF0000" : null
+                document.getElementById("ble-label-pinsimID").style.color = (mismatch) ? "#FF0000" : null
+            }
+        }
+    }
+
+
+    let scaleTriggerToInt = function(v) {
+        return Math.round(v*1023);
+    }
+
+    window.addEventListener("gamepadconnected", (event) => { updateGamepads(); })
+    window.addEventListener("gamepaddisconnected", (event) => { updateGamepads(); })
+
+    const updateGamepads = function() {
+        const gamepads = navigator.getGamepads()
+
+        if (gamepadIndex !== null && !gamepads[gamepadIndex]) {
+            // Your selected gamepad disconnected
+            gamepadIndex = null
+            gp_pinsimID = null
+        }
+
+        if (gamepads.every(i => i === null)) {
+            // All items in gamepads array are null... so.... there are none.  (But then why is this not just empty!?!)
+            document.getElementById("connStatus").innerHTML = '<span class="disabled">No gamepads found</span>'
+            document.getElementById("gamepad-controls").classList.add("disabled")
+        }
+        else {
+            // Build radio buttons
+            let pickerHtml = ""
+            let didAutoselect = null
+            for (let i = 0; i < gamepads.length; i++) {
+                const gamepad = gamepads[i]
+                if (gamepad) {
+                    if (gamepadIndex === null) {
+                        gamepadIndex = i
+                        didAutoselect = `gamepad-${gamepad.index}`
+                    }
+                    const checked = ((i === gamepadIndex) ? " checked" : "")
+                    const leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
+                    const rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
+                    gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
+                    pickerHtml += `<input type="radio" id="gamepad-${gamepad.index}" onchange="onChooseGamepad(this)" value="${gamepad.index}"${checked}/>`
+                    pickerHtml += `<label id="label-gamepad-${gamepad.index}" for="gamepad-${gamepad.index}">PinSim ID:${gp_pinsimID} - ${gamepad.id}</label><br/>`
+                    document.getElementById("gamepad-controls").classList.remove("disabled")
+                }
+            }
+            document.getElementById("connStatus").innerHTML = pickerHtml
+            if (didAutoselect) onChooseGamepad(document.getElementById(didAutoselect))
+        }
+    }
+
+    const onChooseGamepad = function(button) {
+        // User changed the current gamepad
+        gamepadIndex = button.value
+        lastTimestamp = 0
+        if (gp_pinsimID !== null) {
+            document.getElementById("gamepad-label-pinsimID").innerHTML = ` (PinSimID: ${gp_pinsimID})`
+        }
+        else {
+            document.getElementById("gamepad-label-pinsimID").innerHTML = ""
+        }
+        sendCommand(COMMAND_SEND_STATUS)
+    }
 
     const updateGamepadState = function () {
         requestAnimationFrame(updateGamepadState);
@@ -315,33 +400,26 @@
                     }
                 }
 
-                // Check for PinSim Status data in Left and Right trigger values
-                let leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
-                let rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
-                const plungerOnLeftStick = (leftVal & RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
-                const solenoidEnabled = (leftVal & RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED)
-                const numPairs = (leftVal & 0b0001110000) >> 4
-                const pinsimID = (rightVal & 0b0001111100) >> 2
-                document.getElementById("gamepad-status-pinsimID").innerHTML = pinsimID
-                document.getElementById("gamepad-status-pairings").innerHTML = numPairs
-                document.getElementById("gamepad-status-plunger-stick").innerHTML = plungerOnLeftStick ? "Left" : "Right"
-                document.getElementById("gamepad-status-solenoids").innerHTML = solenoidEnabled ? "On" : "Off"
-                document.getElementById("gamepad-status-timestamp").innerHTML = newTimestamp
+                // Update ID in radio button label
+                const leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
+                const rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
+                gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
+                document.getElementById(`label-gamepad-${gamepad.index}`).innerHTML = `PinSim ID:${gp_pinsimID} - ${gamepad.id}`
+                document.getElementById("gamepad-label-pinsimID").innerHTML = ` (PinSimID: ${gp_pinsimID})`
+
+                const mismatch = (gamepadIndex !== null) && cmdDevice && (ble_pinsimID !== gp_pinsimID)
+                document.getElementById("gamepad-status-pinsimID").style.color = (mismatch) ? "#FF0000" : null
+                document.getElementById("ble-label-pinsimID").style.color = (mismatch) ? "#FF0000" : null
 
                 // Update Plunger
                 updateStick(leftStickElement, gamepad.axes[0], gamepad.axes[1], 40)
-                updateStick(rightStickElement, 0, gamepad.axes[(plungerOnLeftStick) ? 1 : 3], 100)
-                return
+                updateStick(rightStickElement, 0, gamepad.axes[3], 100)
+            }
+            else {
+                updateStick(leftStickElement, 0, 0, 40)
+                updateStick(rightStickElement, 0, 0, 100)
             }
         }
-        document.getElementById("gamepad-status-pinsimID").innerHTML = ""
-        document.getElementById("gamepad-status-pairings").innerHTML = ""
-        document.getElementById("gamepad-status-plunger-stick").innerHTML = ""
-        document.getElementById("gamepad-status-solenoids").innerHTML = ""
-        document.getElementById("gamepad-status-timestamp").innerHTML = ""
-
-        updateStick(leftStickElement, 0, 0, 40)
-        updateStick(rightStickElement, 0, 0, 100)
     }
 
     function updateStick(stickElement, x, y, m) {

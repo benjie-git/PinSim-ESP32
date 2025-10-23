@@ -1,5 +1,5 @@
-#include <string>
 #include "xInput.h"
+#include <string>
 #include <Preferences.h>
 #include <NimBLEDevice.h>
 
@@ -19,9 +19,9 @@ extern const char* NIMBLE_NVS_NAMESPACE;
 #define PREFS_NAME "XInput_BLE"
 static Preferences preferences;
 #define MAX_ADDRESSES 4
-std::vector<uint64_t> pairedAddresses;
+static std::vector<uint64_t> pairedAddresses;
 
-void loadWhitelist()
+void XInput::loadWhitelist()
 {
     pairedAddresses.reserve(MAX_ADDRESSES+1);
     
@@ -43,7 +43,7 @@ void loadWhitelist()
     }
 }
 
-void saveWhitelist()
+void XInput::saveWhitelist()
 {
     // Keep within MAX_ADDRESSES addresses
     while (pairedAddresses.size() > MAX_ADDRESSES) {
@@ -62,7 +62,7 @@ void saveWhitelist()
     }
 }
 
-void clearWhitelistInternal()
+void XInput::clearWhitelistInternal()
 {
     printf("--- Clear whitelist and delete all bonds.\n");
     NimBLEDevice::deleteAllBonds();
@@ -73,7 +73,7 @@ void clearWhitelistInternal()
     }
 
     pairedAddresses.clear();
-    saveWhitelist();
+    this->saveWhitelist();
     preferences.remove("pairedAddresses");
 }
 
@@ -122,7 +122,7 @@ public:
             pairedAddresses.push_back(addrInt);
             NimBLEDevice::whiteListAdd(connInfo.getIdAddress());
             // this->_xInput->allowNewConnections(false);
-            saveWhitelist();
+            _xInput->saveWhitelist();
             printf("Added paired address         (%s) (%s)\n", connInfo.getAddress().toString().c_str(), connInfo.getIdAddress().toString().c_str());
         }
     }
@@ -166,7 +166,7 @@ public:
     }
 
 private:
-    XInput *_xInput = NULL;
+    XInput *_xInput = nullptr;
 };
 
 
@@ -174,7 +174,7 @@ private:
 ///////////////////////////////////////////
 // Manage the BLE Server / Advertising
 
-void XInput::startServer(const char *device_name, const char *manufacturer)
+void XInput::startServer(const char *device_name, const char *manufacturer, CommandCallback_t commandCallback)
 {
     NIMBLE_NVS_NAMESPACE = "nim_bond_xb";
 
@@ -223,8 +223,10 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
       NIMBLE_PROPERTY::READ);
     static const char* firmwareRevision = XBOX_FW_VER;
     characteristic_Firmware_Revision->setValue((const uint8_t*)firmwareRevision, strlen(firmwareRevision));
-  
+
     this->_hid->setBatteryLevel(100);
+
+    this->_commandHandler = new CommandHandler(this->_server, commandCallback);
 
     this->_hid->startServices();
 
@@ -235,12 +237,13 @@ void XInput::startServer(const char *device_name, const char *manufacturer)
     this->_advertising->setAdvertisementData(ad);
     this->_advertising->setAppearance(HID_GAMEPAD);
     this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
+    this->_advertising->addServiceUUID(COMMAND_SERVICE_ID);
     this->_advertising->enableScanResponse(true);
     this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });
     this->_advertising->setScanFilter(true, true);
     this->_allowNewConnections = false;
 
-    loadWhitelist();
+    this->loadWhitelist();
 }
 
 bool XInput::isConnected()
@@ -305,9 +308,13 @@ uint XInput::getPairCount()
 
 void XInput::clearWhitelist()
 {
-    clearWhitelistInternal();
+    this->clearWhitelistInternal();
 }
 
+void XInput::send_command(uint8_t* data)
+{
+    this->_commandHandler->send_command(data);
+}
 
 
 

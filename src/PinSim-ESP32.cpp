@@ -5,10 +5,10 @@
     Based on the excellent PinSim Controller v20200517
     Controller for PC Pinball games
     https://www.youtube.com/watch?v=18EcIxywXHg
-    
+
     Which was based on the excellent MSF_FightStick XINPUT project by Zack "Reaper" Littell
     https://github.com/zlittell/MSF-XINPUT
-    
+
     Uses the ESP32-S3, as built into the PinSim-ESP32 PCB
 
     IMPORTANT PLUNGER NOTE:
@@ -134,10 +134,9 @@ Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 XInput gamepad;
 BLEKeyboard kb;
 
-void OnKbLedEvent(uint8_t ledStatus);
 void OnVibrateEvent(XboxGamepadOutputReportData data);
-boolean handleRumbleCommand(uint8_t command);
 void updateTriggerStatus();
+void handleCommand(uint8_t *commandData);
 void buttonUpdate();
 
 TaskHandle_t mainTaskHandle = NULL;
@@ -641,7 +640,7 @@ void checkForConfigButtonPresses()
       buttonUpdate();
     }
   }
-  
+
   if (plungerEnabled) {
     // to calibrate, hold Back and Start
     if (buttonStatus[POSBK] && buttonStatus[POSST]) {
@@ -691,7 +690,6 @@ void setup()
   esp_efuse_mac_get_default(mac_bytes);
   printf("HW MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
   if (useKeyboardMode) {
-    preferences.putBool("useKeyboardMode", !useKeyboardMode); // Only stay in KB mode for one boot, for now
     esp_base_mac_addr_get(mac_bytes);
     mac_bytes[5]++;
     esp_base_mac_addr_set(mac_bytes);
@@ -703,10 +701,10 @@ void setup()
   gamepad.onVibrate.attach(vibrationSlot);
 
   if (!useKeyboardMode) {
-    gamepad.startServer(XB_NAME, XB_MANUFACTURER);
+    gamepad.startServer(XB_NAME, XB_MANUFACTURER, handleCommand);
   }
   else {
-    kb.begin("PinSim KB Controller", "Octopilot", OnKbLedEvent);
+    kb.begin("PinSim KB Controller", "Octopilot", handleCommand);
   }
 
   for (int i = 0; i < 6; i++) {
@@ -722,7 +720,7 @@ void setup()
 
     accel.setRange(ADXL345_RANGE_2_G);
     delay(100);
-    
+
     zeroX = preferences.getInt("accelZeroX", zeroX);
     zeroY = preferences.getInt("accelZeroY", zeroY);
   }
@@ -892,7 +890,7 @@ void pressStart(bool isPressed) {
 void processInputs()
 {
   uint8_t direction = XboxDpadFlags::NONE;
-  
+
   // Use -1 instead of 0 for non-moving thumb/stick axes to fix right stick stuck to top-left
   // Some hosts need to see negative values or else they assume that 0 is the lowest value.
   int8_t center[2];
@@ -1017,7 +1015,6 @@ void processInputs()
           }
           distanceBuffer = plungerMaxDistance;
           lastDistance = plungerMaxDistance;
-          printf("Plunge!  millis=%lu  plungerEnableTime=%lu\n", millis(), plungerEnableTime);
           plungerEnableTime = millis() + 1000;
           return;
         }
@@ -1163,140 +1160,134 @@ void handle_main_task(void *arg)
 }
 
 
-// This value as the weak magnitude means the strong magnitude is a command
-#define RUMBLE_COMMAND_MAGIC 2
-
-// Commands in the strong magnitude field
-#define RUMBLE_COMMAND_ACCEL_CAL 3
-#define RUMBLE_COMMAND_PLUNGER_SET_MIN 4
-#define RUMBLE_COMMAND_PLUNGER_SET_MAX 5
-#define RUMBLE_COMMAND_PLUNGER_SET_ZERO 6
-#define RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP 7
-#define RUMBLE_COMMAND_TOGGLE_SOLENOIDS 8
-#define RUMBLE_COMMAND_PAIR_CLEAR 9
-#define RUMBLE_COMMAND_PAIR_START 10
-#define RUMBLE_COMMAND_TOGGLE_KEYBOARD 11
-#define RUMBLE_COMMAND_SET_PINSIM_ID 32 // (32-63 & 0x11111 for a 5-bit value)
-
-#define RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT 4
-#define RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED 8
-
-
 // Handle Vibrate/Rumble events
 void OnVibrateEvent(XboxGamepadOutputReportData data)
 {
   printf("Rumble: %d, %d\n", data.weakMotorMagnitude, data.strongMotorMagnitude);
-  if (data.weakMotorMagnitude == RUMBLE_COMMAND_MAGIC) {
-    if (handleRumbleCommand(data.strongMotorMagnitude)) {
-      return;
-    }
-  }
   analogWrite(rumbleSmall, data.weakMotorMagnitude);
   analogWrite(rumbleLarge, data.strongMotorMagnitude);
 }
 
-void OnKbLedEvent(uint8_t ledStatus)
-{
-  // Make use of the LED status bits to run commands?
-  // Bits from 0-5: Num, Caps, Scroll, Compose, Kana
-  printf("ledData - %d\n", ledStatus);
-}
-
 void updateTriggerStatus()
 {
-  int leftStatus = 0;
-  if (controlShuffle) leftStatus += RUMBLE_COMMAND_STATUS_PLUNGER_CONTROL_RIGHT;
-  if (solenoidEnabled) leftStatus += RUMBLE_COMMAND_STATUS_SOLENOIDS_ENABLED;
-  leftStatus += gamepad.getPairCount() << 4;
-  gamepad.setLeftTrigger(leftStatus);  // Using bits 0x000XXXXX00
+  uint16_t leftStatus = (pinsimID & 0b11110000) >> 2;
+  gamepad.setLeftTrigger(leftStatus);  // Using bits 0b000XXXXX00
 
-  int rightStatus = pinsimID << 2;
-  gamepad.setRightTrigger(rightStatus);  // Using bits 0x000XXXXX00
+  uint16_t rightStatus = (pinsimID & 0b00001111) << 2;
+  gamepad.setRightTrigger(rightStatus);  // Using bits 0b000XXXXX00
 }
 
-// Received a runmble event that encodes a pinsim command
-boolean handleRumbleCommand(uint8_t command)
+void sendStatus()
 {
+    uint8_t status[4];
+    status[0] = COMMAND_RESPONSE_STATUS;
+    status[1] = pinsimID;
+    status[2] = gamepad.getPairCount();
+    status[3] = 0;
+    if (controlShuffle) status[3] += COMMAND_STATUS_PLUNGER_CONTROL_RIGHT;
+    if (solenoidEnabled) status[3] += COMMAND_STATUS_SOLENOIDS_ENABLED;
+    if (useKeyboardMode) status[3] += COMMAND_STATUS_KEYBOARD_MODE;
+    if (useKeyboardMode) {
+        kb.send_command(status);
+    }
+    else {
+        gamepad.send_command(status);
+    }
+}
+
+// Received a rumble event that encodes a pinsim command
+void handleCommand(uint8_t *commandData)
+{
+  uint8_t command = commandData[0];
+
   switch (command) {
-    case RUMBLE_COMMAND_ACCEL_CAL:
-      printf("Rumble Command: Calibrate Accels\n");
+    case COMMAND_ACCEL_CAL:
+      printf("Command: Calibrate Accels\n");
       zeroX = accX;
       zeroY = accY;
       preferences.putInt("accelZeroX", zeroX);
       preferences.putInt("accelZeroY", zeroY);
       runtimeFeedbackBlinks(1);
       break;
-    
-    case RUMBLE_COMMAND_PLUNGER_SET_MIN:
-      printf("Rumble Command: Plunger Set Min\n");
+
+    case COMMAND_PLUNGER_SET_MIN:
+      printf("Command: Plunger Set Min\n");
       plungerMin = plungerAverage;
       plungerMaxDistance = readingToDistance(plungerMin);
       preferences.putInt("plungerMin", plungerMin);
       runtimeFeedbackBlinks(1);
       break;
-    
-    case RUMBLE_COMMAND_PLUNGER_SET_MAX:
-      printf("Rumble Command: Plunger Set Max\n");
+
+    case COMMAND_PLUNGER_SET_MAX:
+      printf("Command: Plunger Set Max\n");
       plungerMax = plungerAverage;
       plungerMinDistance = readingToDistance(plungerMax);
       preferences.putInt("plungerMax", plungerMax);
       runtimeFeedbackBlinks(1);
       break;
-    
-    case RUMBLE_COMMAND_PLUNGER_SET_ZERO:
-      printf("Rumble Command: Plunger Set Zero\n");
+
+    case COMMAND_PLUNGER_SET_ZERO:
+      printf("Command: Plunger Set Zero\n");
       plungerZeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
       if (plungerZeroValue < 0) plungerZeroValue = 0;
       preferences.putInt("plungerZero", plungerZeroValue);
       runtimeFeedbackBlinks(1);
       break;
-    
-    case RUMBLE_COMMAND_TOGGLE_CONTROL_SWAP:
-      printf("Rumble Command: Control Swap\n");
+
+    case COMMAND_TOGGLE_CONTROL_SWAP:
+      printf("Command: Control Swap\n");
       controlShuffle = !controlShuffle;
       preferences.putBool("controlShuffle", controlShuffle);
       runtimeFeedbackBlinks(controlShuffle ? 2 : 1);
+      sendStatus();
       break;
-    
-    case RUMBLE_COMMAND_TOGGLE_SOLENOIDS:
-      printf("Rumble Command: Toggle Solenoids\n");
+
+    case COMMAND_TOGGLE_SOLENOIDS:
+      printf("Command: Toggle Solenoids\n");
       solenoidEnabled = !solenoidEnabled;
       preferences.putBool("solenoidEnabled", solenoidEnabled);
       runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
+      sendStatus();
       break;
-    
-    case RUMBLE_COMMAND_PAIR_CLEAR:
-      printf("Rumble Command: Clear Pairing\n");
+
+    case COMMAND_PAIR_CLEAR:
+      printf("Command: Clear Pairing\n");
       gamepad.clearWhitelist();
       runtimeFeedbackBlinks(1);
+      sendStatus();
       break;
-    
-    case RUMBLE_COMMAND_PAIR_START:
-      printf("Rumble Command: Pairing Mode\n");
+
+    case COMMAND_PAIR_START:
+      printf("Command: Pairing Mode\n");
       gamepad.allowNewConnections(true);
       gamepad.startAdvertising();
       runtimeFeedbackBlinks(2);
       break;
 
-    case RUMBLE_COMMAND_TOGGLE_KEYBOARD:
-      printf("Rumble Command: Toggle Keyboard\n");
+    case COMMAND_TOGGLE_KEYBOARD:
+      printf("Command: Toggle Keyboard\n");
       useKeyboardMode = !useKeyboardMode;
       preferences.putBool("useKeyboardMode", useKeyboardMode);
       runtimeFeedbackBlinks(2);
+      sendStatus();
       delay(500);
       ESP.restart();
       break; // LOL not needed
 
+    case COMMAND_SET_PINSIM_ID:
+      pinsimID = commandData[1];
+      printf("Command: Set PinSim ID to %d\n", pinsimID);
+      preferences.putUChar("pinsimID", pinsimID);
+      runtimeFeedbackBlinks(1);
+      sendStatus();
+      break;
+
+    case COMMAND_SEND_STATUS:
+      printf("Command: Send Status\n");
+      sendStatus();
+      break;
+
     default:
-      if (command >= RUMBLE_COMMAND_SET_PINSIM_ID && command < RUMBLE_COMMAND_SET_PINSIM_ID+32) {
-        pinsimID = command & 0b11111;
-        preferences.putUChar("pinsimID", pinsimID);
-        runtimeFeedbackBlinks(1);
-      }
-      else {
-        printf("Bad Rumble Command: %d\n", command);
-        return false;
-      }
+      printf("Bad Command: %d\n", command);
   }
-  return true;
 }
