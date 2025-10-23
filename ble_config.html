@@ -156,7 +156,6 @@
                     <button onclick="sendCommand(COMMAND_TOGGLE_CONTROL_SWAP)">Swap Plunger Controls</button>
                     <button onclick="sendCommand(COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
                     <button onclick="sendCommand(COMMAND_TOGGLE_KEYBOARD)">Toggle Keyboard/Gamepad Mode</button><br/>
-                    <button onclick="sendCommand(COMMAND_SEND_STATUS)">Request Status Update</button>
                 </div>
             </td>
             <td style="vertical-align:top;">
@@ -228,7 +227,6 @@
             return device.gatt.connect()
         }).then(gatt => {
             cmdDevice = gatt.device
-            gatt.device.addEventListener('gattserverdisconnected', onDisconnect)
             console.log('Getting Service...')
             return gatt.getPrimaryService(COMMAND_SERVICE_ID)
         }).then(service => {
@@ -236,6 +234,7 @@
             return service.getCharacteristic(COMMAND_CHARACTERISTIC_ID)
         }).then(characteristic => {
             cmdCharacteristic = characteristic
+            cmdDevice.addEventListener('gattserverdisconnected', onDisconnect)
             console.log('Requesting Notifications...')
             return cmdCharacteristic.startNotifications()
         }).then(_ => {
@@ -248,7 +247,7 @@
             }
         }).catch((error) => {
             console.log(error)
-            if (error.name === "NetworkError")
+            if (error.name === "NetworkError" || error.name === "NotSupportedError")
                 scanForDevices()
         })
     }

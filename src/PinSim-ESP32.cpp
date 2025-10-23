@@ -133,10 +133,12 @@ Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
 XInput gamepad;
 BLEKeyboard kb;
+uint8_t pendingCommand[4] = {0,0,0,0};
 
 void OnVibrateEvent(XboxGamepadOutputReportData data);
 void updateTriggerStatus();
-void handleCommand(uint8_t *commandData);
+void rxCommand(uint8_t *commandData);
+void handlePendingCommand();
 void buttonUpdate();
 
 TaskHandle_t mainTaskHandle = NULL;
@@ -701,10 +703,10 @@ void setup()
   gamepad.onVibrate.attach(vibrationSlot);
 
   if (!useKeyboardMode) {
-    gamepad.startServer(XB_NAME, XB_MANUFACTURER, handleCommand);
+    gamepad.startServer(XB_NAME, XB_MANUFACTURER, rxCommand);
   }
   else {
-    kb.begin("PinSim KB Controller", "Octopilot", handleCommand);
+    kb.begin("PinSim KB Controller", "Octopilot", rxCommand);
   }
 
   for (int i = 0; i < 6; i++) {
@@ -1128,6 +1130,7 @@ void handle_main_task(void *arg)
 {
   while (true) {
     delay_since_last_delay(16);
+    handlePendingCommand();
 
     // Update Solenoids
     // Doing this before buttonUpdate() effectively adds a 16ms delay
@@ -1193,12 +1196,27 @@ void sendStatus()
     else {
         gamepad.send_command(status);
     }
+    vTaskDelay_ms(16);
 }
 
-// Received a rumble event that encodes a pinsim command
-void handleCommand(uint8_t *commandData)
+void rxCommand(uint8_t *commandData) {
+    // Move the command handling off of the BLE thread/task
+    pendingCommand[0] = commandData[0];
+    pendingCommand[1] = commandData[1];
+    pendingCommand[2] = commandData[2];
+    pendingCommand[3] = commandData[3];
+}
+
+// Received a pinsim command
+void handlePendingCommand()
 {
-  uint8_t command = commandData[0];
+  if (pendingCommand[0] == 0) {
+    return;
+  }
+
+  // If there is a command pending, handle it here, on the main loop task
+  uint8_t command = pendingCommand[0];
+  pendingCommand[0] = 0;  // Clear pending command
 
   switch (command) {
     case COMMAND_ACCEL_CAL:
@@ -1238,29 +1256,40 @@ void handleCommand(uint8_t *commandData)
       printf("Command: Control Swap\n");
       controlShuffle = !controlShuffle;
       preferences.putBool("controlShuffle", controlShuffle);
-      runtimeFeedbackBlinks(controlShuffle ? 2 : 1);
       sendStatus();
+      runtimeFeedbackBlinks(controlShuffle ? 2 : 1);
       break;
 
     case COMMAND_TOGGLE_SOLENOIDS:
       printf("Command: Toggle Solenoids\n");
       solenoidEnabled = !solenoidEnabled;
       preferences.putBool("solenoidEnabled", solenoidEnabled);
-      runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
       sendStatus();
+      runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
       break;
 
     case COMMAND_PAIR_CLEAR:
       printf("Command: Clear Pairing\n");
-      gamepad.clearWhitelist();
-      runtimeFeedbackBlinks(1);
+      if (useKeyboardMode) {
+          kb.clearWhitelist();
+      }
+      else {
+          gamepad.clearWhitelist();
+      }
       sendStatus();
+      runtimeFeedbackBlinks(1);
       break;
 
     case COMMAND_PAIR_START:
       printf("Command: Pairing Mode\n");
-      gamepad.allowNewConnections(true);
-      gamepad.startAdvertising();
+      if (useKeyboardMode) {
+          kb.allowNewConnections(true);
+          kb.startAdvertising();
+      }
+      else {
+          gamepad.allowNewConnections(true);
+          gamepad.startAdvertising();
+      }
       runtimeFeedbackBlinks(2);
       break;
 
@@ -1268,18 +1297,22 @@ void handleCommand(uint8_t *commandData)
       printf("Command: Toggle Keyboard\n");
       useKeyboardMode = !useKeyboardMode;
       preferences.putBool("useKeyboardMode", useKeyboardMode);
-      runtimeFeedbackBlinks(2);
       sendStatus();
+      runtimeFeedbackBlinks(2);
       delay(500);
       ESP.restart();
       break; // LOL not needed
 
     case COMMAND_SET_PINSIM_ID:
-      pinsimID = commandData[1];
+      pinsimID = pendingCommand[1];
       printf("Command: Set PinSim ID to %d\n", pinsimID);
       preferences.putUChar("pinsimID", pinsimID);
-      runtimeFeedbackBlinks(1);
+      if (!useKeyboardMode) {
+          updateTriggerStatus();
+          gamepad.sendGamepadReport();
+      }
       sendStatus();
+      runtimeFeedbackBlinks(1);
       break;
 
     case COMMAND_SEND_STATUS:

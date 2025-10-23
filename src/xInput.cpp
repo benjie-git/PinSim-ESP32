@@ -359,12 +359,11 @@ void XInput::setLeftThumb(int16_t x, int16_t y)
     
     uint16_t ux = (uint16_t)(x + 0x8000);
     uint16_t uy = (uint16_t)(y + 0x8000);
-
     if(_inputReport.x != ux || _inputReport.y != uy) {
-        _inputReport.x = ux;
-        _inputReport.y = uy;
         _inputReportDirty = true;
     }
+    _inputReport.x = ux;
+    _inputReport.y = uy;
 }
 
 void XInput::setRightThumb(int16_t z, int16_t rZ)
@@ -374,42 +373,39 @@ void XInput::setRightThumb(int16_t z, int16_t rZ)
     
     uint16_t uz = (uint16_t)(z + 0x8000);
     uint16_t urZ = (uint16_t)(rZ + 0x8000);
-
     if(_inputReport.z != uz || _inputReport.rz != urZ){
-        _inputReport.z = uz;
-        _inputReport.rz = urZ;
         _inputReportDirty = true;
     }
+    _inputReport.z = uz;
+    _inputReport.rz = urZ;
 }
 
 void XInput::setLeftTrigger(uint16_t value)
 {
     value = constrain(value, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
-
     if (_inputReport.brake != value) {
-        _inputReport.brake = value;
         _inputReportDirty = true;
     }
+    _inputReport.brake = value;
 }
 
 void XInput::setRightTrigger(uint16_t value)
 {
     value = constrain(value, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
-
     if (_inputReport.accelerator != value) {
-        _inputReport.accelerator = value;
         _inputReportDirty = true;
     }
+    _inputReport.accelerator = value;
 }
 
 void XInput::setTriggers(uint16_t left, uint16_t right)
 {
     left = constrain(left, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
     right = constrain(right, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
+    _inputReport.brake = left;
+    _inputReport.accelerator = right;
 
     if (_inputReport.brake != left || _inputReport.accelerator != right) {
-        _inputReport.brake = left;
-        _inputReport.accelerator = right;
         _inputReportDirty = true;
     }
 }
@@ -438,11 +434,11 @@ static uint8_t dPadDirectionToValue(XboxDpadFlags direction)
 
 void XInput::pressDPadDirectionInternal(uint8_t direction)
 {
+    _inputReport.hat = direction;
 
     // Avoid double presses
     if (!isDPadPressedInternal(direction))
     {
-        _inputReport.hat = direction;
         _inputReportDirty = true;
     }
 }
