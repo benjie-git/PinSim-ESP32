@@ -1053,7 +1053,7 @@ void processInputs()
 
 void ledUpdate()
 {
-  if ((!useKeyboardMode && !gamepad.isAdvertisingNewDevices()) || (useKeyboardMode && kb.isConnected())) {
+  if ((!useKeyboardMode && !gamepad.isAdvertisingNewDevices()) || (useKeyboardMode && !kb.isAdvertisingNewDevices())) {
     // Connected!  So LEDs On Solid
     LED_SetAnalog(pinLEDg, PCB_LED_BRIGHTNESS);
     LED_Set(pinLEDStart, HIGH);
@@ -1185,7 +1185,7 @@ void sendStatus()
     uint8_t status[4];
     status[0] = COMMAND_RESPONSE_STATUS;
     status[1] = pinsimID;
-    status[2] = gamepad.getPairCount();
+    status[2] = (useKeyboardMode) ? kb.getPairCount() : gamepad.getPairCount();
     status[3] = 0;
     if (controlShuffle) status[3] += COMMAND_STATUS_PLUNGER_CONTROL_RIGHT;
     if (solenoidEnabled) status[3] += COMMAND_STATUS_SOLENOIDS_ENABLED;
