@@ -89,8 +89,8 @@
 <div class="outer-section">
     <h2>Connected Gamepads:</h2>
     <div id="connStatus"><span class="disabled">No gamepads found</span></div>
-    <div id="gamepad-controls" class="inner-section disabled">
-        <h3>Gamepad Controls <span id="gamepad-label-pinsimID"></span></h3>
+    <div id="gamepad-controls" class="inner-section">
+        <h3 id="gamepad-title" class="disabled">Gamepad Controls <span id="gamepad-label-pinsimID"></span></h3>
         <div class="pinsim-box">
             <div id="button-status-l-flipper" class="button" style="left: 20px; top: 120px;">L</div>
             <div id="button-status-r-flipper" class="button" style="left: 585px; top: 120px;">R</div>
@@ -203,6 +203,26 @@
         "button-status-dpad-up", "button-status-dpad-down", "button-status-dpad-left", "button-status-dpad-right",
         "button-status-menu"
     ]
+
+    const keyMap = {
+        "a": "button-status-dpad-up",
+        "s": "button-status-dpad-down",
+        "f": "button-status-dpad-left",
+        "d": "button-status-dpad-right",
+        "u": "button-status-l-flipper",
+        "6": "button-status-r-flipper",
+        "8": "plunger-down",
+        "1": "button-status-a",
+        "b": "button-status-b",
+        "c": "button-status-c",
+        "x": "button-status-x",
+        "y": "button-status-y",
+        "z": "button-status-z",
+        "Enter": "button-status-start",
+        "i": "button-status-back",
+        "m": "button-status-menu",
+    }
+
     const leftTriggerIndex = 6
     const rightTriggerIndex = 7
 
@@ -258,13 +278,13 @@
         document.getElementById("ble-section").classList.remove("disabled")
         document.getElementById("connect_button").style.display = "none"
         document.getElementById("disconnect_button").style.display = "block"
+        updateGamepadStatus()
         sendCommand(COMMAND_SEND_STATUS)
     }
 
     function onDisconnect(event) {
         cmdCharacteristic = null
         cmdDevice = null
-
         document.getElementById("gamepad-status-pinsimID").innerHTML = ""
         document.getElementById("gamepad-status-pairings").innerHTML = ""
         document.getElementById("gamepad-status-plunger-stick").innerHTML = ""
@@ -273,6 +293,7 @@
         document.getElementById("ble-section").classList.add("disabled")
         document.getElementById("connect_button").style.display = "block"
         document.getElementById("disconnect_button").style.display = "none"
+        updateGamepadStatus()
         updateStick(leftStickElement, 0, 0, 40)
         updateStick(rightStickElement, 0, 0, 100)
     }
@@ -313,6 +334,7 @@
                 const mismatch = (gamepadIndex !== null) && cmdDevice && (ble_pinsimID !== gp_pinsimID)
                 document.getElementById("gamepad-status-pinsimID").style.color = (mismatch) ? "#FF0000" : null
                 document.getElementById("ble-label-pinsimID").style.color = (mismatch) ? "#FF0000" : null
+                updateGamepadStatus()
             }
         }
     }
@@ -322,8 +344,26 @@
         return Math.round(v*1023);
     }
 
-    window.addEventListener("gamepadconnected", (event) => { updateGamepads(); })
-    window.addEventListener("gamepaddisconnected", (event) => { updateGamepads(); })
+    window.addEventListener("gamepadconnected", (event) => { updateGamepads() })
+    window.addEventListener("gamepaddisconnected", (event) => { updateGamepads() })
+    window.addEventListener("keydown", onKeyDown)
+    window.addEventListener("keyup", onKeyUp)
+
+    function updateGamepadStatus() {
+        if (gamepadIndex === null) {
+            if (cmdCharacteristic && keyboardMode) {
+                document.getElementById("connStatus").innerHTML = "PinSim Keyboard"
+                document.getElementById("gamepad-title").classList.remove("disabled")
+            }
+            else {
+                document.getElementById("connStatus").innerHTML = '<span class="disabled">No gamepads found</span>'
+                document.getElementById("gamepad-title").classList.add("disabled")
+            }
+        }
+        else {
+            document.getElementById("gamepad-title").classList.remove("disabled")
+        }
+    }
 
     const updateGamepads = function() {
         const gamepads = navigator.getGamepads()
@@ -336,8 +376,7 @@
 
         if (gamepads.every(i => i === null)) {
             // All items in gamepads array are null... so.... there are none.  (But then why is this not just empty!?!)
-            document.getElementById("connStatus").innerHTML = '<span class="disabled">No gamepads found</span>'
-            document.getElementById("gamepad-controls").classList.add("disabled")
+            updateGamepadStatus()
         }
         else {
             // Build radio buttons
@@ -356,10 +395,11 @@
                     gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
                     pickerHtml += `<input type="radio" id="gamepad-${gamepad.index}" onchange="onChooseGamepad(this)" value="${gamepad.index}"${checked}/>`
                     pickerHtml += `<label id="label-gamepad-${gamepad.index}" for="gamepad-${gamepad.index}">PinSim ID:${gp_pinsimID} - ${gamepad.id}</label><br/>`
-                    document.getElementById("gamepad-controls").classList.remove("disabled")
+                    document.getElementById("gamepad-title").classList.remove("disabled")
                 }
             }
             document.getElementById("connStatus").innerHTML = pickerHtml
+            updateGamepadStatus()
             if (didAutoselect) onChooseGamepad(document.getElementById(didAutoselect))
         }
     }
@@ -417,6 +457,26 @@
             else {
                 updateStick(leftStickElement, 0, 0, 40)
                 updateStick(rightStickElement, 0, 0, 100)
+            }
+        }
+    }
+
+    function onKeyDown(event) {
+        if (cmdCharacteristic && keyboardMode) {
+            if (keyMap[event.key] === "plunger-down") {
+                updateStick(rightStickElement, 0, 1, 100)
+            } else {
+                document.getElementById(keyMap[event.key]).classList.add("pressed")
+            }
+        }
+    }
+
+    function onKeyUp(event) {
+        if (cmdCharacteristic && keyboardMode) {
+            if (keyMap[event.key] === "plunger-down") {
+                updateStick(rightStickElement, 0, 0, 100)
+            } else {
+                document.getElementById(keyMap[event.key]).classList.remove("pressed")
             }
         }
     }

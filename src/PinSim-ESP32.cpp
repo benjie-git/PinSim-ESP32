@@ -296,17 +296,24 @@ Solenoid solRight(pinGPIO35, pinGPIO36, pinGPIO37);
 #define POSPLUNGER 15
 
 /*
-A: Nudge Up
-S: Nudge Down
-F: Nudge Left
-D: Nudge Right
-U: Left Flipper
+a: Nudge Up
+s: Nudge Down
+f: Nudge Left
+d: Nudge Right
+1: A Button
+b: B Button
+x: X Button
+y: Y Button
+u: Left Flipper
 6: Right Flipper
-I: Pause
-8: Launch Ball
+Enter: Start
+i: Pause (Back)
+m: Menu
+c: C Button
+z: Z Button
+8: Launch Ball (Plunger)
 */
-const char* kbMap = "asfd....u6.i...8";
-//const char* kbMap = "udlrabxy[]skmczp"; // the above buttons as keyboard keys, respectively, plus plunger
+const char* kbMap = "asfd1bxyu6\nimcz8";  // the above buttons as keyboard keys, respectively, plus plunger
 
 
 void setButton(uint16_t xbButton, uint8_t buttonIndex, boolean pressed)
