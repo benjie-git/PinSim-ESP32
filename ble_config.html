@@ -157,6 +157,12 @@
                     <button onclick="sendCommand(COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
                     <button onclick="sendCommand(COMMAND_TOGGLE_KEYBOARD)">Toggle Keyboard/Gamepad Mode</button><br/>
                 </div>
+
+                <h3>Key Mapping</h3>
+                <div class="inner-section">
+                    <button onclick="sendCommand(COMMAND_RESET_KEY_MAPPING)">Reset to Default Key Map</button>
+                    <button onclick="const i = Math.max(0, Math.min(15, prompt('Button Index'))); const k = prompt('Key'); sendCommand(COMMAND_SET_KEY_MAPPING, i, k.charCodeAt(0));">Set Key...</button>
+                </div>
             </td>
             <td style="vertical-align:top;">
 
@@ -185,9 +191,12 @@
     const COMMAND_TOGGLE_KEYBOARD     = 11
     const COMMAND_SEND_STATUS         = 12
     const COMMAND_SET_PINSIM_ID       = 13  // commandData[1] contains id
+    const COMMAND_SET_KEY_MAPPING     = 14  // commandData[1] contains button index, [2]: ord(char) for the new key
+    const COMMAND_RESET_KEY_MAPPING   = 15
 
     // Command response num in commandData[0]
     const COMMAND_RESPONSE_STATUS     = 2
+    const COMMAND_RESPONSE_KEYMAP     = 3
 
     const COMMAND_STATUS_PLUNGER_CONTROL_RIGHT    = 1
     const COMMAND_STATUS_SOLENOIDS_ENABLED        = 2
@@ -204,24 +213,43 @@
         "button-status-menu"
     ]
 
-    const keyMap = {
-        "a": "button-status-dpad-up",
-        "s": "button-status-dpad-down",
-        "f": "button-status-dpad-left",
-        "d": "button-status-dpad-right",
-        "u": "button-status-l-flipper",
-        "6": "button-status-r-flipper",
-        "8": "plunger-down",
-        "1": "button-status-a",
-        "b": "button-status-b",
-        "c": "button-status-c",
-        "x": "button-status-x",
-        "y": "button-status-y",
-        "z": "button-status-z",
-        "Enter": "button-status-start",
-        "i": "button-status-back",
-        "m": "button-status-menu",
-    }
+    const keyMapButtonOrder = [
+        "button-status-dpad-up",
+        "button-status-dpad-down",
+        "button-status-dpad-left",
+        "button-status-dpad-right",
+        "button-status-a",
+        "button-status-b",
+        "button-status-x",
+        "button-status-y",
+        "button-status-l-flipper",
+        "button-status-r-flipper",
+        "button-status-start",
+        "button-status-back",
+        "button-status-menu",
+        "button-status-c",
+        "button-status-z",
+        "plunger-down",
+    ]
+
+    let keyMap = [
+        "a",
+        "s",
+        "f",
+        "d",
+        "1",
+        "b",
+        "x",
+        "y",
+        "u",
+        "6",
+        "Enter",
+        "i",
+        "m",
+        "c",
+        "z",
+        "8",
+    ]
 
     const leftTriggerIndex = 6
     const rightTriggerIndex = 7
@@ -302,21 +330,30 @@
         cmdDevice.gatt.disconnect()
     }
 
-    function sendCommand(b0, b1=0, b2=0, b3=0) {
+    function sendCommand(b0, b1=null, b2=null) {
         if (cmdCharacteristic) {
-            console.log(`Sending Command ${b0} (${b1}, ${b2}, ${b3})`)
-            const arr = new Uint8Array([b0, b1, b2, b3])
+            console.log(`Sending Command ${b0} (${b1}, ${b2})`)
+            let arr
+            if (b1 === null) {
+                arr = new Uint8Array([b0])
+            }
+            else if (b2 === null) {
+                arr = new Uint8Array([b0, b1])
+            }
+            else {
+                arr = new Uint8Array([b0, b1, b2])
+            }
             cmdCharacteristic.writeValueWithoutResponse(arr)
         }
     }
 
     function onRxCommand(event) {
         let value = event.target.value
-        if (value.byteLength === 4) {
+        if (value.byteLength >= 1) {
             const command = value.getUint8(0)
-            console.log(`Command Response: ${command} ${value.getUint8(1)} ${value.getUint8(2)} ${value.getUint8(3)}`)
 
-            if (command === COMMAND_RESPONSE_STATUS) {
+            if (command === COMMAND_RESPONSE_STATUS && value.byteLength === 4) {
+                console.log(`Command Response: ${command} ${value.getUint8(1)} ${value.getUint8(2)} ${value.getUint8(3)}`)
                 // Extract PinSim Status data from command
                 ble_pinsimID = value.getUint8(1)
                 const numPairs = value.getUint8(2)
@@ -335,6 +372,14 @@
                 document.getElementById("gamepad-status-pinsimID").style.color = (mismatch) ? "#FF0000" : null
                 document.getElementById("ble-label-pinsimID").style.color = (mismatch) ? "#FF0000" : null
                 updateGamepadStatus()
+            }
+            else if (command === COMMAND_RESPONSE_KEYMAP && value.byteLength === 17) {
+                let dataString = ""
+                for (let i = 0; i < 16; i++) { dataString += value.getUint8(i+1) + " " }
+                console.log(`Command Response: ${command} ${dataString}`)
+                for (let i = 0; i < 16; i++) {
+                    keyMap[i] = String.fromCharCode(value.getUint8(i+1))
+                }
             }
         }
     }
@@ -463,20 +508,22 @@
 
     function onKeyDown(event) {
         if (cmdCharacteristic && keyboardMode) {
-            if (keyMap[event.key] === "plunger-down") {
+            const index = keyMap.indexOf(event.key)
+            if (keyMapButtonOrder[index] === "plunger-down") {
                 updateStick(rightStickElement, 0, 1, 100)
             } else {
-                document.getElementById(keyMap[event.key]).classList.add("pressed")
+                document.getElementById(keyMapButtonOrder[index]).classList.add("pressed")
             }
         }
     }
 
     function onKeyUp(event) {
         if (cmdCharacteristic && keyboardMode) {
-            if (keyMap[event.key] === "plunger-down") {
+            const index = keyMap.indexOf(event.key)
+            if (keyMapButtonOrder[index] === "plunger-down") {
                 updateStick(rightStickElement, 0, 0, 100)
             } else {
-                document.getElementById(keyMap[event.key]).classList.remove("pressed")
+                document.getElementById(keyMapButtonOrder[index]).classList.remove("pressed")
             }
         }
     }

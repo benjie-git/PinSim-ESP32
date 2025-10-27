@@ -112,7 +112,7 @@ public:
     void releaseAll();
 
     void sendReport();
-    void send_command(uint8_t* data);
+    void send_command(const uint8_t* data, uint8_t length=4);
 
     void loadWhitelist();
     void saveWhitelist();

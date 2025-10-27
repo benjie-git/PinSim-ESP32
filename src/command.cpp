@@ -11,7 +11,7 @@ CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback)
     _commandCharacteristic = cmdService->createCharacteristic(
         COMMAND_CHARACTERISTIC_ID,
         NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR,
-        4);
+        18);
     _commandCharacteristic->setCallbacks(this);
     server->addService(cmdService);
 
@@ -24,15 +24,12 @@ CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback)
 
 void CommandHandler::onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo)
 {
-    uint32_t commandData32 = pCharacteristic->getValue<uint32_t>();
-    uint8_t *commandData = (uint8_t*)&commandData32;
-    printf("Got Command: %d (%d)\n", commandData[0], commandData[1]);
-    _commandCallback(commandData);
+    NimBLEAttValue val = pCharacteristic->getValue();
+    _commandCallback(val.data(), val.size());
 }
 
-void CommandHandler::send_command(uint8_t* commandData)
+void CommandHandler::send_command(const uint8_t* commandData, const uint8_t length)
 {
-    printf("Sending Response: %d (%d, %d, %d)\n", commandData[0], commandData[1], commandData[2], commandData[3]);
-    _commandCharacteristic->setValue(commandData, 4);
+    _commandCharacteristic->setValue(commandData, length);
     _commandCharacteristic->notify();
 }

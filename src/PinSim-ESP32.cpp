@@ -133,11 +133,11 @@ Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
 XInput gamepad;
 BLEKeyboard kb;
-uint8_t pendingCommand[4] = {0,0,0,0};
+uint8_t pendingCommand[18];
 
 void OnVibrateEvent(XboxGamepadOutputReportData data);
 void updateTriggerStatus();
-void rxCommand(uint8_t *commandData);
+void rxCommand(const uint8_t *commandData, const uint8_t length);
 void handlePendingCommand();
 void buttonUpdate();
 
@@ -291,9 +291,9 @@ Solenoid solRight(pinGPIO35, pinGPIO36, pinGPIO37);
 #define POSXB  12
 #define POSB9  13
 #define POSB10 14
+#define POSPLUNGER 15  // Not technically a button
 #define NUM_BUTTONS 15   // Total number of buttons
 
-#define POSPLUNGER 15
 
 /*
 a: Nudge Up
@@ -313,7 +313,8 @@ c: C Button
 z: Z Button
 8: Launch Ball (Plunger)
 */
-const char* kbMap = "asfd1bxyu6\nimcz8";  // the above buttons as keyboard keys, respectively, plus plunger
+#define KB_MAP_DEFAULTS "asfd1bxyu6\nimcz8"
+static char kbMap[17] = KB_MAP_DEFAULTS;  // the above buttons as keyboard keys, respectively, plus plunger
 
 
 void setButton(uint16_t xbButton, uint8_t buttonIndex, boolean pressed)
@@ -688,6 +689,10 @@ void setup()
   setupPins();
   preferences.begin("PinSimESP32");
   pinsimID = preferences.getUChar("pinsimID", 0);
+  if (preferences.isKey("kbMap")) {
+      preferences.getBytes("kbMap", kbMap, 16);
+  }
+  pendingCommand[0] = 0;
 
   // delay(2000);
   printf("\n\n");
@@ -1187,6 +1192,16 @@ void updateTriggerStatus()
   gamepad.setRightTrigger(rightStatus);  // Using bits 0b000XXXXX00
 }
 
+void sendKeymap() {
+    if (useKeyboardMode) {
+        uint8_t buf[17];
+        buf[0] = COMMAND_RESPONSE_KEYMAP;
+        memcpy(buf+1, kbMap, 16);
+        kb.send_command(buf, 17);
+        vTaskDelay_ms(16);
+    }
+}
+
 void sendStatus()
 {
     uint8_t status[4];
@@ -1204,14 +1219,12 @@ void sendStatus()
         gamepad.send_command(status);
     }
     vTaskDelay_ms(16);
+    sendKeymap();
 }
 
-void rxCommand(uint8_t *commandData) {
+void rxCommand(const uint8_t *commandData, const uint8_t length) {
     // Move the command handling off of the BLE thread/task
-    pendingCommand[0] = commandData[0];
-    pendingCommand[1] = commandData[1];
-    pendingCommand[2] = commandData[2];
-    pendingCommand[3] = commandData[3];
+    memcpy(pendingCommand, commandData, length);
 }
 
 // Received a pinsim command
@@ -1325,6 +1338,25 @@ void handlePendingCommand()
     case COMMAND_SEND_STATUS:
       printf("Command: Send Status\n");
       sendStatus();
+      break;
+
+    case COMMAND_SET_KEY_MAPPING:
+      if (pendingCommand[1] < 16) {
+        printf("Command: Set Key Mapping %d:%d\n", pendingCommand[1], pendingCommand[2]);
+        kbMap[pendingCommand[1]] = pendingCommand[2];
+        preferences.putBytes("kbMap", kbMap, 16);
+        sendKeymap();
+      }
+      else {
+        printf("Command: Set Key Mapping - Bad button position %d\n", pendingCommand[1]);
+      }
+      break;
+
+    case COMMAND_RESET_KEY_MAPPING:
+      printf("Command: Reset Key Mapping\n");
+      memcpy(kbMap, KB_MAP_DEFAULTS, 16);
+      preferences.putBytes("kbMap", kbMap, 16);
+      sendKeymap();
       break;
 
     default:

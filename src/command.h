@@ -24,23 +24,26 @@
 #define COMMAND_TOGGLE_KEYBOARD     11
 #define COMMAND_SEND_STATUS         12
 #define COMMAND_SET_PINSIM_ID       13  // commandData[1] contains id
+#define COMMAND_SET_KEY_MAPPING     14
+#define COMMAND_RESET_KEY_MAPPING   15
 
 // Command response num in commandData[0]
 #define COMMAND_RESPONSE_STATUS     2
+#define COMMAND_RESPONSE_KEYMAP     3
 
 #define COMMAND_STATUS_PLUNGER_CONTROL_RIGHT    1
 #define COMMAND_STATUS_SOLENOIDS_ENABLED        2
 #define COMMAND_STATUS_KEYBOARD_MODE            4
 
 
-typedef void (*CommandCallback_t)(uint8_t *args);
+typedef void (*CommandCallback_t)(const uint8_t *args, uint8_t length);
 
 
 class CommandHandler : public NimBLECharacteristicCallbacks
 {
 public:
     CommandHandler(NimBLEServer *server, CommandCallback_t callback);
-    void send_command(uint8_t* data);
+    void send_command(const uint8_t* data, uint8_t length=4);
 
 private:
     void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override;

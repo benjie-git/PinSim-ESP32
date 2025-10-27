@@ -311,9 +311,9 @@ void XInput::clearWhitelist()
     this->clearWhitelistInternal();
 }
 
-void XInput::send_command(uint8_t* data)
+void XInput::send_command(const uint8_t* data, const uint8_t length)
 {
-    this->_commandHandler->send_command(data);
+    this->_commandHandler->send_command(data, length);
 }
 
 

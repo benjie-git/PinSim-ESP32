@@ -305,9 +305,9 @@ void BLEKeyboard::clearWhitelist()
     this->clearWhitelistInternal();
 }
 
-void BLEKeyboard::send_command(uint8_t* data)
+void BLEKeyboard::send_command(const uint8_t* data, const uint8_t length)
 {
-    this->_commandHandler->send_command(data);
+    this->_commandHandler->send_command(data, length);
 }
 
 extern
