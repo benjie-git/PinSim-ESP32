@@ -26,17 +26,23 @@
             width: 650px;
         }
         div.button {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
             position: absolute;
             background: #FFF;
             border: solid 3px #000;
             border-radius: 40px;
-            width: 40px;
-            height: 30px;
-            text-align: center;
-            padding-top: 10px;
+            width: 42px;
+            height: 40px;
+            padding-top: 2px;
         }
-        div.pressed {
+        div.button.pressed {
             background: #38F;
+        }
+        div.button.keyMap {
+            border-color: #F00;
         }
         input[type="radio"]:checked + label {
             font-weight: bold;
@@ -88,28 +94,28 @@
 
 <div class="outer-section">
     <h2>Connected Gamepads:</h2>
-    <div id="connStatus"><span class="disabled">No gamepads found</span></div>
+    <div id="conn-status"><span class="disabled">No gamepads found</span></div>
     <div id="gamepad-controls" class="inner-section">
         <h3 id="gamepad-title" class="disabled">Gamepad Controls <span id="gamepad-label-pinsimID"></span></h3>
         <div class="pinsim-box">
-            <div id="button-status-l-flipper" class="button" style="left: 20px; top: 120px;">L</div>
-            <div id="button-status-r-flipper" class="button" style="left: 585px; top: 120px;">R</div>
+            <div id="button-status-l-flipper" class="button" style="left: 20px; top: 120px;">L<div class="key"></div></div>
+            <div id="button-status-r-flipper" class="button" style="left: 585px; top: 120px;">R<div class="key"></div></div>
 
-            <div id="button-status-back" class="button" style="left: 80px; top: 20px;">Back</div>
-            <div id="button-status-menu" class="button" style="left: 130px; top: 20px;">Menu</div>
-            <div id="button-status-start" class="button" style="left: 65px; top: 195px;">Start</div>
+            <div id="button-status-back" class="button" style="left: 80px; top: 20px;">Back<div class="key"></div></div>
+            <div id="button-status-menu" class="button" style="left: 130px; top: 20px;">Menu<div class="key"></div></div>
+            <div id="button-status-start" class="button" style="left: 65px; top: 195px;">Start<div class="key"></div></div>
 
-            <div id="button-status-x" class="button" style="left: 400px; top: 20px;">X</div>
-            <div id="button-status-y" class="button" style="left: 450px; top: 20px;">Y</div>
-            <div id="button-status-z" class="button" style="left: 500px; top: 20px;">Z</div>
-            <div id="button-status-a" class="button" style="left: 400px; top: 70px;">A</div>
-            <div id="button-status-b" class="button" style="left: 450px; top: 70px;">B</div>
-            <div id="button-status-c" class="button" style="left: 500px; top: 70px;">C</div>
+            <div id="button-status-x" class="button" style="left: 400px; top: 20px;">X<div class="key"></div></div>
+            <div id="button-status-y" class="button" style="left: 450px; top: 20px;">Y<div class="key"></div></div>
+            <div id="button-status-z" class="button" style="left: 500px; top: 20px;">Z<div class="key"></div></div>
+            <div id="button-status-a" class="button" style="left: 400px; top: 70px;">A<div class="key"></div></div>
+            <div id="button-status-b" class="button" style="left: 450px; top: 70px;">B<div class="key"></div></div>
+            <div id="button-status-c" class="button" style="left: 500px; top: 70px;">C<div class="key"></div></div>
 
-            <div id="button-status-dpad-up" class="button" style="left: 270px; top: 30px;">Up</div>
-            <div id="button-status-dpad-down" class="button" style="left: 270px; top: 90px;">Down</div>
-            <div id="button-status-dpad-left" class="button" style="left: 240px; top: 60px;">Left</div>
-            <div id="button-status-dpad-right" class="button" style="left: 300px; top: 60px;">Right</div>
+            <div id="button-status-dpad-up" class="button" style="left: 270px; top: 30px;">Up<div class="key"></div></div>
+            <div id="button-status-dpad-down" class="button" style="left: 270px; top: 90px;">Down<div class="key"></div></div>
+            <div id="button-status-dpad-left" class="button" style="left: 240px; top: 60px;">Left<div class="key"></div></div>
+            <div id="button-status-dpad-right" class="button" style="left: 300px; top: 60px;">Right<div class="key"></div></div>
 
             <div class="stick-visual" style="left: 150px; top: 120px;">
                 <div id="left-stick" class="thumbstick"></div>
@@ -119,7 +125,7 @@
             <div class="vbar-container" style="left: 530px; top: 143px;">
                 <div id="right-stick" class="thumbstick" style="left: 0; top: 0;"></div>
             </div>
-            <span style="position: absolute; left: 555px; top: 240px;">Right Stick</span>
+            <span id="plunger" style="position: absolute; left: 555px; top: 240px;">Right Stick <span class="key"></span></span>
             <div style="height: 180px;"></div>
         </div>
     </div>
@@ -127,8 +133,8 @@
 
 <div class="outer-section">
     <h2>Gamepad Status and Configuration</h2>
-    <button id="connect_button" onclick="scanForDevices()">Connect to Config Service...</button>
-    <button id="disconnect_button" style="display: none;" onclick="disconnect()">Disconnect Config Service</button>
+    <button id="connect-button" onclick="scanForDevices()">Connect to Config Service...</button>
+    <button id="disconnect-button" style="display: none;" onclick="disconnect()">Disconnect Config Service</button>
     <div id="ble-section" class="inner-section disabled">
         <table><tr>
             <td>
@@ -158,10 +164,12 @@
                     <button onclick="sendCommand(COMMAND_TOGGLE_KEYBOARD)">Toggle Keyboard/Gamepad Mode</button><br/>
                 </div>
 
-                <h3>Key Mapping</h3>
-                <div class="inner-section">
-                    <button onclick="sendCommand(COMMAND_RESET_KEY_MAPPING)">Reset to Default Key Map</button>
-                    <button onclick="const i = Math.max(0, Math.min(15, prompt('Button Index'))); const k = prompt('Key'); sendCommand(COMMAND_SET_KEY_MAPPING, i, k.charCodeAt(0));">Set Key...</button>
+                <div id="key-mapping-commands" style="display:none">
+                    <h3>Key Mapping</h3>
+                    <div class="inner-section">
+                        <button onclick="sendCommand(COMMAND_RESET_KEY_MAPPING)">Reset to Default Key Map</button>
+                        <button onclick="setKeyMapUI(1)">Set Key...</button>
+                    </div>
                 </div>
             </td>
             <td style="vertical-align:top;">
@@ -202,8 +210,21 @@
     const COMMAND_STATUS_SOLENOIDS_ENABLED        = 2
     const COMMAND_STATUS_KEYBOARD_MODE            = 4
 
+    const connStatusElement = document.getElementById("conn-status")
+    const gamepadTitleElement = document.getElementById("gamepad-title")
+    const pinsimLabelElement = document.getElementById("gamepad-label-pinsimID")
+    const bleLabelElement = document.getElementById("ble-label-pinsimID")
+    const pinsimIDStatusElement = document.getElementById("gamepad-status-pinsimID")
+    const pairingsStatusElement = document.getElementById("gamepad-status-pairings")
+    const plungerStickStatusElement = document.getElementById("gamepad-status-plunger-stick")
+    const deviceModeStatusElement = document.getElementById("gamepad-status-device-mode")
+    const solenoidsStatusElement = document.getElementById("gamepad-status-solenoids")
+    const bleSectionElement = document.getElementById("ble-section")
+    const connectButtonElement = document.getElementById("connect-button")
+    const disconnectButtonElement = document.getElementById("disconnect-button")
     const leftStickElement = document.getElementById('left-stick')
     const rightStickElement = document.getElementById('right-stick')
+    const keyMappingCommandsElement = document.getElementById("key-mapping-commands")
 
     const buttonMap = [
         "button-status-a", "button-status-b", "button-status-x", "button-status-y",
@@ -229,7 +250,7 @@
         "button-status-menu",
         "button-status-c",
         "button-status-z",
-        "plunger-down",
+        "plunger",
     ]
 
     let keyMap = [
@@ -251,6 +272,52 @@
         "8",
     ]
 
+    const keyCodeMap = {
+        0x80: "Ctrl",
+        0x81: "Shift",
+        0x82: "Alt",
+        0x84: "Ctrl",
+        0x85: "Shift",
+        0x86: "Alt",
+        0xDA: "UpArrow",
+        0xD9: "DownArrow",
+        0xD8: "LeftArrow",
+        0xD7: "RightArrow",
+        0x09: "Tab",
+        0x0A: "Enter",
+        0xB0: "Return",
+        0xB1: "Escape",
+        0xD4: "Delete",
+        0xB2: "Backspace",
+    }
+
+    const keyCodeMapInv = {
+        "Ctrl": 0x80,
+        "Shift": 0x81,
+        "Alt": 0x82,
+        // "Ctrl": 0x84,
+        // "Shift": 0x85,
+        // "Alt": 0x86,
+        "UpArrow": 0xDA,
+        "DownArrow": 0xD9,
+        "LeftArrow": 0xD8,
+        "RightArrow": 0xD7,
+        "Tab": 0x09,
+        "Enter": 0x0A,
+        "Return": 0xB0,
+        "Escape": 0xB1,
+        "Delete": 0xD4,
+        "Backspace": 0xB2,
+    }
+
+    window.addEventListener("gamepadconnected", (event) => { updateGamepads() })
+    window.addEventListener("gamepaddisconnected", (event) => { updateGamepads() })
+    window.addEventListener("keydown", onKeyDown)
+    window.addEventListener("keyup", onKeyUp)
+    for (let i in keyMapButtonOrder) {
+        document.getElementById(keyMapButtonOrder[i]).addEventListener("click", (e) => {onClickButton(e, i)})
+    }
+
     const leftTriggerIndex = 6
     const rightTriggerIndex = 7
 
@@ -263,6 +330,8 @@
     let lastTimestamp = 0
     let gp_pinsimID = null
     let ble_pinsimID = null
+    let kbGetKeyMode = 0  // 0=Idle, 1=GetButton, 2=GetKey, 3=Send&End
+    let kbGetKeyData = [null, null]
 
     function scanForDevices() {
         const COMMAND_SERVICE_ID =        "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
@@ -303,9 +372,10 @@
     function onConnect() {
         cmdCharacteristic.addEventListener("characteristicvaluechanged", onRxCommand);
         console.log('Notifications started.')
-        document.getElementById("ble-section").classList.remove("disabled")
-        document.getElementById("connect_button").style.display = "none"
-        document.getElementById("disconnect_button").style.display = "block"
+        bleSectionElement.classList.remove("disabled")
+        connectButtonElement.style.display = "none"
+        disconnectButtonElement.style.display = "block"
+        setKeyMapUI(0)
         updateGamepadStatus()
         sendCommand(COMMAND_SEND_STATUS)
     }
@@ -313,15 +383,18 @@
     function onDisconnect(event) {
         cmdCharacteristic = null
         cmdDevice = null
-        document.getElementById("gamepad-status-pinsimID").innerHTML = ""
-        document.getElementById("gamepad-status-pairings").innerHTML = ""
-        document.getElementById("gamepad-status-plunger-stick").innerHTML = ""
-        document.getElementById("gamepad-status-solenoids").innerHTML = ""
-        document.getElementById("gamepad-status-device-mode").innerHTML = ""
-        document.getElementById("ble-section").classList.add("disabled")
-        document.getElementById("connect_button").style.display = "block"
-        document.getElementById("disconnect_button").style.display = "none"
+        pinsimIDStatusElement.innerHTML = ""
+        pairingsStatusElement.innerHTML = ""
+        plungerStickStatusElement.innerHTML = ""
+        solenoidsStatusElement.innerHTML = ""
+        deviceModeStatusElement.innerHTML = ""
+        bleSectionElement.classList.add("disabled")
+        connectButtonElement.style.display = "block"
+        disconnectButtonElement.style.display = "none"
+        keyMappingCommandsElement.style.display = "none"
+        setKeyMapUI(0)
         updateGamepadStatus()
+        displayKeys()
         updateStick(leftStickElement, 0, 0, 40)
         updateStick(rightStickElement, 0, 0, 100)
     }
@@ -362,55 +435,93 @@
                 solenoidEnabled = (flags & COMMAND_STATUS_SOLENOIDS_ENABLED)
                 keyboardMode = (flags & COMMAND_STATUS_KEYBOARD_MODE)
 
-                document.getElementById("gamepad-status-pinsimID").innerHTML = ble_pinsimID
-                document.getElementById("gamepad-status-pairings").innerHTML = numPairs
-                document.getElementById("gamepad-status-plunger-stick").innerHTML = plungerOnLeftStick ? "Left" : "Right"
-                document.getElementById("gamepad-status-solenoids").innerHTML = solenoidEnabled ? "On" : "Off"
-                document.getElementById("gamepad-status-device-mode").innerHTML = keyboardMode ? "Keyboard" : "Gamepad"
+                pinsimIDStatusElement.innerHTML = ble_pinsimID
+                pairingsStatusElement.innerHTML = numPairs
+                plungerStickStatusElement.innerHTML = plungerOnLeftStick ? "Left" : "Right"
+                solenoidsStatusElement.innerHTML = solenoidEnabled ? "On" : "Off"
+                deviceModeStatusElement.innerHTML = keyboardMode ? "Keyboard" : "Gamepad"
 
                 const mismatch = (gamepadIndex !== null) && cmdDevice && (ble_pinsimID !== gp_pinsimID)
-                document.getElementById("gamepad-status-pinsimID").style.color = (mismatch) ? "#FF0000" : null
-                document.getElementById("ble-label-pinsimID").style.color = (mismatch) ? "#FF0000" : null
+                pinsimIDStatusElement.style.color = (mismatch) ? "#FF0000" : null
+                bleLabelElement.style.color = (mismatch) ? "#FF0000" : null
                 updateGamepadStatus()
+                keyMappingCommandsElement.style.display = (keyboardMode) ? "block" : "none"
             }
             else if (command === COMMAND_RESPONSE_KEYMAP && value.byteLength === 17) {
                 let dataString = ""
                 for (let i = 0; i < 16; i++) { dataString += value.getUint8(i+1) + " " }
                 console.log(`Command Response: ${command} ${dataString}`)
                 for (let i = 0; i < 16; i++) {
-                    keyMap[i] = String.fromCharCode(value.getUint8(i+1))
+                    let substitution = keyCodeMap[value.getUint8(i+1)]
+                    if (substitution) {
+                        keyMap[i] = substitution
+                    }
+                    else {
+                        keyMap[i] = String.fromCharCode(value.getUint8(i+1))
+                    }
                 }
+                displayKeys()
             }
         }
     }
 
-
-    let scaleTriggerToInt = function(v) {
-        return Math.round(v*1023);
+    function setKeyMapUI(val) {
+        if (val === 0) {
+            kbGetKeyMode = 0
+            kbGetKeyData = [null, null]
+            for (let i=0; i<keyMapButtonOrder.length; i++) {
+                document.getElementById(keyMapButtonOrder[i]).classList.remove("keyMap")
+            }
+        }
+        if (val === 1) {
+            kbGetKeyMode = 1
+            if (cmdCharacteristic && keyboardMode) {
+                for (let i=0; i<keyMapButtonOrder.length; i++) {
+                    document.getElementById(keyMapButtonOrder[i]).classList.add("keyMap")
+                }
+            }
+        }
+        else if (val === 2) {
+            kbGetKeyMode = 2
+            for (let i=0; i<keyMapButtonOrder.length; i++) {
+                if (i != kbGetKeyData[0]) {
+                    document.getElementById(keyMapButtonOrder[i]).classList.remove("keyMap")
+                }
+            }
+        }
+        else if (val === 3) {
+            document.getElementById(keyMapButtonOrder[kbGetKeyData[0]]).classList.remove("keyMap")
+            sendCommand(COMMAND_SET_KEY_MAPPING, kbGetKeyData[0], kbGetKeyData[1])
+            kbGetKeyMode = 0
+        }
     }
 
-    window.addEventListener("gamepadconnected", (event) => { updateGamepads() })
-    window.addEventListener("gamepaddisconnected", (event) => { updateGamepads() })
-    window.addEventListener("keydown", onKeyDown)
-    window.addEventListener("keyup", onKeyUp)
+    function onClickButton(e, b) {
+        kbGetKeyData[0] = b
+        setKeyMapUI(2)
+    }
+
+    function scaleTriggerToInt(v) {
+        return Math.round(v*1023);
+    }
 
     function updateGamepadStatus() {
         if (gamepadIndex === null) {
             if (cmdCharacteristic && keyboardMode) {
-                document.getElementById("connStatus").innerHTML = "PinSim Keyboard"
-                document.getElementById("gamepad-title").classList.remove("disabled")
+                connStatusElement.innerHTML = "PinSim Keyboard"
+                gamepadTitleElement.classList.remove("disabled")
             }
             else {
-                document.getElementById("connStatus").innerHTML = '<span class="disabled">No gamepads found</span>'
-                document.getElementById("gamepad-title").classList.add("disabled")
+                connStatusElement.innerHTML = '<span class="disabled">No gamepads found</span>'
+                gamepadTitleElement.classList.add("disabled")
             }
         }
         else {
-            document.getElementById("gamepad-title").classList.remove("disabled")
+            gamepadTitleElement.classList.remove("disabled")
         }
     }
 
-    const updateGamepads = function() {
+    function updateGamepads() {
         const gamepads = navigator.getGamepads()
 
         if (gamepadIndex !== null && !gamepads[gamepadIndex]) {
@@ -440,29 +551,28 @@
                     gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
                     pickerHtml += `<input type="radio" id="gamepad-${gamepad.index}" onchange="onChooseGamepad(this)" value="${gamepad.index}"${checked}/>`
                     pickerHtml += `<label id="label-gamepad-${gamepad.index}" for="gamepad-${gamepad.index}">PinSim ID:${gp_pinsimID} - ${gamepad.id}</label><br/>`
-                    document.getElementById("gamepad-title").classList.remove("disabled")
+                    gamepadTitleElement.classList.remove("disabled")
                 }
             }
-            document.getElementById("connStatus").innerHTML = pickerHtml
+            connStatusElement.innerHTML = pickerHtml
             updateGamepadStatus()
             if (didAutoselect) onChooseGamepad(document.getElementById(didAutoselect))
         }
     }
-
-    const onChooseGamepad = function(button) {
+    function onChooseGamepad(button) {
         // User changed the current gamepad
         gamepadIndex = button.value
         lastTimestamp = 0
         if (gp_pinsimID !== null) {
-            document.getElementById("gamepad-label-pinsimID").innerHTML = ` (PinSimID: ${gp_pinsimID})`
+            pinsimLabelElement.innerHTML = ` (PinSimID: ${gp_pinsimID})`
         }
         else {
-            document.getElementById("gamepad-label-pinsimID").innerHTML = ""
+            pinsimLabelElement.innerHTML = ""
         }
         sendCommand(COMMAND_SEND_STATUS)
     }
 
-    const updateGamepadState = function () {
+    function updateGamepadState() {
         requestAnimationFrame(updateGamepadState);
         if (gamepadIndex !== null) {
             let gamepad = null
@@ -489,11 +599,11 @@
                 const rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
                 gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
                 document.getElementById(`label-gamepad-${gamepad.index}`).innerHTML = `PinSim ID:${gp_pinsimID} - ${gamepad.id}`
-                document.getElementById("gamepad-label-pinsimID").innerHTML = ` (PinSimID: ${gp_pinsimID})`
+                pinsimLabelElement.innerHTML = ` (PinSimID: ${gp_pinsimID})`
 
                 const mismatch = (gamepadIndex !== null) && cmdDevice && (ble_pinsimID !== gp_pinsimID)
-                document.getElementById("gamepad-status-pinsimID").style.color = (mismatch) ? "#FF0000" : null
-                document.getElementById("ble-label-pinsimID").style.color = (mismatch) ? "#FF0000" : null
+                pinsimIDStatusElement.style.color = (mismatch) ? "#FF0000" : null
+                bleLabelElement.style.color = (mismatch) ? "#FF0000" : null
 
                 // Update Plunger
                 updateStick(leftStickElement, gamepad.axes[0], gamepad.axes[1], 40)
@@ -508,11 +618,24 @@
 
     function onKeyDown(event) {
         if (cmdCharacteristic && keyboardMode) {
-            const index = keyMap.indexOf(event.key)
-            if (keyMapButtonOrder[index] === "plunger-down") {
-                updateStick(rightStickElement, 0, 1, 100)
-            } else {
-                document.getElementById(keyMapButtonOrder[index]).classList.add("pressed")
+            if (kbGetKeyMode === 2) {
+                if (keyCodeMapInv[event.key]) {
+                    kbGetKeyData[1] = keyCodeMapInv[event.key]
+                }
+                else {
+                    kbGetKeyData[1] = event.key.charCodeAt(0)
+                }
+                setKeyMapUI(3)
+            }
+            else {
+                const index = keyMap.indexOf(event.key)
+                if (index >= 0) {
+                    if (keyMapButtonOrder[index] === "plunger") {
+                        updateStick(rightStickElement, 0, 1, 100)
+                    } else {
+                        document.getElementById(keyMapButtonOrder[index]).classList.add("pressed")
+                    }
+                }
             }
         }
     }
@@ -520,10 +643,23 @@
     function onKeyUp(event) {
         if (cmdCharacteristic && keyboardMode) {
             const index = keyMap.indexOf(event.key)
-            if (keyMapButtonOrder[index] === "plunger-down") {
-                updateStick(rightStickElement, 0, 0, 100)
-            } else {
-                document.getElementById(keyMapButtonOrder[index]).classList.remove("pressed")
+            if (index >= 0) {
+                if (keyMapButtonOrder[index] === "plunger") {
+                    updateStick(rightStickElement, 0, 0, 100)
+                } else {
+                    document.getElementById(keyMapButtonOrder[index]).classList.remove("pressed")
+                }
+            }
+        }
+    }
+
+    function displayKeys() {
+        for (let i=0; i<keyMapButtonOrder.length; i++) {
+            if (cmdCharacteristic && keyboardMode) {
+                document.getElementById(keyMapButtonOrder[i]).getElementsByClassName("key")[0].innerHTML = keyMap[i]
+            }
+            else {
+                document.getElementById(keyMapButtonOrder[i]).getElementsByClassName("key")[0].innerHTML = ""
             }
         }
     }

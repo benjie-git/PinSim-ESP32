@@ -434,13 +434,13 @@ static uint8_t dPadDirectionToValue(XboxDpadFlags direction)
 
 void XInput::pressDPadDirectionInternal(uint8_t direction)
 {
-    _inputReport.hat = direction;
-
     // Avoid double presses
     if (!isDPadPressedInternal(direction))
     {
         _inputReportDirty = true;
     }
+
+    _inputReport.hat = direction;
 }
 
 void XInput::pressDPadDirection(XboxDpadFlags direction)

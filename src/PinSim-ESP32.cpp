@@ -569,8 +569,13 @@ void checkForConfigButtonPresses()
   }
 
   // Hold Back and dPad Down on boot to clear BLE paired devices
-  if (buttonStatus[POSBK] && buttonStatus[POSDN] && !useKeyboardMode) {
-    gamepad.clearWhitelist();
+  if (buttonStatus[POSBK] && buttonStatus[POSDN]) {
+    if (useKeyboardMode) {
+      kb.clearWhitelist();
+    }
+    else {
+      gamepad.clearWhitelist();
+    }
     configFeedbackBlinks(1);
     // Wait for button release
     while (buttonStatus[POSDN]) {
@@ -580,9 +585,14 @@ void checkForConfigButtonPresses()
   }
 
   // Hold Back and dPad Up on boot to allow pairing a new device
-  if (buttonStatus[POSBK] && buttonStatus[POSUP] && !useKeyboardMode) {
+  if (buttonStatus[POSBK] && buttonStatus[POSUP]8) {
     printf("Allow new devices to connect...\n");
-    gamepad.allowNewConnections(true);
+    if (useKeyboardMode) {
+      kb.allowNewConnections(true);
+    }
+    else {
+      gamepad.allowNewConnections(true);
+    }
     configFeedbackBlinks(2);
     // Wait for button release
     while (buttonStatus[POSUP]) {
@@ -1040,6 +1050,7 @@ void processInputs()
       } else if (currentDistance <= plungerMinDistance) {
         // cap max
         tiltEnableTime = millis() + 1000;
+        distanceBuffer = plungerMinDistance;
       } else if (currentDistance > plungerMaxDistance) {
         // cap min
         distanceBuffer = plungerMaxDistance;
