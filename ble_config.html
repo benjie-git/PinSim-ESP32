@@ -34,8 +34,8 @@
             background: #FFF;
             border: solid 3px #000;
             border-radius: 40px;
-            width: 42px;
-            height: 40px;
+            width: 45px;
+            height: 43px;
             padding-top: 2px;
         }
         div.button.pressed {
@@ -93,10 +93,18 @@
 <h1>PinSim Web Configurator</h1>
 
 <div class="outer-section">
-    <h2>Connected Gamepads:</h2>
-    <div id="conn-status"><span class="disabled">No gamepads found</span></div>
-    <div id="gamepad-controls" class="inner-section">
-        <h3 id="gamepad-title" class="disabled">Gamepad Controls <span id="gamepad-label-pinsimID"></span></h3>
+    <h2>PinSim Devices:</h2>
+    <div id="conn-status"><span class="disabled">No devices found</span></div>
+    <br/>
+    <button id="scan-button" onclick="scanForDevices()">Scan for PinSim Devices...</button>
+</div>
+
+<div class="outer-section">
+    <div id="gamepad-controls" class="inner-section disabled">
+        <h3>
+            <button id="disconnect-button" onclick="disconnect()">Disconnect</button>
+            PinSim Controls <span id="gamepad-label-pinsimID"></span>
+        </h3>
         <div class="pinsim-box">
             <div id="button-status-l-flipper" class="button" style="left: 20px; top: 120px;">L<div class="key"></div></div>
             <div id="button-status-r-flipper" class="button" style="left: 585px; top: 120px;">R<div class="key"></div></div>
@@ -112,29 +120,24 @@
             <div id="button-status-b" class="button" style="left: 450px; top: 70px;">B<div class="key"></div></div>
             <div id="button-status-c" class="button" style="left: 500px; top: 70px;">C<div class="key"></div></div>
 
-            <div id="button-status-dpad-up" class="button" style="left: 270px; top: 30px;">Up<div class="key"></div></div>
-            <div id="button-status-dpad-down" class="button" style="left: 270px; top: 90px;">Down<div class="key"></div></div>
-            <div id="button-status-dpad-left" class="button" style="left: 240px; top: 60px;">Left<div class="key"></div></div>
-            <div id="button-status-dpad-right" class="button" style="left: 300px; top: 60px;">Right<div class="key"></div></div>
+            <div id="button-status-dpad-up" class="button" style="left: 270px; top: 25px;">Up<div class="key"></div></div>
+            <div id="button-status-dpad-down" class="button" style="left: 270px; top: 95px;">Down<div class="key"></div></div>
+            <div id="button-status-dpad-left" class="button" style="left: 235px; top: 60px;">Left<div class="key"></div></div>
+            <div id="button-status-dpad-right" class="button" style="left: 305px; top: 60px;">Right<div class="key"></div></div>
 
             <div class="stick-visual" style="left: 150px; top: 120px;">
                 <div id="left-stick" class="thumbstick"></div>
             </div>
             <span style="position: absolute; left: 170px; top: 240px;">Left Stick</span>
 
-            <div class="vbar-container" style="left: 530px; top: 143px;">
+            <div class="vbar-container" style="left: 520px; top: 143px;">
                 <div id="right-stick" class="thumbstick" style="left: 0; top: 0;"></div>
             </div>
-            <span id="plunger" style="position: absolute; left: 555px; top: 240px;">Right Stick <span class="key"></span></span>
-            <div style="height: 180px;"></div>
+            <span id="plunger" style="position: absolute; left: 545px; top: 240px;">Right Stick <span class="key"></span></span>
+            <div style="height: 220px;"></div>
         </div>
     </div>
-</div>
 
-<div class="outer-section">
-    <h2>Gamepad Status and Configuration</h2>
-    <button id="connect-button" onclick="scanForDevices()">Connect to Config Service...</button>
-    <button id="disconnect-button" style="display: none;" onclick="disconnect()">Disconnect Config Service</button>
     <div id="ble-section" class="inner-section disabled">
         <table><tr>
             <td>
@@ -172,8 +175,7 @@
                     </div>
                 </div>
             </td>
-            <td style="vertical-align:top;">
-
+            <td style="vertical-align:top; padding-top: 20px;">
                 <table>
                     <tr><th id="ble-label-pinsimID" align="right">PinSim ID:</th><td id="gamepad-status-pinsimID"></td></tr>
                     <tr><th align="right">Pairings:</th><td id="gamepad-status-pairings"></td></tr>
@@ -210,8 +212,10 @@
     const COMMAND_STATUS_SOLENOIDS_ENABLED        = 2
     const COMMAND_STATUS_KEYBOARD_MODE            = 4
 
+    const COMMAND_SERVICE_ID =        "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
+    const COMMAND_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
+
     const connStatusElement = document.getElementById("conn-status")
-    const gamepadTitleElement = document.getElementById("gamepad-title")
     const pinsimLabelElement = document.getElementById("gamepad-label-pinsimID")
     const bleLabelElement = document.getElementById("ble-label-pinsimID")
     const pinsimIDStatusElement = document.getElementById("gamepad-status-pinsimID")
@@ -219,8 +223,8 @@
     const plungerStickStatusElement = document.getElementById("gamepad-status-plunger-stick")
     const deviceModeStatusElement = document.getElementById("gamepad-status-device-mode")
     const solenoidsStatusElement = document.getElementById("gamepad-status-solenoids")
+    const gamepadSectionElement = document.getElementById("gamepad-controls")
     const bleSectionElement = document.getElementById("ble-section")
-    const connectButtonElement = document.getElementById("connect-button")
     const disconnectButtonElement = document.getElementById("disconnect-button")
     const leftStickElement = document.getElementById('left-stick')
     const rightStickElement = document.getElementById('right-stick')
@@ -279,10 +283,10 @@
         0x84: "Ctrl",
         0x85: "Shift",
         0x86: "Alt",
-        0xDA: "UpArrow",
-        0xD9: "DownArrow",
-        0xD8: "LeftArrow",
-        0xD7: "RightArrow",
+        0xDA: "ArrowUp",
+        0xD9: "ArrowDown",
+        0xD8: "ArrowLeft",
+        0xD7: "ArrowRight",
         0x09: "Tab",
         0x0A: "Enter",
         0xB0: "Return",
@@ -298,10 +302,10 @@
         // "Ctrl": 0x84,
         // "Shift": 0x85,
         // "Alt": 0x86,
-        "UpArrow": 0xDA,
-        "DownArrow": 0xD9,
-        "LeftArrow": 0xD8,
-        "RightArrow": 0xD7,
+        "ArrowUp": 0xDA,
+        "ArrowDown": 0xD9,
+        "ArrowLeft": 0xD8,
+        "ArrowRight": 0xD7,
         "Tab": 0x09,
         "Enter": 0x0A,
         "Return": 0xB0,
@@ -310,8 +314,8 @@
         "Backspace": 0xB2,
     }
 
-    window.addEventListener("gamepadconnected", (event) => { updateGamepads() })
-    window.addEventListener("gamepaddisconnected", (event) => { updateGamepads() })
+    window.addEventListener("gamepadconnected", (event) => { connectGamepadWithPinsimID() })
+    // window.addEventListener("gamepaddisconnected", (event) => { updateGamepads() })
     window.addEventListener("keydown", onKeyDown)
     window.addEventListener("keyup", onKeyUp)
     for (let i in keyMapButtonOrder) {
@@ -328,21 +332,60 @@
     let solenoidEnabled = false
     let keyboardMode = false
     let lastTimestamp = 0
-    let gp_pinsimID = null
-    let ble_pinsimID = null
+    let pinsimID = null
     let kbGetKeyMode = 0  // 0=Idle, 1=GetButton, 2=GetKey, 3=Send&End
     let kbGetKeyData = [null, null]
 
-    function scanForDevices() {
-        const COMMAND_SERVICE_ID =        "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
-        const COMMAND_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
 
+    function showAllowedDevices() {
+        if (navigator.bluetooth.getDevices === undefined) {
+            connStatusElement.innerHTML = 'To use the PinSim web config tool, please enable the Chrome flags:<br/>\n\
+  <b>chrome://flags#enable-experimental-web-platform-features</b> <a href="javascript:0" onclick="navigator.clipboard.writeText(\'chrome://flags#enable-experimental-web-platform-features\');">[Copy Link]</a><br/>\n\
+  <b>chrome://flags#enable-web-bluetooth-new-permissions-backend</b> <a href="javascript:0" onclick="navigator.clipboard.writeText(\'chrome://flags#enable-web-bluetooth-new-permissions-backend\');">[Copy Link]</a>'
+        }
+        else {
+            console.log('Getting Allowed Bluetooth Device...')
+            navigator.bluetooth.getDevices().then(devices => {
+                console.log(`Found ${devices.length} BLE Device/s.`)
+                let pickerHtml = ""
+                if (devices.length >= 1) {
+                    for (let device of devices) {
+                        if (device) {
+                            const devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
+                            if (devName) {
+                                pickerHtml += `<button onclick="connectToDeviceWithId('${device.id}')">${devName}</button> `
+                            } else {
+                                pickerHtml += `<button onclick="connectToDeviceWithId('${device.id}')">Connect to PinSim Device</button> `
+                            }
+                        }
+                    }
+                    connStatusElement.innerHTML = pickerHtml
+                }
+                else {
+                    connStatusElement.innerHTML = '<span class="disabled">No Devices found</span>'
+                }
+            }).catch((e) => {
+                connStatusElement.innerHTML = `<span class="disabled">Error listing devices: (${e})</span>`
+            })
+        }
+    }
+
+    function scanForDevices() {
         console.log('Requesting Bluetooth Device...')
         navigator.bluetooth.requestDevice({ acceptAllDevices: true,
             optionalServices: [COMMAND_SERVICE_ID]
         }).then(device => {
-            return device.gatt.connect()
-        }).then(gatt => {
+            connectToDevice(device)
+        }).catch((error) => {
+            console.log(error)
+            if (error.name === "NetworkError" || error.name === "NotSupportedError")
+                scanForDevices()
+        })
+    }
+
+    function connectToDevice(device) {
+        disconnect()
+        device.gatt.connect().then(gatt => {
             cmdDevice = gatt.device
             console.log('Getting Service...')
             return gatt.getPrimaryService(COMMAND_SERVICE_ID)
@@ -364,43 +407,59 @@
             }
         }).catch((error) => {
             console.log(error)
-            if (error.name === "NetworkError" || error.name === "NotSupportedError")
-                scanForDevices()
+            // if (error.name === "NetworkError" || error.name === "NotSupportedError") {
+            //     connectToDevice(device)
+            // }
+        })
+    }
+
+    function connectToDeviceWithId(id) {
+        navigator.bluetooth.getDevices().then(devices => {
+            for (let device of devices) {
+                if (device.id === id) {
+                    connectToDevice(device)
+                    break
+                }
+            }
         })
     }
 
     function onConnect() {
         cmdCharacteristic.addEventListener("characteristicvaluechanged", onRxCommand);
         console.log('Notifications started.')
+        gamepadSectionElement.classList.remove("disabled")
         bleSectionElement.classList.remove("disabled")
-        connectButtonElement.style.display = "none"
-        disconnectButtonElement.style.display = "block"
+        disconnectButtonElement.classList.remove("disabled")
         setKeyMapUI(0)
-        updateGamepadStatus()
+        showAllowedDevices()
         sendCommand(COMMAND_SEND_STATUS)
     }
 
     function onDisconnect(event) {
-        cmdCharacteristic = null
-        cmdDevice = null
-        pinsimIDStatusElement.innerHTML = ""
-        pairingsStatusElement.innerHTML = ""
-        plungerStickStatusElement.innerHTML = ""
-        solenoidsStatusElement.innerHTML = ""
-        deviceModeStatusElement.innerHTML = ""
-        bleSectionElement.classList.add("disabled")
-        connectButtonElement.style.display = "block"
-        disconnectButtonElement.style.display = "none"
-        keyMappingCommandsElement.style.display = "none"
-        setKeyMapUI(0)
-        updateGamepadStatus()
-        displayKeys()
-        updateStick(leftStickElement, 0, 0, 40)
-        updateStick(rightStickElement, 0, 0, 100)
+        if (event.target === cmdDevice) {
+            cmdCharacteristic = null
+            cmdDevice = null
+            pinsimIDStatusElement.innerHTML = ""
+            pairingsStatusElement.innerHTML = ""
+            plungerStickStatusElement.innerHTML = ""
+            solenoidsStatusElement.innerHTML = ""
+            deviceModeStatusElement.innerHTML = ""
+            gamepadSectionElement.classList.add("disabled")
+            bleSectionElement.classList.add("disabled")
+            disconnectButtonElement.classList.add("disabled")
+            keyMappingCommandsElement.style.display = "none"
+            setKeyMapUI(0)
+            showAllowedDevices()
+            displayKeys()
+            updateStick(leftStickElement, 0, 0, 40)
+            updateStick(rightStickElement, 0, 0, 100)
+        }
     }
 
     function disconnect() {
-        cmdDevice.gatt.disconnect()
+        if (cmdDevice) {
+            cmdDevice.gatt.disconnect()
+        }
     }
 
     function sendCommand(b0, b1=null, b2=null) {
@@ -428,24 +487,28 @@
             if (command === COMMAND_RESPONSE_STATUS && value.byteLength === 4) {
                 console.log(`Command Response: ${command} ${value.getUint8(1)} ${value.getUint8(2)} ${value.getUint8(3)}`)
                 // Extract PinSim Status data from command
-                ble_pinsimID = value.getUint8(1)
+                pinsimID = value.getUint8(1)
                 const numPairs = value.getUint8(2)
                 const flags = value.getUint8(3)
                 plungerOnLeftStick = (flags & COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
                 solenoidEnabled = (flags & COMMAND_STATUS_SOLENOIDS_ENABLED)
                 keyboardMode = (flags & COMMAND_STATUS_KEYBOARD_MODE)
 
-                pinsimIDStatusElement.innerHTML = ble_pinsimID
+                pinsimIDStatusElement.innerHTML = pinsimID
                 pairingsStatusElement.innerHTML = numPairs
                 plungerStickStatusElement.innerHTML = plungerOnLeftStick ? "Left" : "Right"
                 solenoidsStatusElement.innerHTML = solenoidEnabled ? "On" : "Off"
                 deviceModeStatusElement.innerHTML = keyboardMode ? "Keyboard" : "Gamepad"
 
-                const mismatch = (gamepadIndex !== null) && cmdDevice && (ble_pinsimID !== gp_pinsimID)
+                const mismatch = (gamepadIndex !== null) && cmdDevice && (pinsimID !== pinsimID)
                 pinsimIDStatusElement.style.color = (mismatch) ? "#FF0000" : null
                 bleLabelElement.style.color = (mismatch) ? "#FF0000" : null
-                updateGamepadStatus()
+                showAllowedDevices()
                 keyMappingCommandsElement.style.display = (keyboardMode) ? "block" : "none"
+                localStorage.setItem(`PinSimDisplayName-${cmdDevice.id}`, `PinSim ${keyboardMode?"Keyboard":"Gamepad"}: ${pinsimID}`)
+                if (gamepadIndex === null) {
+                    connectGamepadWithPinsimID()
+                }
             }
             else if (command === COMMAND_RESPONSE_KEYMAP && value.byteLength === 17) {
                 let dataString = ""
@@ -505,71 +568,25 @@
         return Math.round(v*1023);
     }
 
-    function updateGamepadStatus() {
-        if (gamepadIndex === null) {
-            if (cmdCharacteristic && keyboardMode) {
-                connStatusElement.innerHTML = "PinSim Keyboard"
-                gamepadTitleElement.classList.remove("disabled")
-            }
-            else {
-                connStatusElement.innerHTML = '<span class="disabled">No gamepads found</span>'
-                gamepadTitleElement.classList.add("disabled")
-            }
-        }
-        else {
-            gamepadTitleElement.classList.remove("disabled")
-        }
-    }
+    function connectGamepadWithPinsimID(retries=3) {
+        if (pinsimID === null) return
 
-    function updateGamepads() {
         const gamepads = navigator.getGamepads()
-
-        if (gamepadIndex !== null && !gamepads[gamepadIndex]) {
-            // Your selected gamepad disconnected
-            gamepadIndex = null
-            gp_pinsimID = null
-        }
-
-        if (gamepads.every(i => i === null)) {
-            // All items in gamepads array are null... so.... there are none.  (But then why is this not just empty!?!)
-            updateGamepadStatus()
-        }
-        else {
-            // Build radio buttons
-            let pickerHtml = ""
-            let didAutoselect = null
-            for (let i = 0; i < gamepads.length; i++) {
-                const gamepad = gamepads[i]
-                if (gamepad) {
-                    if (gamepadIndex === null) {
-                        gamepadIndex = i
-                        didAutoselect = `gamepad-${gamepad.index}`
-                    }
-                    const checked = ((i === gamepadIndex) ? " checked" : "")
-                    const leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
-                    const rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
-                    gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
-                    pickerHtml += `<input type="radio" id="gamepad-${gamepad.index}" onchange="onChooseGamepad(this)" value="${gamepad.index}"${checked}/>`
-                    pickerHtml += `<label id="label-gamepad-${gamepad.index}" for="gamepad-${gamepad.index}">PinSim ID:${gp_pinsimID} - ${gamepad.id}</label><br/>`
-                    gamepadTitleElement.classList.remove("disabled")
+        for (let i = 0; i < gamepads.length; i++) {
+            const gamepad = gamepads[i]
+            if (gamepad) {
+                const leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
+                const rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
+                const gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
+                if (gp_pinsimID === pinsimID) {
+                    gamepadIndex = i
+                    showAllowedDevices()
                 }
             }
-            connStatusElement.innerHTML = pickerHtml
-            updateGamepadStatus()
-            if (didAutoselect) onChooseGamepad(document.getElementById(didAutoselect))
         }
-    }
-    function onChooseGamepad(button) {
-        // User changed the current gamepad
-        gamepadIndex = button.value
-        lastTimestamp = 0
-        if (gp_pinsimID !== null) {
-            pinsimLabelElement.innerHTML = ` (PinSimID: ${gp_pinsimID})`
+        if (gamepadIndex === null && retries > 0) {
+            setTimeout(() => { connectGamepadWithPinsimID(retries - 1) }, 500)
         }
-        else {
-            pinsimLabelElement.innerHTML = ""
-        }
-        sendCommand(COMMAND_SEND_STATUS)
     }
 
     function updateGamepadState() {
@@ -597,11 +614,11 @@
                 // Update ID in radio button label
                 const leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
                 const rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
-                gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
-                document.getElementById(`label-gamepad-${gamepad.index}`).innerHTML = `PinSim ID:${gp_pinsimID} - ${gamepad.id}`
-                pinsimLabelElement.innerHTML = ` (PinSimID: ${gp_pinsimID})`
+                const gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
+                // document.getElementById(`label-gamepad-${gamepad.index}`).innerHTML = `PinSim ID:${gp_pinsimID} - ${gamepad.id}`
+                pinsimLabelElement.innerHTML = ` (PinSim ${keyboardMode?"Keyboard":"Gamepad"}:${gp_pinsimID})`
 
-                const mismatch = (gamepadIndex !== null) && cmdDevice && (ble_pinsimID !== gp_pinsimID)
+                const mismatch = (gamepadIndex !== null) && cmdDevice && (pinsimID !== gp_pinsimID)
                 pinsimIDStatusElement.style.color = (mismatch) ? "#FF0000" : null
                 bleLabelElement.style.color = (mismatch) ? "#FF0000" : null
 
@@ -609,7 +626,7 @@
                 updateStick(leftStickElement, gamepad.axes[0], gamepad.axes[1], 40)
                 updateStick(rightStickElement, 0, gamepad.axes[3], 100)
             }
-            else {
+            else if (!keyboardMode) {
                 updateStick(leftStickElement, 0, 0, 40)
                 updateStick(rightStickElement, 0, 0, 100)
             }
@@ -656,7 +673,9 @@
     function displayKeys() {
         for (let i=0; i<keyMapButtonOrder.length; i++) {
             if (cmdCharacteristic && keyboardMode) {
-                document.getElementById(keyMapButtonOrder[i]).getElementsByClassName("key")[0].innerHTML = keyMap[i]
+                let disp = keyMap[i]
+                if (disp.startsWith("Arrow")) disp = disp.replace("Arrow", "")
+                document.getElementById(keyMapButtonOrder[i]).getElementsByClassName("key")[0].innerHTML = disp
             }
             else {
                 document.getElementById(keyMapButtonOrder[i]).getElementsByClassName("key")[0].innerHTML = ""
@@ -672,6 +691,8 @@
     }
 
     requestAnimationFrame(updateGamepadState)
+    showAllowedDevices()
+
 </script>
 </body>
 </html>

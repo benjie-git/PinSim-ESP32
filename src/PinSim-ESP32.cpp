@@ -585,7 +585,7 @@ void checkForConfigButtonPresses()
   }
 
   // Hold Back and dPad Up on boot to allow pairing a new device
-  if (buttonStatus[POSBK] && buttonStatus[POSUP]8) {
+  if (buttonStatus[POSBK] && buttonStatus[POSUP]) {
     printf("Allow new devices to connect...\n");
     if (useKeyboardMode) {
       kb.allowNewConnections(true);
@@ -1328,8 +1328,7 @@ void handlePendingCommand()
       printf("Command: Toggle Keyboard\n");
       useKeyboardMode = !useKeyboardMode;
       preferences.putBool("useKeyboardMode", useKeyboardMode);
-      sendStatus();
-      runtimeFeedbackBlinks(2);
+      runtimeFeedbackBlinks(useKeyboardMode ? 2 : 1);
       delay(500);
       ESP.restart();
       break; // LOL not needed
