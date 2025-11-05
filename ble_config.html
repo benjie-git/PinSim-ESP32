@@ -97,7 +97,7 @@
     <div id="conn-status"><span class="disabled">No Devices Found</span></div>
     <br/>
     <button id="scan-button" onclick="scanForDevices()">Scan for PinSim Devices...</button>
-    <a href="javascript:0" onclick="editDevicesMode = !editDevicesMode; showAllowedDevices()">[Edit]</a>
+    <a href="javascript:0" id="edit-link" onclick="editDevicesMode = !editDevicesMode; showAllowedDevices()">[Edit]</a>
 </div>
 
 <div class="outer-section">
@@ -237,6 +237,7 @@
     const leftStickElement = document.getElementById('left-stick')
     const rightStickElement = document.getElementById('right-stick')
     const keyMappingCommandsElement = document.getElementById("key-mapping-commands")
+    const editLinkElement = document.getElementById("edit-link")
 
     const buttonMap = [
         "button-status-a", "button-status-b", "button-status-x", "button-status-y",
@@ -363,7 +364,7 @@
                     for (let device of devices) {
                         if (device) {
                             let devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
-                            if (devName === null) devName = "Connect to PinSim Device"
+                            if (devName === null) devName = "Unknown Device"
                             pickerHtml += `<button onclick="connectToDeviceWithId('${device.id}')">${devName}</button>`
                             if (editDevicesMode) {
                                 pickerHtml += `<a href="javascript:0" onclick="forgetDevice('${device.id}')">[X]</a>`
@@ -380,6 +381,7 @@
                 connStatusElement.innerHTML = `<span class="disabled">Error Listing Devices: (${e})</span>`
             })
         }
+        editLinkElement.innerText = (editDevicesMode) ? "[Done]" : "[Edit]"
     }
     showAllowedDevices()
 
@@ -391,6 +393,7 @@
             connectToDevice(device)
         }).catch((error) => {
             console.log(error)
+            showAllowedDevices()
         })
     }
 
@@ -408,6 +411,9 @@
     }
 
     function connectToDevice(device) {
+        if (cmdDevice === device)
+            return
+
         disconnect()
         device.gatt.connect().then(gatt => {
             cmdDevice = gatt.device
@@ -441,6 +447,7 @@
             }
         }).catch((error) => {
             console.log(error)
+            showAllowedDevices()
         })
     }
 
