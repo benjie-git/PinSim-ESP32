@@ -10,7 +10,9 @@
 
 #define COMMAND_SERVICE_ID        "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
 #define COMMAND_CHARACTERISTIC_ID "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
+#define COMMAND_VERSION_CHARACTERISTIC_ID "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
 
+#define COMMAND_VERSION             {0, 2}
 
 // Command num goes in commandData[0]
 #define COMMAND_ACCEL_CAL           3
@@ -26,10 +28,12 @@
 #define COMMAND_SET_PINSIM_ID       13  // commandData[1] contains id
 #define COMMAND_SET_KEY_MAPPING     14
 #define COMMAND_RESET_KEY_MAPPING   15
+#define COMMAND_SET_SOLENOIDS       16
+#define COMMAND_FIRE_SOLENOID       17
 
 // Command response num in commandData[0]
-#define COMMAND_RESPONSE_STATUS     2
-#define COMMAND_RESPONSE_KEYMAP     3
+#define COMMAND_RESPONSE_STATUS     130
+#define COMMAND_RESPONSE_KEYMAP     131
 
 #define COMMAND_STATUS_PLUNGER_CONTROL_RIGHT    1
 #define COMMAND_STATUS_SOLENOIDS_ENABLED        2
@@ -48,6 +52,7 @@ public:
 private:
     void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override;
     NimBLECharacteristic *_commandCharacteristic = nullptr;
+    NimBLECharacteristic *_versionCharacteristic = nullptr;
     CommandCallback_t _commandCallback = nullptr;
 };
 

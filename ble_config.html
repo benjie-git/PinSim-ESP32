@@ -154,26 +154,38 @@
             <button onclick="sendCommand(COMMAND_PAIR_CLEAR)">Clear All Pairing Info</button>
         </div>
 
-        <h3>Plunger</h3>
+        <h3>Calibration</h3>
         <div class="inner-section">
-            <button id="button-plunger-min" onclick="sendCommand(COMMAND_PLUNGER_SET_MIN); document.getElementById('button-plunger-max').focus();">Set Plunger Min</button>
-            <button id="button-plunger-max" onclick="sendCommand(COMMAND_PLUNGER_SET_MAX); document.getElementById('button-plunger-zero').focus();">Set Plunger Max</button>
-            <button id="button-plunger-zero" onclick="sendCommand(COMMAND_PLUNGER_SET_ZERO); document.getElementById('button-plunger-min').focus();">Set Plunger Zero (Dead Zone)</button>
-        </div>
-
-        <h3>Tilt Sensor</h3>
-        <div class="inner-section">
-            <button onclick="sendCommand(COMMAND_ACCEL_CAL)">Calibrate Tilt Sensor</button>
+            <table>
+                <tr>
+                    <th>Tilt Sensor:</th><td>
+                        <button onclick="sendCommand(COMMAND_ACCEL_CAL)">Calibrate</button>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Plunger:</th><td>
+                        <button id="button-plunger-min" onclick="sendCommand(COMMAND_PLUNGER_SET_MIN); document.getElementById('button-plunger-max').focus();">Set Min</button>
+                        <button id="button-plunger-max" onclick="sendCommand(COMMAND_PLUNGER_SET_MAX); document.getElementById('button-plunger-zero').focus();">Set Max</button>
+                        <button id="button-plunger-zero" onclick="sendCommand(COMMAND_PLUNGER_SET_ZERO); document.getElementById('button-plunger-min').focus();">Set Zero (Dead Zone)</button>
+                    </td>
+                </tr>
+            </table>
         </div>
 
         <h3>Control Toggles</h3>
         <div class="inner-section">
             <button onclick="sendCommand(COMMAND_TOGGLE_CONTROL_SWAP)">Swap Plunger Controls</button>
             <button onclick="sendCommand(COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
-            <button onclick="sendCommand(COMMAND_TOGGLE_KEYBOARD)">Toggle Keyboard/Gamepad Mode</button><br/>
+            <button onclick="sendCommand(COMMAND_TOGGLE_KEYBOARD)">Toggle Keyboard/Gamepad Mode</button>
         </div>
 
-        <div id="key-mapping-commands" style="display:none">
+        <h3>Testing</h3>
+        <div class="inner-section">
+            <button onclick="sendCommand(COMMAND_FIRE_SOLENOID,0,1); setTimeout(()=>{sendCommand(COMMAND_FIRE_SOLENOID,0,0)}, 300)">Test Left Solenoid</button>
+            <button onclick="sendCommand(COMMAND_FIRE_SOLENOID,1,1); setTimeout(()=>{sendCommand(COMMAND_FIRE_SOLENOID,1,0)}, 300)">Test Right Solenoid</button>
+        </div>
+
+        <div id="key-mapping-commands" class="disabled">
             <h3>Key Mapping</h3>
             <div class="inner-section">
                 <button onclick="sendCommand(COMMAND_RESET_KEY_MAPPING)">Reset to Default Key Map</button>
@@ -198,17 +210,21 @@
     const COMMAND_SET_PINSIM_ID       = 13  // commandData[1] contains id
     const COMMAND_SET_KEY_MAPPING     = 14  // commandData[1] contains button index, [2]: ord(char) for the new key
     const COMMAND_RESET_KEY_MAPPING   = 15
+    const COMMAND_SET_SOLENOIDS       = 16  // commandData[1] contains bool for solenoids enabled
+    const COMMAND_FIRE_SOLENOID       = 17  // commandData[1] contains isLeft(bool), [2]: isPressed(bool)
 
     // Command response num in commandData[0]
-    const COMMAND_RESPONSE_STATUS     = 2  // 4 bytes
-    const COMMAND_RESPONSE_KEYMAP     = 3  // 17 bytes
+    const COMMAND_RESPONSE_STATUS     = 130  // 4 bytes
+    const COMMAND_RESPONSE_KEYMAP     = 131  // 17 bytes
 
     const COMMAND_STATUS_PLUNGER_CONTROL_RIGHT    = 1
     const COMMAND_STATUS_SOLENOIDS_ENABLED        = 2
     const COMMAND_STATUS_KEYBOARD_MODE            = 4
 
-    const COMMAND_SERVICE_ID =        "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
-    const COMMAND_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
+    const COMMAND_VERSION                   = [0,2]
+    const COMMAND_SERVICE_ID                = "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
+    const COMMAND_CHARACTERISTIC_ID         = "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
+    const COMMAND_VERSION_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
 
     const connStatusElement = document.getElementById("conn-status")
     const pinsimLabelElement = document.getElementById("gamepad-label-pinsimID")
@@ -382,6 +398,8 @@
         navigator.bluetooth.getDevices().then(devices => {
             for (let device of devices) {
                 if (device.id === deviceId) {
+                    if (devices.length === 1)
+                        editDevicesMode = false
                     device.forget()
                     showAllowedDevices()
                 }
@@ -395,8 +413,18 @@
             cmdDevice = gatt.device
             console.log('Getting Service...')
             return gatt.getPrimaryService(COMMAND_SERVICE_ID)
-        }).then(service => {
-            console.log('Getting Characteristic...')
+        }).then(async service => {
+            console.log('Getting Characteristics...')
+            const characteristic = await service.getCharacteristic(COMMAND_VERSION_CHARACTERISTIC_ID)
+            if (characteristic) {
+                const v = await characteristic.readValue()
+                if (v.getUint8(0) !== COMMAND_VERSION[0] || v.getUint8(1) !== COMMAND_VERSION[1]) {
+                    throw Error('Bad PinSim Command Version')
+                }
+            }
+            else {
+                throw Error('PinSim Command Version Missing')
+            }
             return service.getCharacteristic(COMMAND_CHARACTERISTIC_ID)
         }).then(characteristic => {
             cmdCharacteristic = characteristic
@@ -447,15 +475,13 @@
             cmdCharacteristic = null
             cmdDevice = null
             gamepadIndex = null
-            pinsimIDStatusElement.innerHTML = ""
             pairingsStatusElement.innerHTML = ""
             plungerStickStatusElement.innerHTML = ""
             solenoidsStatusElement.innerHTML = ""
-            deviceModeStatusElement.innerHTML = ""
             gamepadSectionElement.classList.add("disabled")
             bleSectionElement.classList.add("disabled")
             disconnectButtonElement.classList.add("disabled")
-            keyMappingCommandsElement.style.display = "none"
+            keyMappingCommandsElement.classList.add("disabled")
             setKeyMapUI(0)
             showAllowedDevices()
             displayKeys()
@@ -536,7 +562,12 @@
                 solenoidsStatusElement.innerHTML = solenoidEnabled ? "On" : "Off"
 
                 showAllowedDevices()
-                keyMappingCommandsElement.style.display = (keyboardMode) ? "block" : "none"
+                if (keyboardMode) {
+                    keyMappingCommandsElement.classList.remove("disabled")
+                }
+                else {
+                    keyMappingCommandsElement.classList.add("disabled")
+                }
                 displayName = `PinSim ${keyboardMode?"Keyboard":"Gamepad"}: ${pinsimID}`
                 localStorage.setItem(`PinSimDisplayName-${cmdDevice.id}`, displayName)
                 pinsimLabelElement.innerHTML = ` (${displayName})`

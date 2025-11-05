@@ -107,6 +107,7 @@ const char *XB_MANUFACTURER = "Microsoft";  // "Octopilot Electronics";
 boolean accelerometerEnabled = true;
 boolean plungerEnabled = true;
 boolean solenoidEnabled = true;
+boolean solenoidOverrides[2] = {false, false};
 
 boolean waitingForDeadzoneSetting = false;
 boolean waitingForAccelSetting = false;
@@ -1099,27 +1100,29 @@ void solenoidUpdate()
   // Last state is the previous button state, to help notice state changes
   static bool lastStateLeft  = false;
   static bool lastStateRight = false;
+  const bool newStateLeft  = buttonStatus[POSL1] || solenoidOverrides[0];
+  const bool newStateRight = buttonStatus[POSR1] || solenoidOverrides[1];
 
-  if (buttonStatus[POSL1] && !lastStateLeft) {
+  if (newStateLeft && !lastStateLeft) {
     // Left was just pressed
     lastStateLeft = true;
     solLeft.fwd();
     tiltEnableTime = millis() + 100;
   }
-  else if (!buttonStatus[POSL1] && lastStateLeft) {
+  else if (!newStateLeft && lastStateLeft) {
     // Left was just released
     lastStateLeft = false;
     solLeft.coast();
     tiltEnableTime = millis() + 100;
   }
 
-  if (buttonStatus[POSR1] && !lastStateRight) {
+  if (newStateRight && !lastStateRight) {
     // Right was just pressed
     lastStateRight = true;
     solRight.fwd();
     tiltEnableTime = millis() + 100;
   }
-  else if (!buttonStatus[POSR1] && lastStateRight) {
+  else if (!newStateRight && lastStateRight) {
     // Right was just released
     lastStateRight = false;
     solRight.coast();
@@ -1157,7 +1160,7 @@ void handle_main_task(void *arg)
 
     // Update Solenoids
     // Doing this before buttonUpdate() effectively adds a 16ms delay
-    if (solenoidEnabled) {
+    if (solenoidEnabled || solenoidOverrides[0] || solenoidOverrides[1]) {
       solenoidUpdate();
     }
 
@@ -1297,6 +1300,18 @@ void handlePendingCommand()
       preferences.putBool("solenoidEnabled", solenoidEnabled);
       sendStatus();
       runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
+      break;
+
+    case COMMAND_SET_SOLENOIDS:
+      solenoidEnabled = (pendingCommand[1] != 0);
+      printf("Command: Set Solenoids %s\n", (solenoidEnabled) ? "On" : "Off");
+      preferences.putBool("solenoidEnabled", solenoidEnabled);
+      sendStatus();
+      runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
+      break;
+
+    case COMMAND_FIRE_SOLENOID:
+      solenoidOverrides[pendingCommand[1] != 0] = (pendingCommand[2] != 0);
       break;
 
     case COMMAND_PAIR_CLEAR:
