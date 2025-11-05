@@ -320,21 +320,21 @@ static char kbMap[17] = KB_MAP_DEFAULTS;  // the above buttons as keyboard keys,
 
 void setButton(uint16_t xbButton, uint8_t buttonIndex, boolean pressed)
 {
-  if (!useKeyboardMode) {
-    gamepad.setButton(xbButton, pressed);
-  } else {
-    if (kbMap[buttonIndex] != '.') {
-      kb.set(kbMap[buttonIndex], pressed);
+    if (!useKeyboardMode) {
+        gamepad.setButton(xbButton, pressed);
+    } else {
+        if (kbMap[buttonIndex] != '.') {
+            kb.set(kbMap[buttonIndex], pressed);
+        }
     }
-  }
 }
 
 void sendKbDPad(uint8_t direction)
 {
-  kb.set(kbMap[POSUP], direction & XboxDpadFlags::NORTH);
-  kb.set(kbMap[POSDN], direction & XboxDpadFlags::SOUTH);
-  kb.set(kbMap[POSLT], direction & XboxDpadFlags::WEST);
-  kb.set(kbMap[POSRT], direction & XboxDpadFlags::EAST);
+    kb.set(kbMap[POSUP], direction & XboxDpadFlags::NORTH);
+    kb.set(kbMap[POSDN], direction & XboxDpadFlags::SOUTH);
+    kb.set(kbMap[POSLT], direction & XboxDpadFlags::WEST);
+    kb.set(kbMap[POSRT], direction & XboxDpadFlags::EAST);
 }
 
 uint8_t buttonStatus[NUM_BUTTONS];  // array Holds a "Snapshot" of the button status to parse and manipulate
@@ -361,438 +361,438 @@ bool LED_states[50];
 
 // Use LED_Set() and LED_SetAnalog() to control LEDS.
 // These will ignore LEDs with pin numbers set to 0 (not used on the current board revision)
-void LED_Set(int pin, bool state, bool skipSetState=false) {
-  if (pin) {
-    digitalWrite(pin, state);
-  }
-  if (!skipSetState) LED_states[pin] = state;
+void LED_Set(int pin, bool state, bool skipSetState=false)
+{
+    if (pin) {
+        digitalWrite(pin, state);
+    }
+    if (!skipSetState) LED_states[pin] = state;
 }
+
 void LED_SetAnalog(int pin, int value) {
-  if (pin) {
-    analogWrite(pin, value);
-  }
+    if (pin) {
+        analogWrite(pin, value);
+    }
 }
 
 
 // Configure Inputs and Outputs
 void setupPins()
 {
-  // Configure the direction of the pins
-  // All inputs with internal pullups enabled
-  pinMode(pinDpadU, INPUT_PULLUP);
-  pinMode(pinDpadD, INPUT_PULLUP);
-  pinMode(pinDpadL, INPUT_PULLUP);
-  pinMode(pinDpadR, INPUT_PULLUP);
-  pinMode(pinB1, INPUT_PULLUP);
-  pinMode(pinB2, INPUT_PULLUP);
-  pinMode(pinB3, INPUT_PULLUP);
-  pinMode(pinB4, INPUT_PULLUP);
-  pinMode(pinB9, INPUT_PULLUP);
-  pinMode(pinB10, INPUT_PULLUP);
-  pinMode(pinLT, INPUT_PULLUP);
-  pinMode(pinRT, INPUT_PULLUP);
-  pinMode(pinST, INPUT_PULLUP);
-  pinMode(pinBK, INPUT_PULLUP);
-  pinMode(pinXB, INPUT_PULLUP);
-  pinMode(rumbleSmall, OUTPUT);
-  pinMode(rumbleLarge, OUTPUT);
+    // Configure the direction of the pins
+    // All inputs with internal pullups enabled
+    pinMode(pinDpadU, INPUT_PULLUP);
+    pinMode(pinDpadD, INPUT_PULLUP);
+    pinMode(pinDpadL, INPUT_PULLUP);
+    pinMode(pinDpadR, INPUT_PULLUP);
+    pinMode(pinB1, INPUT_PULLUP);
+    pinMode(pinB2, INPUT_PULLUP);
+    pinMode(pinB3, INPUT_PULLUP);
+    pinMode(pinB4, INPUT_PULLUP);
+    pinMode(pinB9, INPUT_PULLUP);
+    pinMode(pinB10, INPUT_PULLUP);
+    pinMode(pinLT, INPUT_PULLUP);
+    pinMode(pinRT, INPUT_PULLUP);
+    pinMode(pinST, INPUT_PULLUP);
+    pinMode(pinBK, INPUT_PULLUP);
+    pinMode(pinXB, INPUT_PULLUP);
+    pinMode(rumbleSmall, OUTPUT);
+    pinMode(rumbleLarge, OUTPUT);
 
-  if (pinLEDStart) pinMode(pinLEDStart, OUTPUT);
-  if (pinLEDLR) pinMode(pinLEDLR, OUTPUT);
-  if (pinLEDBG) pinMode(pinLEDBG, OUTPUT);
-  if (pinLEDABC) pinMode(pinLEDABC, OUTPUT);
-  if (pinLEDXYZ) pinMode(pinLEDXYZ, OUTPUT);
-  if (pinLEDg) pinMode(pinLEDg, OUTPUT);
-  if (pinLEDr) pinMode(pinLEDr, OUTPUT);
+    if (pinLEDStart) pinMode(pinLEDStart, OUTPUT);
+    if (pinLEDLR) pinMode(pinLEDLR, OUTPUT);
+    if (pinLEDBG) pinMode(pinLEDBG, OUTPUT);
+    if (pinLEDABC) pinMode(pinLEDABC, OUTPUT);
+    if (pinLEDXYZ) pinMode(pinLEDXYZ, OUTPUT);
+    if (pinLEDg) pinMode(pinLEDg, OUTPUT);
+    if (pinLEDr) pinMode(pinLEDr, OUTPUT);
 
-  // Disable bright neopixel on ESP32-S3 Dev Board
-  // pinMode(LED_BUILTIN, OUTPUT);
-  // LED_Set(LED_BUILTIN, LOW);
+    // Disable bright neopixel on ESP32-S3 Dev Board
+    // pinMode(LED_BUILTIN, OUTPUT);
+    // LED_Set(LED_BUILTIN, LOW);
 
-  // Set up LED initial states
-  LED_SetAnalog(pinLEDr, PCB_LED_BRIGHTNESS);
-  LED_SetAnalog(pinLEDg, 0);
-  LED_Set(pinLEDStart, LOW);
-  LED_Set(pinLEDLR, LOW);
-  LED_Set(pinLEDBG, LOW);
-  LED_Set(pinLEDABC, LOW);
-  LED_Set(pinLEDXYZ, LOW);
+    // Set up LED initial states
+    LED_SetAnalog(pinLEDr, PCB_LED_BRIGHTNESS);
+    LED_SetAnalog(pinLEDg, 0);
+    LED_Set(pinLEDStart, LOW);
+    LED_Set(pinLEDLR, LOW);
+    LED_Set(pinLEDBG, LOW);
+    LED_Set(pinLEDABC, LOW);
+    LED_Set(pinLEDXYZ, LOW);
 
-  // Set button timeouts
-  dpadUP.setDebounceTime(MILLIDEBOUNCE);
-  dpadDOWN.setDebounceTime(MILLIDEBOUNCE);
-  dpadLEFT.setDebounceTime(MILLIDEBOUNCE);
-  dpadRIGHT.setDebounceTime(MILLIDEBOUNCE);
-  button1.setDebounceTime(MILLIDEBOUNCE);
-  button2.setDebounceTime(MILLIDEBOUNCE);
-  button3.setDebounceTime(MILLIDEBOUNCE);
-  button4.setDebounceTime(MILLIDEBOUNCE);
-  buttonLT.setDebounceTime(MILLIDEBOUNCE);
-  buttonRT.setDebounceTime(MILLIDEBOUNCE);
-  buttonSTART.setDebounceTime(MILLIDEBOUNCE);
-  buttonBACK.setDebounceTime(MILLIDEBOUNCE);
-  buttonXBOX.setDebounceTime(MILLIDEBOUNCE);
-  button9.setDebounceTime(MILLIDEBOUNCE);
-  button10.setDebounceTime(MILLIDEBOUNCE);
+    // Set button timeouts
+    dpadUP.setDebounceTime(MILLIDEBOUNCE);
+    dpadDOWN.setDebounceTime(MILLIDEBOUNCE);
+    dpadLEFT.setDebounceTime(MILLIDEBOUNCE);
+    dpadRIGHT.setDebounceTime(MILLIDEBOUNCE);
+    button1.setDebounceTime(MILLIDEBOUNCE);
+    button2.setDebounceTime(MILLIDEBOUNCE);
+    button3.setDebounceTime(MILLIDEBOUNCE);
+    button4.setDebounceTime(MILLIDEBOUNCE);
+    buttonLT.setDebounceTime(MILLIDEBOUNCE);
+    buttonRT.setDebounceTime(MILLIDEBOUNCE);
+    buttonSTART.setDebounceTime(MILLIDEBOUNCE);
+    buttonBACK.setDebounceTime(MILLIDEBOUNCE);
+    buttonXBOX.setDebounceTime(MILLIDEBOUNCE);
+    button9.setDebounceTime(MILLIDEBOUNCE);
+    button10.setDebounceTime(MILLIDEBOUNCE);
 
-  // Set up DATA and CLK pins for the Acceleromter I2C interface
-  if (accelerometerEnabled) {
-    Wire.setPins(pinACC_SDA, pinACC_SCL);
-  }
+    // Set up DATA and CLK pins for the Acceleromter I2C interface
+    if (accelerometerEnabled) {
+        Wire.setPins(pinACC_SDA, pinACC_SCL);
+    }
 }
 
 
 // Blink when the LEDs are already on
 void configFeedbackBlinks(int n)
 {
-  for (int i = 0; i < n-1; i++) {
+    for (int i = 0; i < n - 1; i++) {
+        LED_Set(pinLEDStart, LOW);
+        if (pinLEDBG) LED_Set(pinLEDBG, LOW);
+        vTaskDelay_ms(300);
+        LED_Set(pinLEDStart, HIGH);
+        if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
+        vTaskDelay_ms(300);
+    }
     LED_Set(pinLEDStart, LOW);
     if (pinLEDBG) LED_Set(pinLEDBG, LOW);
     vTaskDelay_ms(300);
     LED_Set(pinLEDStart, HIGH);
     if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
-    vTaskDelay_ms(300);
-  }
-  LED_Set(pinLEDStart, LOW);
-  if (pinLEDBG) LED_Set(pinLEDBG, LOW);
-  vTaskDelay_ms(300);
-  LED_Set(pinLEDStart, HIGH);
-  if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
 }
 
 
 // Blink when the LEDs are already off
 void runtimeFeedbackBlinks(int n)
 {
-  for (int i = 0; i < n; i++) {
-    LED_Set(pinLEDStart, HIGH);
-    if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
-    vTaskDelay_ms(300);
-    LED_Set(pinLEDStart, LOW);
-    if (pinLEDBG) LED_Set(pinLEDBG, LOW);
-    if (i == n-1) break; // Skip the last delay
-    vTaskDelay_ms(300);
-  }
+    for (int i = 0; i < n; i++) {
+        LED_Set(pinLEDStart, HIGH);
+        if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
+        vTaskDelay_ms(300);
+        LED_Set(pinLEDStart, LOW);
+        if (pinLEDBG) LED_Set(pinLEDBG, LOW);
+        if (i == n - 1) break; // Skip the last delay
+        vTaskDelay_ms(300);
+    }
 }
 
 
-uint16_t readingToDistance(int16_t reading) {
-  // The signal from the IR distance detector is curved. Let's linearize. Thanks for the help Twitter!
-  float voltage = reading / 310.0f;
-  if (voltage == 0) return 0;  // Avoid divide by zero
-  float linearDistance = ((0.1621f * voltage) + 1.0f) / (0.1567f * voltage);
-  return linearDistance * 100;
+uint16_t readingToDistance(int16_t reading)
+{
+    // The signal from the IR distance detector is curved. Let's linearize. Thanks for the help Twitter!
+    float voltage = reading / 310.0f;
+    if (voltage == 0) return 0; // Avoid divide by zero
+    float linearDistance = ((0.1621f * voltage) + 1.0f) / (0.1567f * voltage);
+    return linearDistance * 100;
 }
 
 
 void getPlungerSamples()
 {
-  int total = 0;
+    int total = 0;
 
-  for (int i = 0; i < numSamples; i++) {
-    total += analogRead(pinPlunger);
-  }
-  plungerAverage = (total+numSamples/2)/numSamples;
+    for (int i = 0; i < numSamples; i++) {
+        total += analogRead(pinPlunger);
+    }
+    plungerAverage = (total + numSamples / 2) / numSamples;
 }
 
 
 void getPlungerMax()
 {
-  printf("Plunger calibration: starting...\n");
+    printf("Plunger calibration: starting...\n");
 
-  configFeedbackBlinks(1);
-  getPlungerSamples();
-  plungerMin = plungerAverage + plungerMinOffset;
-  plungerMax = plungerMin + 1;
-
-  printf("Plunger calibration: recorded min.\n");
-  printf("Plunger calibration: pull plunger back to record max...\n");
-
-  while (plungerAverage < plungerMin + 100) {
-    // wait for the plunger to be pulled
+    configFeedbackBlinks(1);
     getPlungerSamples();
-    vTaskDelay_ms(16);
-  }
+    plungerMin = plungerAverage + plungerMinOffset;
+    plungerMax = plungerMin + 1;
 
-  while (plungerAverage > plungerMin) {
-    // start recording plungerMax
-    getPlungerSamples();
-    if (plungerAverage > plungerMax) {
-      plungerMax = plungerAverage;
+    printf("Plunger calibration: recorded min.\n");
+    printf("Plunger calibration: pull plunger back to record max...\n");
+
+    while (plungerAverage < plungerMin + 100) {
+        // wait for the plunger to be pulled
+        getPlungerSamples();
+        vTaskDelay_ms(16);
     }
-    vTaskDelay_ms(16);
-  }
 
-  printf("Plunger calibration: recorded max.\n");
+    while (plungerAverage > plungerMin) {
+        // start recording plungerMax
+        getPlungerSamples();
+        if (plungerAverage > plungerMax) {
+            plungerMax = plungerAverage;
+        }
+        vTaskDelay_ms(16);
+    }
 
-  preferences.putInt("plungerMin", plungerMin);
-  preferences.putInt("plungerMax", plungerMax);
+    printf("Plunger calibration: recorded max.\n");
 
-  plungerMaxDistance = readingToDistance(plungerMin);
-  plungerMinDistance = readingToDistance(plungerMax);
-  lastDistance = plungerMaxDistance;
+    preferences.putInt("plungerMin", plungerMin);
+    preferences.putInt("plungerMax", plungerMax);
 
-  // Reset plungerZero to make sure we have full plunger movement so we can preperly set a new zero value
-  plungerZeroValue = 0;
-  preferences.putInt("plungerZero", plungerMin);
+    plungerMaxDistance = readingToDistance(plungerMin);
+    plungerMinDistance = readingToDistance(plungerMax);
+    lastDistance = plungerMaxDistance;
 
-  printf("Plunger calibration data stored to flash.\n");
-  printf("---- min: %d, max: %d\n", plungerMin, plungerMax);
-  printf("Waiting for Dead Zone calibration.  Adjust plunger and press Start to set it...\n");
-  waitingForDeadzoneSetting = true;
+    // Reset plungerZero to make sure we have full plunger movement so we can preperly set a new zero value
+    plungerZeroValue = 0;
+    preferences.putInt("plungerZero", plungerMin);
 
-  configFeedbackBlinks(2);
+    printf("Plunger calibration data stored to flash.\n");
+    printf("---- min: %d, max: %d\n", plungerMin, plungerMax);
+    printf("Waiting for Dead Zone calibration.  Adjust plunger and press Start to set it...\n");
+    waitingForDeadzoneSetting = true;
+
+    configFeedbackBlinks(2);
 }
 
 
 void deadZoneCompensation()
 {
-  plungerZeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
-  if (plungerZeroValue < 0) plungerZeroValue = 0;
-  preferences.putInt("plungerZero", plungerZeroValue);
-  printf("Plunger deadzone data stored to flash.\n");
-  printf("---- plungerZeroValue: %d\n", plungerZeroValue);
-  configFeedbackBlinks(3);
+    plungerZeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
+    if (plungerZeroValue < 0) plungerZeroValue = 0;
+    preferences.putInt("plungerZero", plungerZeroValue);
+    printf("Plunger deadzone data stored to flash.\n");
+    printf("---- plungerZeroValue: %d\n", plungerZeroValue);
+    configFeedbackBlinks(3);
 }
 
 
 void checkForConfigButtonPresses()
 {
-  // Hold Back and A and B on boot to toggle useKeyboardMode.  Reboots into new mode.
-  if (buttonStatus[POSBK] && buttonStatus[POSB1] && buttonStatus[POSB2]) {
-    useKeyboardMode = !useKeyboardMode;
-    preferences.putBool("useKeyboardMode", useKeyboardMode);
-    while (buttonStatus[POSBK]) {
-      delay(16);
-      buttonUpdate();
-    }
-    ESP.restart();
-  }
-
-  // Hold Back and dPad Down on boot to clear BLE paired devices
-  if (buttonStatus[POSBK] && buttonStatus[POSDN]) {
-    if (useKeyboardMode) {
-      kb.clearWhitelist();
-    }
-    else {
-      gamepad.clearWhitelist();
-    }
-    configFeedbackBlinks(1);
-    // Wait for button release
-    while (buttonStatus[POSDN]) {
-      delay(16);
-      buttonUpdate();
-    }
-  }
-
-  // Hold Back and dPad Up on boot to allow pairing a new device
-  if (buttonStatus[POSBK] && buttonStatus[POSUP]) {
-    printf("Allow new devices to connect...\n");
-    if (useKeyboardMode) {
-      kb.allowNewConnections(true);
-    }
-    else {
-      gamepad.allowNewConnections(true);
-    }
-    configFeedbackBlinks(2);
-    // Wait for button release
-    while (buttonStatus[POSUP]) {
-      delay(16);
-      buttonUpdate();
-    }
-  }
-
-  // rumble test (hold Back and Left Flipper on boot)
-  if (buttonStatus[POSBK] && buttonStatus[POSL1]) {
-    printf("Left Flipper down at start - Rumble Test\n");
-    configFeedbackBlinks(1);
-    for (int i = 0; i < 256; i++) {
-      analogWrite(rumbleSmall, i);
-      vTaskDelay_ms(10);
-    }
-    for (int i = 255; i >= 0; i--) {
-      analogWrite(rumbleSmall, i);
-      vTaskDelay_ms(10);
+    // Hold Back and A and B on boot to toggle useKeyboardMode.  Reboots into new mode.
+    if (buttonStatus[POSBK] && buttonStatus[POSB1] && buttonStatus[POSB2]) {
+        useKeyboardMode = !useKeyboardMode;
+        preferences.putBool("useKeyboardMode", useKeyboardMode);
+        while (buttonStatus[POSBK]) {
+            delay(16);
+            buttonUpdate();
+        }
+        ESP.restart();
     }
 
-    for (int i = 0; i < 256; i++) {
-      analogWrite(rumbleLarge, i);
-      vTaskDelay_ms(10);
+    // Hold Back and dPad Down on boot to clear BLE paired devices
+    if (buttonStatus[POSBK] && buttonStatus[POSDN]) {
+        if (useKeyboardMode) {
+            kb.clearWhitelist();
+        } else {
+            gamepad.clearWhitelist();
+        }
+        configFeedbackBlinks(1);
+        // Wait for button release
+        while (buttonStatus[POSDN]) {
+            delay(16);
+            buttonUpdate();
+        }
     }
-    for (int i = 255; i >= 0; i--) {
-      analogWrite(rumbleLarge, i);
-      vTaskDelay_ms(10);
-    }
-    // Wait for button release
-    while (buttonStatus[POSL1]) {
-      delay(16);
-      buttonUpdate();
-    }
-  }
 
-  if (accelerometerEnabled) {
-    if (buttonStatus[POSBK] && buttonStatus[POSRT]) {
-      waitingForAccelSetting = true;
-      printf("Waiting for Accelerometer calibration.  Close lid and press Start to set it...\n");
-      configFeedbackBlinks(1);
-      // Wait for button release
-      while (buttonStatus[POSRT]) {
-        delay(16);
-        buttonUpdate();
-      }
+    // Hold Back and dPad Up on boot to allow pairing a new device
+    if (buttonStatus[POSBK] && buttonStatus[POSUP]) {
+        printf("Allow new devices to connect...\n");
+        if (useKeyboardMode) {
+            kb.allowNewConnections(true);
+        } else {
+            gamepad.allowNewConnections(true);
+        }
+        configFeedbackBlinks(2);
+        // Wait for button release
+        while (buttonStatus[POSUP]) {
+            delay(16);
+            buttonUpdate();
+        }
     }
-  }
 
-  // If BACK and Left D-Pad are pressed simultaneously, toggle controlShuffle, and persist that value
-  if (buttonStatus[POSBK] && buttonStatus[POSLT]) {
-    controlShuffle = !controlShuffle;
-    preferences.putBool("controlShuffle", controlShuffle);
-    if (controlShuffle) {
-      printf("Control Shuffle Enabled: Plunge with Left Stick, Tilt with D-Pad.\n");
-      configFeedbackBlinks(2);
-    }
-    else {
-      printf("Control Shuffle Disabled: Plunge with Right Stick, Tilt with Left Stick.\n");
-      configFeedbackBlinks(1);
-    }
-    // Wait for button release
-    while (buttonStatus[POSLT]) {
-      delay(16);
-      buttonUpdate();
-    }
-  }
+    // rumble test (hold Back and Left Flipper on boot)
+    if (buttonStatus[POSBK] && buttonStatus[POSL1]) {
+        printf("Left Flipper down at start - Rumble Test\n");
+        configFeedbackBlinks(1);
+        for (int i = 0; i < 256; i++) {
+            analogWrite(rumbleSmall, i);
+            vTaskDelay_ms(10);
+        }
+        for (int i = 255; i >= 0; i--) {
+            analogWrite(rumbleSmall, i);
+            vTaskDelay_ms(10);
+        }
 
-  if (plungerEnabled) {
-    // to calibrate, hold Back and Start
-    if (buttonStatus[POSBK] && buttonStatus[POSST]) {
-      printf("Begin Plunger Calibration\n");
-      getPlungerMax();
-      // Wait for button release
-      while (buttonStatus[POSST]) {
-        delay(16);
-        buttonUpdate();
-      }
+        for (int i = 0; i < 256; i++) {
+            analogWrite(rumbleLarge, i);
+            vTaskDelay_ms(10);
+        }
+        for (int i = 255; i >= 0; i--) {
+            analogWrite(rumbleLarge, i);
+            vTaskDelay_ms(10);
+        }
+        // Wait for button release
+        while (buttonStatus[POSL1]) {
+            delay(16);
+            buttonUpdate();
+        }
     }
-  }
 
-  // Solenoid toggle (hold Back and Right Flipper)
-  if (buttonStatus[POSBK] && buttonStatus[POSR1]) {
-    solenoidEnabled = !solenoidEnabled;
-    preferences.putBool("solenoidEnabled", solenoidEnabled);
-    if (solenoidEnabled) {
-      printf("Solenoids Enabled\n");
-      configFeedbackBlinks(2);
+    if (accelerometerEnabled) {
+        if (buttonStatus[POSBK] && buttonStatus[POSRT]) {
+            waitingForAccelSetting = true;
+            printf("Waiting for Accelerometer calibration.  Close lid and press Start to set it...\n");
+            configFeedbackBlinks(1);
+            // Wait for button release
+            while (buttonStatus[POSRT]) {
+                delay(16);
+                buttonUpdate();
+            }
+        }
     }
-    else {
-      printf("Solenoids Disabled\n");
-      configFeedbackBlinks(1);
+
+    // If BACK and Left D-Pad are pressed simultaneously, toggle controlShuffle, and persist that value
+    if (buttonStatus[POSBK] && buttonStatus[POSLT]) {
+        controlShuffle = !controlShuffle;
+        preferences.putBool("controlShuffle", controlShuffle);
+        if (controlShuffle) {
+            printf("Control Shuffle Enabled: Plunge with Left Stick, Tilt with D-Pad.\n");
+            configFeedbackBlinks(2);
+        } else {
+            printf("Control Shuffle Disabled: Plunge with Right Stick, Tilt with Left Stick.\n");
+            configFeedbackBlinks(1);
+        }
+        // Wait for button release
+        while (buttonStatus[POSLT]) {
+            delay(16);
+            buttonUpdate();
+        }
     }
-    // Wait for button release
-    while (buttonStatus[POSR1]) {
-      delay(16);
-      buttonUpdate();
+
+    if (plungerEnabled) {
+        // to calibrate, hold Back and Start
+        if (buttonStatus[POSBK] && buttonStatus[POSST]) {
+            printf("Begin Plunger Calibration\n");
+            getPlungerMax();
+            // Wait for button release
+            while (buttonStatus[POSST]) {
+                delay(16);
+                buttonUpdate();
+            }
+        }
     }
-  }
+
+    // Solenoid toggle (hold Back and Right Flipper)
+    if (buttonStatus[POSBK] && buttonStatus[POSR1]) {
+        solenoidEnabled = !solenoidEnabled;
+        preferences.putBool("solenoidEnabled", solenoidEnabled);
+        if (solenoidEnabled) {
+            printf("Solenoids Enabled\n");
+            configFeedbackBlinks(2);
+        } else {
+            printf("Solenoids Disabled\n");
+            configFeedbackBlinks(1);
+        }
+        // Wait for button release
+        while (buttonStatus[POSR1]) {
+            delay(16);
+            buttonUpdate();
+        }
+    }
 }
 
 void setup()
 {
-  setupPins();
-  preferences.begin("PinSimESP32");
-  pinsimID = preferences.getUChar("pinsimID", 0);
-  if (preferences.isKey("kbMap")) {
-      preferences.getBytes("kbMap", kbMap, 16);
-  }
-  pendingCommand[0] = 0;
-
-  // delay(2000);
-  printf("\n\n");
-  printf("PinSim ESP32 Starting up\n");
-
-  useKeyboardMode = preferences.getBool("useKeyboardMode", useKeyboardMode);
-
-  uint8_t mac_bytes[6];
-  esp_efuse_mac_get_default(mac_bytes);
-  printf("HW MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
-  if (useKeyboardMode) {
-    esp_base_mac_addr_get(mac_bytes);
-    mac_bytes[5]++;
-    esp_base_mac_addr_set(mac_bytes);
-    printf("KB using MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]);
-  }
-
-  // Set up vibration event handler
-  FunctionSlot<XboxGamepadOutputReportData> vibrationSlot(OnVibrateEvent);
-  gamepad.onVibrate.attach(vibrationSlot);
-
-  if (!useKeyboardMode) {
-    gamepad.startServer(XB_NAME, XB_MANUFACTURER, rxCommand);
-  }
-  else {
-    kb.begin("PinSim KB Controller", "Octopilot", rxCommand);
-  }
-
-  for (int i = 0; i < 6; i++) {
-    delay(16);
-    buttonUpdate();
-  }
-
-  /* Initialise the sensor */
-  if (!accel.begin()) {
-    printf("Accelerometer setup failed\n");
-    /* There was a problem detecting the ADXL345 ... check your connections */
-    accelerometerEnabled = false;
-
-    accel.setRange(ADXL345_RANGE_2_G);
-    delay(100);
-
-    zeroX = preferences.getInt("accelZeroX", zeroX);
-    zeroY = preferences.getInt("accelZeroY", zeroY);
-  }
-
-  if (plungerEnabled) {
-    plungerMin = preferences.getInt("plungerMin", plungerMin);  // With default value
-    plungerMax = preferences.getInt("plungerMax", plungerMax);  // With default value
-    plungerZeroValue  = preferences.getInt("plungerZero", plungerZeroValue);  // With default value
-  }
-
-  controlShuffle = preferences.getBool("controlShuffle", controlShuffle);
-  solenoidEnabled = preferences.getBool("solenoidEnabled", solenoidEnabled);
-
-  // Hold Back button on boot to enter config mode
-  if (buttonStatus[POSBK]) {
-    static uint8_t ledON = 0;
-    if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
-    while (buttonStatus[POSBK]) {
-      LED_Set(pinLEDStart, (ledON & 0x02)!=0);
-      ledON++;
-      checkForConfigButtonPresses();
-      delay(16);
-      buttonUpdate();
+    setupPins();
+    preferences.begin("PinSimESP32");
+    pinsimID = preferences.getUChar("pinsimID", 0);
+    if (preferences.isKey("kbMap")) {
+        preferences.getBytes("kbMap", kbMap, 16);
     }
-    if (pinLEDBG) LED_Set(pinLEDBG, LOW);
-  }
+    pendingCommand[0] = 0;
 
-  if (!useKeyboardMode) {
-    gamepad.startAdvertising();
-  } else {
-    kb.startAdvertising();
-  }
+    // delay(2000);
+    printf("\n\n");
+    printf("PinSim ESP32 Starting up\n");
 
-  // plunger setup
-  if (plungerEnabled) {
-    // linear conversions
-    plungerMaxDistance = readingToDistance(plungerMin);
-    plungerMinDistance = readingToDistance(plungerMax);
-    lastDistance = plungerMaxDistance;
-  }
+    useKeyboardMode = preferences.getBool("useKeyboardMode", useKeyboardMode);
 
-  if (solenoidEnabled) {
-    solLeft.setup();
-    solRight.setup();
-  }
+    uint8_t mac_bytes[6];
+    esp_efuse_mac_get_default(mac_bytes);
+    printf("HW MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4],
+           mac_bytes[5]);
+    if (useKeyboardMode) {
+        esp_base_mac_addr_get(mac_bytes);
+        mac_bytes[5]++;
+        esp_base_mac_addr_set(mac_bytes);
+        printf("KB using MAC: %02X%02X %02X%02X %02X%02X\n", mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3],
+               mac_bytes[4], mac_bytes[5]);
+    }
 
-  xTaskCreatePinnedToCore(&handle_main_task, "mani_loop", 8192, NULL, 20, &mainTaskHandle, 1);
+    // Set up vibration event handler
+    FunctionSlot<XboxGamepadOutputReportData> vibrationSlot(OnVibrateEvent);
+    gamepad.onVibrate.attach(vibrationSlot);
+
+    if (!useKeyboardMode) {
+        gamepad.startServer(XB_NAME, XB_MANUFACTURER, rxCommand);
+    } else {
+        kb.begin("PinSim KB Controller", "Octopilot", rxCommand);
+    }
+
+    for (int i = 0; i < 6; i++) {
+        delay(16);
+        buttonUpdate();
+    }
+
+    /* Initialise the sensor */
+    if (!accel.begin()) {
+        printf("Accelerometer setup failed\n");
+        /* There was a problem detecting the ADXL345 ... check your connections */
+        accelerometerEnabled = false;
+
+        accel.setRange(ADXL345_RANGE_2_G);
+        delay(100);
+
+        zeroX = preferences.getInt("accelZeroX", zeroX);
+        zeroY = preferences.getInt("accelZeroY", zeroY);
+    }
+
+    if (plungerEnabled) {
+        plungerMin = preferences.getInt("plungerMin", plungerMin); // With default value
+        plungerMax = preferences.getInt("plungerMax", plungerMax); // With default value
+        plungerZeroValue = preferences.getInt("plungerZero", plungerZeroValue); // With default value
+    }
+
+    controlShuffle = preferences.getBool("controlShuffle", controlShuffle);
+    solenoidEnabled = preferences.getBool("solenoidEnabled", solenoidEnabled);
+
+    // Hold Back button on boot to enter config mode
+    if (buttonStatus[POSBK]) {
+        static uint8_t ledON = 0;
+        if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
+        while (buttonStatus[POSBK]) {
+            LED_Set(pinLEDStart, (ledON & 0x02) != 0);
+            ledON++;
+            checkForConfigButtonPresses();
+            delay(16);
+            buttonUpdate();
+        }
+        if (pinLEDBG) LED_Set(pinLEDBG, LOW);
+    }
+
+    if (!useKeyboardMode) {
+        gamepad.startAdvertising();
+    } else {
+        kb.startAdvertising();
+    }
+
+    // plunger setup
+    if (plungerEnabled) {
+        // linear conversions
+        plungerMaxDistance = readingToDistance(plungerMin);
+        plungerMinDistance = readingToDistance(plungerMax);
+        lastDistance = plungerMaxDistance;
+    }
+
+    if (solenoidEnabled) {
+        solLeft.setup();
+        solRight.setup();
+    }
+
+    xTaskCreatePinnedToCore(&handle_main_task, "mani_loop", 8192, NULL, 20, &mainTaskHandle, 1);
 }
 
 // Nothing to do in loop().  Use handle_main_task() instead.
@@ -802,57 +802,57 @@ void loop() {}
 // Update the debounced button statuses
 void buttonUpdate()
 {
-  dpadUP.loop();
-  dpadDOWN.loop();
-  dpadLEFT.loop();
-  dpadRIGHT.loop();
+    dpadUP.loop();
+    dpadDOWN.loop();
+    dpadLEFT.loop();
+    dpadRIGHT.loop();
 
-  // Disable button LEDs while testing the buttons
-  LED_Set(pinLEDABC, LOW, true);
-  button1.loop();
-  button2.loop();
-  button9.loop();
-  LED_Set(pinLEDABC, LED_states[pinLEDABC]);
+    // Disable button LEDs while testing the buttons
+    LED_Set(pinLEDABC, LOW, true);
+    button1.loop();
+    button2.loop();
+    button9.loop();
+    LED_Set(pinLEDABC, LED_states[pinLEDABC]);
 
-  // Disable button LEDs while testing the buttons
-  LED_Set(pinLEDXYZ, LOW, true);
-  button3.loop();
-  button4.loop();
-  button10.loop();
-  LED_Set(pinLEDXYZ, LED_states[pinLEDXYZ]);
+    // Disable button LEDs while testing the buttons
+    LED_Set(pinLEDXYZ, LOW, true);
+    button3.loop();
+    button4.loop();
+    button10.loop();
+    LED_Set(pinLEDXYZ, LED_states[pinLEDXYZ]);
 
-  // Disable button LEDs while testing the buttons
-  LED_Set(pinLEDLR, LOW, true);
-  buttonLT.loop();
-  buttonRT.loop();
-  LED_Set(pinLEDLR, LED_states[pinLEDLR]);
+    // Disable button LEDs while testing the buttons
+    LED_Set(pinLEDLR, LOW, true);
+    buttonLT.loop();
+    buttonRT.loop();
+    LED_Set(pinLEDLR, LED_states[pinLEDLR]);
 
-  // Disable button LEDs while testing the buttons
-  LED_Set(pinLEDStart, LOW, true);
-  buttonSTART.loop();
-  LED_Set(pinLEDStart, LED_states[pinLEDStart]);
+    // Disable button LEDs while testing the buttons
+    LED_Set(pinLEDStart, LOW, true);
+    buttonSTART.loop();
+    LED_Set(pinLEDStart, LED_states[pinLEDStart]);
 
-  // Disable button LEDs while testing the buttons
-  LED_Set(pinLEDBG, LOW, true);
-  buttonBACK.loop();
-  buttonXBOX.loop();
-  LED_Set(pinLEDBG, LED_states[pinLEDBG]);
+    // Disable button LEDs while testing the buttons
+    LED_Set(pinLEDBG, LOW, true);
+    buttonBACK.loop();
+    buttonXBOX.loop();
+    LED_Set(pinLEDBG, LED_states[pinLEDBG]);
 
-  buttonStatus[POSUP] = dpadUP.isPressed();
-  buttonStatus[POSDN] = dpadDOWN.isPressed();
-  buttonStatus[POSLT] = dpadLEFT.isPressed();
-  buttonStatus[POSRT] = dpadRIGHT.isPressed();
-  buttonStatus[POSB1] = button1.isPressed();
-  buttonStatus[POSB2] = button2.isPressed();
-  buttonStatus[POSB3] = button3.isPressed();
-  buttonStatus[POSB4] = button4.isPressed();
-  buttonStatus[POSL1] = buttonLT.isPressed();
-  buttonStatus[POSR1] = buttonRT.isPressed();
-  buttonStatus[POSST] = buttonSTART.isPressed();
-  buttonStatus[POSBK] = buttonBACK.isPressed();
-  buttonStatus[POSXB] = buttonXBOX.isPressed();
-  buttonStatus[POSB9] = button9.isPressed();
-  buttonStatus[POSB10] = button10.isPressed();
+    buttonStatus[POSUP] = dpadUP.isPressed();
+    buttonStatus[POSDN] = dpadDOWN.isPressed();
+    buttonStatus[POSLT] = dpadLEFT.isPressed();
+    buttonStatus[POSRT] = dpadRIGHT.isPressed();
+    buttonStatus[POSB1] = button1.isPressed();
+    buttonStatus[POSB2] = button2.isPressed();
+    buttonStatus[POSB3] = button3.isPressed();
+    buttonStatus[POSB4] = button4.isPressed();
+    buttonStatus[POSL1] = buttonLT.isPressed();
+    buttonStatus[POSR1] = buttonRT.isPressed();
+    buttonStatus[POSST] = buttonSTART.isPressed();
+    buttonStatus[POSBK] = buttonBACK.isPressed();
+    buttonStatus[POSXB] = buttonXBOX.isPressed();
+    buttonStatus[POSB9] = button9.isPressed();
+    buttonStatus[POSB10] = button10.isPressed();
 }
 
 
@@ -860,278 +860,272 @@ void buttonUpdate()
 // Wait until DELAY_HOME ms after button initially pressed to start sending the button press
 void pressHome(bool isPressed)
 {
-  static int wasPressed = 0;  // 0 = was up, 1 = was waiting, 2 = was pressed
-  static long lastPress = 0;
-  long currentTime = millis();
-
-  if (wasPressed == 0 && isPressed) {
-    lastPress = currentTime;
-    wasPressed = 1;
-  }
-  else if (wasPressed == 1 && isPressed) {
+    static int wasPressed = 0; // 0 = was up, 1 = was waiting, 2 = was pressed
+    static long lastPress = 0;
     long currentTime = millis();
-    if (currentTime > lastPress + DELAY_HOME) {
-      setButton(XBOX_BUTTON_HOME, POSBK, true);
-      wasPressed = 2;
+
+    if (wasPressed == 0 && isPressed) {
+        lastPress = currentTime;
+        wasPressed = 1;
+    } else if (wasPressed == 1 && isPressed) {
+        long currentTime = millis();
+        if (currentTime > lastPress + DELAY_HOME) {
+            setButton(XBOX_BUTTON_HOME, POSBK, true);
+            wasPressed = 2;
+        }
+    } else if (wasPressed != 0 && !isPressed) {
+        setButton(XBOX_BUTTON_HOME, POSBK, false);
+        wasPressed = 0;
     }
-  }
-  else if (wasPressed != 0 && !isPressed) {
-      setButton(XBOX_BUTTON_HOME, POSBK, false);
-    wasPressed = 0;
-  }
 }
 
 
 // Process Start button press delay
 // Send the Start button immediately, but after DELAY_L3R3, also start sending L3 and R3
-void pressStart(bool isPressed) {
-  static int wasPressed = 0;  // 0 = was up, 1 = was waiting, 2 = was pressed
-  static long lastPress = 0;
-  long currentTime = millis();
-
-  if (wasPressed == 0 && isPressed) {
-    setButton(XBOX_BUTTON_START, POSST, true);
-    lastPress = currentTime;
-    wasPressed = 1;
-  }
-  else if (wasPressed == 1 && isPressed) {
+void pressStart(bool isPressed)
+{
+    static int wasPressed = 0;  // 0 = was up, 1 = was waiting, 2 = was pressed
+    static long lastPress = 0;
     long currentTime = millis();
-    if (currentTime > lastPress + DELAY_L3R3) {
-      setButton(XBOX_BUTTON_LS, POSB9, true);
-      setButton(XBOX_BUTTON_RS, POSB10, true);
-      wasPressed = 2;
+
+    if (wasPressed == 0 && isPressed) {
+        setButton(XBOX_BUTTON_START, POSST, true);
+        lastPress = currentTime;
+        wasPressed = 1;
+    } else if (wasPressed == 1 && isPressed) {
+        long currentTime = millis();
+        if (currentTime > lastPress + DELAY_L3R3) {
+            setButton(XBOX_BUTTON_LS, POSB9, true);
+            setButton(XBOX_BUTTON_RS, POSB10, true);
+            wasPressed = 2;
+        }
+    } else if (wasPressed != 0 && !isPressed) {
+        setButton(XBOX_BUTTON_START, POSST, false);
+        setButton(XBOX_BUTTON_LS, POSB9, false);
+        setButton(XBOX_BUTTON_RS, POSB10, false);
+        wasPressed = 0;
     }
-  }
-  else if (wasPressed != 0 && !isPressed) {
-    setButton(XBOX_BUTTON_START, POSST, false);
-    setButton(XBOX_BUTTON_LS, POSB9, false);
-    setButton(XBOX_BUTTON_RS, POSB10, false);
-    wasPressed = 0;
-  }
 }
 
 
 // ProcessInputs
 void processInputs()
 {
-  uint8_t direction = XboxDpadFlags::NONE;
+    uint8_t direction = XboxDpadFlags::NONE;
 
-  // Use -1 instead of 0 for non-moving thumb/stick axes to fix right stick stuck to top-left
-  // Some hosts need to see negative values or else they assume that 0 is the lowest value.
-  int8_t center[2];
-  center[0] = -1;
-  center[1] = -1;
+    // Use -1 instead of 0 for non-moving thumb/stick axes to fix right stick stuck to top-left
+    // Some hosts need to see negative values or else they assume that 0 is the lowest value.
+    int8_t center[2];
+    center[0] = -1;
+    center[1] = -1;
 
-  // Update the DPAD
-  if (buttonStatus[POSUP]) direction |= XboxDpadFlags::NORTH;
-  if (buttonStatus[POSRT]) direction |= XboxDpadFlags::EAST;
-  if (buttonStatus[POSDN]) direction |= XboxDpadFlags::SOUTH;
-  if (buttonStatus[POSLT]) direction |= XboxDpadFlags::WEST;
+    // Update the DPAD
+    if (buttonStatus[POSUP]) direction |= XboxDpadFlags::NORTH;
+    if (buttonStatus[POSRT]) direction |= XboxDpadFlags::EAST;
+    if (buttonStatus[POSDN]) direction |= XboxDpadFlags::SOUTH;
+    if (buttonStatus[POSLT]) direction |= XboxDpadFlags::WEST;
 
-  // Buttons
-  setButton(XBOX_BUTTON_A,  POSB1, buttonStatus[POSB1]);
-  setButton(XBOX_BUTTON_B,  POSB2, buttonStatus[POSB2]);
-  setButton(XBOX_BUTTON_X,  POSB3, buttonStatus[POSB3]);
-  setButton(XBOX_BUTTON_Y,  POSB4, buttonStatus[POSB4]);
-  if (!buttonStatus[POSST]) {
-    setButton(XBOX_BUTTON_LS, POSB9, buttonStatus[POSB9]);
-    setButton(XBOX_BUTTON_RS, POSB10,buttonStatus[POSB10]);
-  }
-
-  // If we're still waiting for DeadZone calibration, and Start is pressed, set new plunger dead zone
-  // Compensates for games where the in-game plunger doesn't begin pulling back until
-  // the gamepad is pulled back ~half way. Just pull the plunger to the point just before
-  // it begins to move in-game, and then press START.
-  if (waitingForDeadzoneSetting && buttonStatus[POSST]) {
-    deadZoneCompensation();
-    printf("Calibrated Plunger Dead Zone\n");
-    waitingForDeadzoneSetting = false;
-  }
-
-  // Bumpers
-  setButton(XBOX_BUTTON_LB,  POSL1, buttonStatus[POSL1]);
-  setButton(XBOX_BUTTON_RB,  POSR1, buttonStatus[POSR1]);
-
-  // Middle Buttons: Start, Select, Home
-  pressHome(buttonStatus[POSXB]);
-  pressStart(buttonStatus[POSST]);
-  setButton(XBOX_BUTTON_SELECT,  POSBK, buttonStatus[POSBK]);
-
-  // Tilt
-  if (accelerometerEnabled) {
-    /* Get a new sensor event */
-    sensors_event_t event;
-    accel.getEvent(&event);
-
-    accX = event.acceleration.x * nudgeMultiplier * -1;
-    accY = event.acceleration.y * nudgeMultiplier * -1;
-
-    // Re-calibrate accelerometer if we're waiting for Accel setting, and Start is pressed
-    if (waitingForAccelSetting && buttonStatus[POSST]) {
-      zeroX = accX;
-      zeroY = accY;
-      preferences.putInt("accelZeroX", zeroX);
-      preferences.putInt("accelZeroY", zeroY);
-      printf("Recalibrated accelerometers.\n");
-      printf("---- accelZeroX: %d, accelZeroY: %d\n", zeroX, zeroY);
-      configFeedbackBlinks(1);
-      waitingForAccelSetting = false;
+    // Buttons
+    setButton(XBOX_BUTTON_A, POSB1, buttonStatus[POSB1]);
+    setButton(XBOX_BUTTON_B, POSB2, buttonStatus[POSB2]);
+    setButton(XBOX_BUTTON_X, POSB3, buttonStatus[POSB3]);
+    setButton(XBOX_BUTTON_Y, POSB4, buttonStatus[POSB4]);
+    if (!buttonStatus[POSST]) {
+        setButton(XBOX_BUTTON_LS, POSB9, buttonStatus[POSB9]);
+        setButton(XBOX_BUTTON_RS, POSB10, buttonStatus[POSB10]);
     }
 
-    int32_t accXcon = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
-    int32_t accYcon = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
+    // If we're still waiting for DeadZone calibration, and Start is pressed, set new plunger dead zone
+    // Compensates for games where the in-game plunger doesn't begin pulling back until
+    // the gamepad is pulled back ~half way. Just pull the plunger to the point just before
+    // it begins to move in-game, and then press START.
+    if (waitingForDeadzoneSetting && buttonStatus[POSST]) {
+        deadZoneCompensation();
+        printf("Calibrated Plunger Dead Zone\n");
+        waitingForDeadzoneSetting = false;
+    }
 
-    if (millis() > tiltEnableTime) {
-      if (controlShuffle || useKeyboardMode) {
-        if (accYcon > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::NORTH;
-        if (accXcon > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::EAST;
-        if (accYcon < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::SOUTH;
-        if (accXcon < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::WEST;
-      }
-      else {
-        // Add a big dead zone for Left-stick analog accelerometer movements
-        if (abs(accXcon) > XBOX_STICK_MAX * 0.6 || abs(accYcon) > XBOX_STICK_MAX * 0.6) {
-          gamepad.setLeftThumb(accXcon, accYcon);
+    // Bumpers
+    setButton(XBOX_BUTTON_LB, POSL1, buttonStatus[POSL1]);
+    setButton(XBOX_BUTTON_RB, POSR1, buttonStatus[POSR1]);
+
+    // Middle Buttons: Start, Select, Home
+    pressHome(buttonStatus[POSXB]);
+    pressStart(buttonStatus[POSST]);
+    setButton(XBOX_BUTTON_SELECT, POSBK, buttonStatus[POSBK]);
+
+    // Tilt
+    if (accelerometerEnabled) {
+        /* Get a new sensor event */
+        sensors_event_t event;
+        accel.getEvent(&event);
+
+        accX = event.acceleration.x * nudgeMultiplier * -1;
+        accY = event.acceleration.y * nudgeMultiplier * -1;
+
+        // Re-calibrate accelerometer if we're waiting for Accel setting, and Start is pressed
+        if (waitingForAccelSetting && buttonStatus[POSST]) {
+            zeroX = accX;
+            zeroY = accY;
+            preferences.putInt("accelZeroX", zeroX);
+            preferences.putInt("accelZeroY", zeroY);
+            printf("Recalibrated accelerometers.\n");
+            printf("---- accelZeroX: %d, accelZeroY: %d\n", zeroX, zeroY);
+            configFeedbackBlinks(1);
+            waitingForAccelSetting = false;
         }
-        else {
-          gamepad.setLeftThumb(0, 0);
+
+        int32_t accXcon = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
+        int32_t accYcon = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
+
+        if (millis() > tiltEnableTime) {
+            if (controlShuffle || useKeyboardMode) {
+                if (accYcon > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::NORTH;
+                if (accXcon > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::EAST;
+                if (accYcon < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::SOUTH;
+                if (accXcon < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::WEST;
+            } else {
+                // Add a big dead zone for Left-stick analog accelerometer movements
+                if (abs(accXcon) > XBOX_STICK_MAX * 0.6 || abs(accYcon) > XBOX_STICK_MAX * 0.6) {
+                    gamepad.setLeftThumb(accXcon, accYcon);
+                } else {
+                    gamepad.setLeftThumb(0, 0);
+                }
+            }
         }
-      }
+        if (!useKeyboardMode) {
+            gamepad.pressDPadDirection(XboxDpadFlags(direction));
+        } else {
+            sendKbDPad(direction);
+        }
     }
-    if (!useKeyboardMode) {
-      gamepad.pressDPadDirection(XboxDpadFlags(direction));
-    } else {
-      sendKbDPad(direction);
-    }
-  }
 
-  // Plunger
-  // This is based on the Sharp GP2Y0A51SK0F Analog Distance Sensor 2-15cm
-  if (plungerEnabled) {
-    getPlungerSamples();
+    // Plunger
+    // This is based on the Sharp GP2Y0A51SK0F Analog Distance Sensor 2-15cm
+    if (plungerEnabled) {
+        getPlungerSamples();
 
-    // // Automatically move the plunger, for testing without a plunger
-    // static int16_t pCnt = 0;
-    // pCnt = (++pCnt)%1024;
-    // plungerAverage = (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128;
-    // gamepad.setRightThumb(0, plungerAverage);
+        // // Automatically move the plunger, for testing without a plunger
+        // static int16_t pCnt = 0;
+        // pCnt = (++pCnt)%1024;
+        // plungerAverage = (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128;
+        // gamepad.setRightThumb(0, plungerAverage);
 
-    int16_t currentDistance = readingToDistance(plungerAverage);
-    distanceBuffer = currentDistance;
-    if (plungerEnableTime > millis()) {
-      distanceBuffer = plungerMaxDistance;
-    }
-    else {
-      if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance) {
-        // Attempt to detect plunge
-        int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance, plungeTrigger / 2, plungeTrigger);
-        if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
-          // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
-          if (!useKeyboardMode) {
+        int16_t currentDistance = readingToDistance(plungerAverage);
+        distanceBuffer = currentDistance;
+        if (plungerEnableTime > millis()) {
+            distanceBuffer = plungerMaxDistance;
+        } else {
+            if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance) {
+                // Attempt to detect plunge
+                int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance,
+                                                    plungeTrigger / 2, plungeTrigger);
+                if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
+                    // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
+                    if (!useKeyboardMode) {
+                        if (controlShuffle) {
+                            gamepad.setLeftThumb(center[0], center[1]);
+                            gamepad.setRightThumb(center[0], center[1]);
+                        } else {
+                            gamepad.setRightThumb(center[0], center[1]);
+                        }
+                    } else {
+                        kb.release(kbMap[POSPLUNGER]);
+                    }
+                    distanceBuffer = plungerMaxDistance;
+                    lastDistance = plungerMaxDistance;
+                    plungerEnableTime = millis() + 1000;
+                    return;
+                }
+                lastDistance = currentDistance;
+
+                // Disable accelerometer while plunging and for 1 second afterwards.
+                if (currentDistance < plungerMaxDistance - 20)
+                    tiltEnableTime = millis() + 1000;
+            } else if (currentDistance <= plungerMinDistance) {
+                // cap max
+                tiltEnableTime = millis() + 1000;
+                distanceBuffer = plungerMinDistance;
+            } else if (currentDistance > plungerMaxDistance) {
+                // cap min
+                distanceBuffer = plungerMaxDistance;
+            }
+        }
+
+        if (!useKeyboardMode) {
             if (controlShuffle) {
-              gamepad.setLeftThumb(center[0], center[1]);
-              gamepad.setRightThumb(center[0], center[1]);
+                gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance,
+                                                    plungerZeroValue, XBOX_STICK_MAX));
+            } else {
+                gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance,
+                                                     plungerZeroValue, XBOX_STICK_MAX));
             }
-            else {
-              gamepad.setRightThumb(center[0], center[1]);
-            }
-          } else {
-            kb.release(kbMap[POSPLUNGER]);
-          }
-          distanceBuffer = plungerMaxDistance;
-          lastDistance = plungerMaxDistance;
-          plungerEnableTime = millis() + 1000;
-          return;
+        } else {
+            kb.set(kbMap[POSPLUNGER], distanceBuffer < plungerMaxDistance - 20);
         }
-        lastDistance = currentDistance;
-
-        // Disable accelerometer while plunging and for 1 second afterwards.
-        if (currentDistance < plungerMaxDistance - 20)
-          tiltEnableTime = millis() + 1000;
-      } else if (currentDistance <= plungerMinDistance) {
-        // cap max
-        tiltEnableTime = millis() + 1000;
-        distanceBuffer = plungerMinDistance;
-      } else if (currentDistance > plungerMaxDistance) {
-        // cap min
-        distanceBuffer = plungerMaxDistance;
-      }
     }
-
-    if (!useKeyboardMode) {
-      if (controlShuffle) {
-        gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, plungerZeroValue, XBOX_STICK_MAX));
-      }
-      else {
-        gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance, plungerZeroValue, XBOX_STICK_MAX));
-      }
-    } else {
-      kb.set(kbMap[POSPLUNGER], distanceBuffer < plungerMaxDistance - 20);
+    if (controlShuffle && !useKeyboardMode) {
+        gamepad.setRightThumb(center[0], center[1]);
     }
-  }
-  if (controlShuffle && !useKeyboardMode) {
-    gamepad.setRightThumb(center[0], center[1]);
-  }
 }
 
 
 void ledUpdate()
 {
-  if ((!useKeyboardMode && !gamepad.isAdvertisingNewDevices()) || (useKeyboardMode && !kb.isAdvertisingNewDevices())) {
-    // Connected!  So LEDs On Solid
-    LED_SetAnalog(pinLEDg, PCB_LED_BRIGHTNESS);
-    LED_Set(pinLEDStart, HIGH);
-  } else {
-    // BLE Pairing mode -- So Flash LEDs
-    static uint8_t blinkCounter = 0;
-    static bool ledOn = false;
-    if (blinkCounter++ >= 30) {
-      ledOn = !ledOn;
-      blinkCounter = 0;
+    if ((!useKeyboardMode && !gamepad.isAdvertisingNewDevices()) || (
+            useKeyboardMode && !kb.isAdvertisingNewDevices())) {
+        // Connected!  So LEDs On Solid
+        LED_SetAnalog(pinLEDg, PCB_LED_BRIGHTNESS);
+        LED_Set(pinLEDStart, HIGH);
+    } else {
+        // BLE Pairing mode -- So Flash LEDs
+        static uint8_t blinkCounter = 0;
+        static bool ledOn = false;
+        if (blinkCounter++ >= 30) {
+            ledOn = !ledOn;
+            blinkCounter = 0;
+        }
+        LED_SetAnalog(pinLEDg, (ledOn) ? PCB_LED_BRIGHTNESS : 0);
+        LED_Set(pinLEDStart, ledOn);
     }
-    LED_SetAnalog(pinLEDg, (ledOn) ? PCB_LED_BRIGHTNESS : 0);
-    LED_Set(pinLEDStart, ledOn);
-  }
 }
 
 
 void solenoidUpdate()
 {
-  // Last state is the previous button state, to help notice state changes
-  static bool lastStateLeft  = false;
-  static bool lastStateRight = false;
-  const bool newStateLeft  = buttonStatus[POSL1] || solenoidOverrides[0];
-  const bool newStateRight = buttonStatus[POSR1] || solenoidOverrides[1];
+    // Last state is the previous button state, to help notice state changes
+    static bool lastStateLeft = false;
+    static bool lastStateRight = false;
+    const bool newStateLeft = buttonStatus[POSL1] || solenoidOverrides[0];
+    const bool newStateRight = buttonStatus[POSR1] || solenoidOverrides[1];
 
-  if (newStateLeft && !lastStateLeft) {
-    // Left was just pressed
-    lastStateLeft = true;
-    solLeft.fwd();
-    tiltEnableTime = millis() + 100;
-  }
-  else if (!newStateLeft && lastStateLeft) {
-    // Left was just released
-    lastStateLeft = false;
-    solLeft.coast();
-    tiltEnableTime = millis() + 100;
-  }
+    if (newStateLeft && !lastStateLeft) {
+        // Left was just pressed
+        lastStateLeft = true;
+        solLeft.fwd();
+        tiltEnableTime = millis() + 100;
+    } else if (!newStateLeft && lastStateLeft) {
+        // Left was just released
+        lastStateLeft = false;
+        solLeft.coast();
+        tiltEnableTime = millis() + 100;
+    }
 
-  if (newStateRight && !lastStateRight) {
-    // Right was just pressed
-    lastStateRight = true;
-    solRight.fwd();
-    tiltEnableTime = millis() + 100;
-  }
-  else if (!newStateRight && lastStateRight) {
-    // Right was just released
-    lastStateRight = false;
-    solRight.coast();
-    tiltEnableTime = millis() + 100;
-  }
+    if (newStateRight && !lastStateRight) {
+        // Right was just pressed
+        lastStateRight = true;
+        solRight.fwd();
+        tiltEnableTime = millis() + 100;
+    } else if (!newStateRight && lastStateRight) {
+        // Right was just released
+        lastStateRight = false;
+        solRight.coast();
+        tiltEnableTime = millis() + 100;
+    }
 
-  if (lastStateLeft == 0 && lastStateRight == 0) {
-    solLeft.standby();
-  }
+    if (lastStateLeft == 0 && lastStateRight == 0) {
+        solLeft.standby();
+    }
 }
 
 
@@ -1143,8 +1137,7 @@ void delay_since_last_delay(uint32_t ms_since_last_delay)
     uint32_t new_target = last_target + ms_since_last_delay;
     if (new_target <= now) {
         new_target = now;
-    }
-    else {
+    } else {
         vTaskDelay_ms(new_target - now);
     }
     last_target = new_target;
@@ -1154,63 +1147,64 @@ void delay_since_last_delay(uint32_t ms_since_last_delay)
 // Main Task runs forever, yielding during vTaskDelay() calls
 void handle_main_task(void *arg)
 {
-  while (true) {
-    delay_since_last_delay(16);
-    handlePendingCommand();
+    while (true) {
+        delay_since_last_delay(16);
+        handlePendingCommand();
 
-    // Update Solenoids
-    // Doing this before buttonUpdate() effectively adds a 16ms delay
-    if (solenoidEnabled || solenoidOverrides[0] || solenoidOverrides[1]) {
-      solenoidUpdate();
+        // Update Solenoids
+        // Doing this before buttonUpdate() effectively adds a 16ms delay
+        if (solenoidEnabled || solenoidOverrides[0] || solenoidOverrides[1]) {
+            solenoidUpdate();
+        }
+
+        // Poll Buttons
+        buttonUpdate();
+
+        // Update LEDs
+        ledUpdate();
+
+        if ((!useKeyboardMode && gamepad.isConnected()) || (useKeyboardMode && kb.isConnected())) {
+            // Process all inputs and load up the usbData registers correctly
+            processInputs();
+
+            if (useKeyboardMode) {
+                // Send keyboard state
+                kb.sendReport();
+            } else {
+                // Add status data into trigger values as small movements
+                updateTriggerStatus();
+
+                // Send controller
+                gamepad.sendGamepadReport();
+            }
+        }
     }
-
-    // Poll Buttons
-    buttonUpdate();
-
-    // Update LEDs
-    ledUpdate();
-
-    if ((!useKeyboardMode && gamepad.isConnected()) || (useKeyboardMode && kb.isConnected())) {
-      // Process all inputs and load up the usbData registers correctly
-      processInputs();
-
-      if (useKeyboardMode) {
-        // Send keyboard state
-        kb.sendReport();
-      } else {
-        // Add status data into trigger values as small movements
-        updateTriggerStatus();
-
-        // Send controller
-        gamepad.sendGamepadReport();
-      }
-    }
-  }
 }
 
 
 // Handle Vibrate/Rumble events
 void OnVibrateEvent(XboxGamepadOutputReportData data)
 {
-  printf("Rumble: %d, %d\n", data.weakMotorMagnitude, data.strongMotorMagnitude);
-  analogWrite(rumbleSmall, data.weakMotorMagnitude);
-  analogWrite(rumbleLarge, data.strongMotorMagnitude);
+    printf("Rumble: %d, %d\n", data.weakMotorMagnitude, data.strongMotorMagnitude);
+    analogWrite(rumbleSmall, data.weakMotorMagnitude);
+    analogWrite(rumbleLarge, data.strongMotorMagnitude);
 }
 
 void updateTriggerStatus()
 {
-  uint16_t leftStatus = (pinsimID & 0b11110000) >> 2;
-  gamepad.setLeftTrigger(leftStatus);  // Using bits 0b000XXXXX00
+    uint16_t leftStatus = (pinsimID & 0b11110000) >> 2;
+    gamepad.setLeftTrigger(leftStatus); // Using bits 0b000XXXXX00
 
-  uint16_t rightStatus = (pinsimID & 0b00001111) << 2;
-  gamepad.setRightTrigger(rightStatus);  // Using bits 0b000XXXXX00
+    uint16_t rightStatus = (pinsimID & 0b00001111) << 2;
+    gamepad.setRightTrigger(rightStatus); // Using bits 0b000XXXXX00
 }
 
-void sendKeymap() {
+void sendKeymap()
+{
     if (useKeyboardMode) {
         uint8_t buf[17];
         buf[0] = COMMAND_RESPONSE_KEYMAP;
-        memcpy(buf+1, kbMap, 16);
+        memcpy(buf + 1, kbMap, 16);
         kb.send_command(buf, 17);
         vTaskDelay_ms(16);
     }
@@ -1228,15 +1222,15 @@ void sendStatus()
     if (useKeyboardMode) status[3] += COMMAND_STATUS_KEYBOARD_MODE;
     if (useKeyboardMode) {
         kb.send_command(status);
-    }
-    else {
+    } else {
         gamepad.send_command(status);
     }
     vTaskDelay_ms(16);
     sendKeymap();
 }
 
-void rxCommand(const uint8_t *commandData, const uint8_t length) {
+void rxCommand(const uint8_t *commandData, const uint8_t length)
+{
     // Move the command handling off of the BLE thread/task
     memcpy(pendingCommand, commandData, length);
 }
@@ -1244,147 +1238,144 @@ void rxCommand(const uint8_t *commandData, const uint8_t length) {
 // Received a pinsim command
 void handlePendingCommand()
 {
-  if (pendingCommand[0] == 0) {
-    return;
-  }
+    if (pendingCommand[0] == 0) {
+        return;
+    }
 
-  // If there is a command pending, handle it here, on the main loop task
-  uint8_t command = pendingCommand[0];
-  pendingCommand[0] = 0;  // Clear pending command
+    // If there is a command pending, handle it here, on the main loop task
+    uint8_t command = pendingCommand[0];
+    pendingCommand[0] = 0; // Clear pending command
 
-  switch (command) {
-    case COMMAND_ACCEL_CAL:
-      printf("Command: Calibrate Accels\n");
-      zeroX = accX;
-      zeroY = accY;
-      preferences.putInt("accelZeroX", zeroX);
-      preferences.putInt("accelZeroY", zeroY);
-      runtimeFeedbackBlinks(1);
-      break;
+    switch (command) {
+        case COMMAND_ACCEL_CAL:
+            printf("Command: Calibrate Accels\n");
+            zeroX = accX;
+            zeroY = accY;
+            preferences.putInt("accelZeroX", zeroX);
+            preferences.putInt("accelZeroY", zeroY);
+            runtimeFeedbackBlinks(1);
+            break;
 
-    case COMMAND_PLUNGER_SET_MIN:
-      printf("Command: Plunger Set Min\n");
-      plungerMin = plungerAverage;
-      plungerMaxDistance = readingToDistance(plungerMin);
-      preferences.putInt("plungerMin", plungerMin);
-      runtimeFeedbackBlinks(1);
-      break;
+        case COMMAND_PLUNGER_SET_MIN:
+            printf("Command: Plunger Set Min\n");
+            plungerMin = plungerAverage;
+            plungerMaxDistance = readingToDistance(plungerMin);
+            preferences.putInt("plungerMin", plungerMin);
+            runtimeFeedbackBlinks(1);
+            break;
 
-    case COMMAND_PLUNGER_SET_MAX:
-      printf("Command: Plunger Set Max\n");
-      plungerMax = plungerAverage;
-      plungerMinDistance = readingToDistance(plungerMax);
-      preferences.putInt("plungerMax", plungerMax);
-      runtimeFeedbackBlinks(1);
-      break;
+        case COMMAND_PLUNGER_SET_MAX:
+            printf("Command: Plunger Set Max\n");
+            plungerMax = plungerAverage;
+            plungerMinDistance = readingToDistance(plungerMax);
+            preferences.putInt("plungerMax", plungerMax);
+            runtimeFeedbackBlinks(1);
+            break;
 
-    case COMMAND_PLUNGER_SET_ZERO:
-      printf("Command: Plunger Set Zero\n");
-      plungerZeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
-      if (plungerZeroValue < 0) plungerZeroValue = 0;
-      preferences.putInt("plungerZero", plungerZeroValue);
-      runtimeFeedbackBlinks(1);
-      break;
+        case COMMAND_PLUNGER_SET_ZERO:
+            printf("Command: Plunger Set Zero\n");
+            plungerZeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
+            if (plungerZeroValue < 0) plungerZeroValue = 0;
+            preferences.putInt("plungerZero", plungerZeroValue);
+            runtimeFeedbackBlinks(1);
+            break;
 
-    case COMMAND_TOGGLE_CONTROL_SWAP:
-      printf("Command: Control Swap\n");
-      controlShuffle = !controlShuffle;
-      preferences.putBool("controlShuffle", controlShuffle);
-      sendStatus();
-      runtimeFeedbackBlinks(controlShuffle ? 2 : 1);
-      break;
+        case COMMAND_TOGGLE_CONTROL_SWAP:
+            printf("Command: Control Swap\n");
+            controlShuffle = !controlShuffle;
+            preferences.putBool("controlShuffle", controlShuffle);
+            sendStatus();
+            runtimeFeedbackBlinks(controlShuffle ? 2 : 1);
+            break;
 
-    case COMMAND_TOGGLE_SOLENOIDS:
-      printf("Command: Toggle Solenoids\n");
-      solenoidEnabled = !solenoidEnabled;
-      preferences.putBool("solenoidEnabled", solenoidEnabled);
-      sendStatus();
-      runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
-      break;
+        case COMMAND_TOGGLE_SOLENOIDS:
+            printf("Command: Toggle Solenoids\n");
+            solenoidEnabled = !solenoidEnabled;
+            preferences.putBool("solenoidEnabled", solenoidEnabled);
+            sendStatus();
+            runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
+            break;
 
-    case COMMAND_SET_SOLENOIDS:
-      solenoidEnabled = (pendingCommand[1] != 0);
-      printf("Command: Set Solenoids %s\n", (solenoidEnabled) ? "On" : "Off");
-      preferences.putBool("solenoidEnabled", solenoidEnabled);
-      sendStatus();
-      runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
-      break;
+        case COMMAND_SET_SOLENOIDS:
+            solenoidEnabled = (pendingCommand[1] != 0);
+            printf("Command: Set Solenoids %s\n", (solenoidEnabled) ? "On" : "Off");
+            preferences.putBool("solenoidEnabled", solenoidEnabled);
+            sendStatus();
+            runtimeFeedbackBlinks(solenoidEnabled ? 2 : 1);
+            break;
 
-    case COMMAND_FIRE_SOLENOID:
-      solenoidOverrides[pendingCommand[1] != 0] = (pendingCommand[2] != 0);
-      break;
+        case COMMAND_FIRE_SOLENOID:
+            solenoidOverrides[pendingCommand[1] != 0] = (pendingCommand[2] != 0);
+            break;
 
-    case COMMAND_PAIR_CLEAR:
-      printf("Command: Clear Pairing\n");
-      if (useKeyboardMode) {
-          kb.clearWhitelist();
-      }
-      else {
-          gamepad.clearWhitelist();
-      }
-      sendStatus();
-      runtimeFeedbackBlinks(1);
-      break;
+        case COMMAND_PAIR_CLEAR:
+            printf("Command: Clear Pairing\n");
+            if (useKeyboardMode) {
+                kb.clearWhitelist();
+            } else {
+                gamepad.clearWhitelist();
+            }
+            sendStatus();
+            runtimeFeedbackBlinks(1);
+            break;
 
-    case COMMAND_PAIR_START:
-      printf("Command: Pairing Mode\n");
-      if (useKeyboardMode) {
-          kb.allowNewConnections(true);
-          kb.startAdvertising();
-      }
-      else {
-          gamepad.allowNewConnections(true);
-          gamepad.startAdvertising();
-      }
-      runtimeFeedbackBlinks(2);
-      break;
+        case COMMAND_PAIR_START:
+            printf("Command: Pairing Mode\n");
+            if (useKeyboardMode) {
+                kb.allowNewConnections(true);
+                kb.startAdvertising();
+            } else {
+                gamepad.allowNewConnections(true);
+                gamepad.startAdvertising();
+            }
+            runtimeFeedbackBlinks(2);
+            break;
 
-    case COMMAND_TOGGLE_KEYBOARD:
-      printf("Command: Toggle Keyboard\n");
-      useKeyboardMode = !useKeyboardMode;
-      preferences.putBool("useKeyboardMode", useKeyboardMode);
-      runtimeFeedbackBlinks(useKeyboardMode ? 2 : 1);
-      delay(500);
-      ESP.restart();
-      break; // LOL not needed
+        case COMMAND_TOGGLE_KEYBOARD:
+            printf("Command: Toggle Keyboard\n");
+            useKeyboardMode = !useKeyboardMode;
+            preferences.putBool("useKeyboardMode", useKeyboardMode);
+            runtimeFeedbackBlinks(useKeyboardMode ? 2 : 1);
+            delay(500);
+            ESP.restart();
+            break; // LOL not needed
 
-    case COMMAND_SET_PINSIM_ID:
-      pinsimID = pendingCommand[1];
-      printf("Command: Set PinSim ID to %d\n", pinsimID);
-      preferences.putUChar("pinsimID", pinsimID);
-      if (!useKeyboardMode) {
-          updateTriggerStatus();
-          gamepad.sendGamepadReport();
-      }
-      sendStatus();
-      runtimeFeedbackBlinks(1);
-      break;
+        case COMMAND_SET_PINSIM_ID:
+            pinsimID = pendingCommand[1];
+            printf("Command: Set PinSim ID to %d\n", pinsimID);
+            preferences.putUChar("pinsimID", pinsimID);
+            if (!useKeyboardMode) {
+                updateTriggerStatus();
+                gamepad.sendGamepadReport();
+            }
+            sendStatus();
+            runtimeFeedbackBlinks(1);
+            break;
 
-    case COMMAND_SEND_STATUS:
-      printf("Command: Send Status\n");
-      sendStatus();
-      break;
+        case COMMAND_SEND_STATUS:
+            printf("Command: Send Status\n");
+            sendStatus();
+            break;
 
-    case COMMAND_SET_KEY_MAPPING:
-      if (pendingCommand[1] < 16) {
-        printf("Command: Set Key Mapping %d:%d\n", pendingCommand[1], pendingCommand[2]);
-        kbMap[pendingCommand[1]] = pendingCommand[2];
-        preferences.putBytes("kbMap", kbMap, 16);
-        sendKeymap();
-      }
-      else {
-        printf("Command: Set Key Mapping - Bad button position %d\n", pendingCommand[1]);
-      }
-      break;
+        case COMMAND_SET_KEY_MAPPING:
+            if (pendingCommand[1] < 16) {
+                printf("Command: Set Key Mapping %d:%d\n", pendingCommand[1], pendingCommand[2]);
+                kbMap[pendingCommand[1]] = pendingCommand[2];
+                preferences.putBytes("kbMap", kbMap, 16);
+                sendKeymap();
+            } else {
+                printf("Command: Set Key Mapping - Bad button position %d\n", pendingCommand[1]);
+            }
+            break;
 
-    case COMMAND_RESET_KEY_MAPPING:
-      printf("Command: Reset Key Mapping\n");
-      memcpy(kbMap, KB_MAP_DEFAULTS, 16);
-      preferences.putBytes("kbMap", kbMap, 16);
-      sendKeymap();
-      break;
+        case COMMAND_RESET_KEY_MAPPING:
+            printf("Command: Reset Key Mapping\n");
+            memcpy(kbMap, KB_MAP_DEFAULTS, 16);
+            preferences.putBytes("kbMap", kbMap, 16);
+            sendKeymap();
+            break;
 
-    default:
-      printf("Bad Command: %d\n", command);
-  }
+        default:
+            printf("Bad Command: %d\n", command);
+    }
 }
