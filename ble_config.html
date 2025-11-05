@@ -16,6 +16,10 @@
         .inner-section {
             padding-left: 20px;
         }
+        #conn-status button {
+            position: relative;
+            height: 28px;
+        }
         #conn-error {
             color: #BB2222;
             font-weight: bold;
@@ -94,7 +98,9 @@
 
         /* Connecting... animation */
         .loader {
-            width: 20px;
+            position: absolute;
+            left: 80%;
+            width: 18px;
             aspect-ratio: 1;
             display: inline-grid;
             border-radius: 50%;
@@ -497,7 +503,7 @@
     function connectToDeviceWithId(id, button) {
         navigator.bluetooth.getDevices().then(devices => {
             for (let device of devices) {
-                if (device.id === id) {
+                if (device.id === id && device !== cmdDevice) {
                     connStatusElement.classList.add('disabled')
                     button.insertAdjacentHTML('beforeend', ' <div class="loader"></div>')
                     connectToDevice(device)
@@ -508,15 +514,21 @@
     }
 
     function showError(err) {
-        connErrorElement.innerHTML = err
-        if (connErrTimer !== null) clearTimeout(connErrTimer)
-        connErrTimer = setTimeout(() => {
+        if (err === null) {
             connErrorElement.innerHTML = ""
             connErrTimer = null
-        }, 5000)
+        } else {
+            connErrorElement.innerHTML = err
+            if (connErrTimer !== null) clearTimeout(connErrTimer)
+            connErrTimer = setTimeout(() => {
+                connErrorElement.innerHTML = ""
+                connErrTimer = null
+            }, 5000)
+        }
     }
 
     function onConnect() {
+        showError(null)
         cmdCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
         console.log('Notifications started.')
         gamepadSectionElement.classList.remove("disabled")
