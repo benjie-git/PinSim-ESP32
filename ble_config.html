@@ -16,6 +16,11 @@
         .inner-section {
             padding-left: 20px;
         }
+        #conn-error {
+            color: #BB2222;
+            font-weight: bold;
+            padding-top: 6px;
+        }
         .pinsim-box {
             position: relative;
             margin-top: 20px;
@@ -86,6 +91,35 @@
             transform: translate(0, 0);
             transition: background-color 0.1s;
         }
+
+        /* Connecting... animation */
+        .loader {
+            width: 20px;
+            aspect-ratio: 1;
+            display: inline-grid;
+            border-radius: 50%;
+            background:
+                    linear-gradient(0deg ,rgb(0 0 0/50%) 30%,#0000 0 70%,rgb(0 0 0/100%) 0) 50%/8% 100%,
+                    linear-gradient(90deg,rgb(0 0 0/25%) 30%,#0000 0 70%,rgb(0 0 0/75% ) 0) 50%/100% 8%;
+            background-repeat: no-repeat;
+            animation: l23 1s infinite steps(12);
+        }
+        .loader::before,
+        .loader::after {
+            content: "";
+            grid-area: 1/1;
+            border-radius: 50%;
+            background: inherit;
+            opacity: 0.915;
+            transform: rotate(30deg);
+        }
+        .loader::after {
+            opacity: 0.83;
+            transform: rotate(60deg);
+        }
+        @keyframes l23 {
+            100% {transform: rotate(1turn)}
+        }
     </style>
 </head>
 
@@ -97,7 +131,8 @@
     <div id="conn-status"><span class="disabled">No Devices Found</span></div>
     <br/>
     <button id="scan-button" onclick="scanForDevices()">Scan for PinSim Devices...</button>
-    <a href="javascript:0" id="edit-link" onclick="editDevicesMode = !editDevicesMode; showAllowedDevices()">[Edit]</a>
+    <a href="javascript:0" id="edit-link" onclick="editDevicesMode = !editDevicesMode; showAllowedDevices()">[Edit]</a><br/>
+    <div id="conn-error"></div>
 </div>
 
 <div class="outer-section">
@@ -227,6 +262,7 @@
     const COMMAND_VERSION_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
 
     const connStatusElement = document.getElementById("conn-status")
+    const connErrorElement = document.getElementById("conn-error")
     const pinsimLabelElement = document.getElementById("gamepad-label-pinsimID")
     const pairingsStatusElement = document.getElementById("gamepad-status-pairings")
     const plungerStickStatusElement = document.getElementById("gamepad-status-plunger-stick")
@@ -344,12 +380,14 @@
     let kbGetKeyMode = 0  // 0=Idle, 1=GetButton, 2=GetKey, 3=Send&End
     let kbGetKeyData = [null, null]  // Button index, and key code for new mapping
     let editDevicesMode = false // When true, show [X] links next to each known device
+    let connErrTimer = null
 
 
     /////////////////////////////////////
     // Connection-related functions
 
     function showAllowedDevices() {
+        connStatusElement.classList.remove('disabled')
         if (navigator.bluetooth.getDevices === undefined) {
             connStatusElement.innerHTML = 'To use the PinSim web config tool, please enable the Chrome flags:<br/>\n\
   <b>chrome://flags#enable-experimental-web-platform-features</b> <a href="javascript:0" onclick="navigator.clipboard.writeText(\'chrome://flags#enable-experimental-web-platform-features\');">[Copy Link]</a><br/>\n\
@@ -365,7 +403,7 @@
                         if (device) {
                             let devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
                             if (devName === null) devName = "Unknown Device"
-                            pickerHtml += `<button onclick="connectToDeviceWithId('${device.id}')">${devName}</button>`
+                            pickerHtml += `<button onclick="connectToDeviceWithId('${device.id}', this)">${devName}</button>`
                             if (editDevicesMode) {
                                 pickerHtml += `<a href="javascript:0" onclick="forgetDevice('${device.id}')">[X]</a>`
                             }
@@ -378,7 +416,8 @@
                     connStatusElement.innerHTML = '<span class="disabled">No Devices Found</span>'
                 }
             }).catch((e) => {
-                connStatusElement.innerHTML = `<span class="disabled">Error Listing Devices: (${e})</span>`
+                connStatusElement.innerHTML = '<span class="disabled">No Devices Found</span>'
+                showError(`Error Listing Devices (${e})`)
             })
         }
         editLinkElement.innerText = (editDevicesMode) ? "[Done]" : "[Edit]"
@@ -390,9 +429,12 @@
         navigator.bluetooth.requestDevice({ acceptAllDevices: true,
             optionalServices: [COMMAND_SERVICE_ID]
         }).then(device => {
-            connectToDevice(device)
-        }).catch((error) => {
-            console.log(error)
+            if (device) {
+                connectToDevice(device)
+            }
+        }).catch((e) => {
+            console.log(e)
+            showError(`Error Scanning for Devices (${e})`)
             showAllowedDevices()
         })
     }
@@ -445,21 +487,33 @@
                 console.log('Notifications not available.')
                 didDisconnect(cmdDevice)
             }
-        }).catch((error) => {
-            console.log(error)
+        }).catch((e) => {
+            console.log(e)
+            showError(`Error Connecting to Device (${e})`)
             showAllowedDevices()
         })
     }
 
-    function connectToDeviceWithId(id) {
+    function connectToDeviceWithId(id, button) {
         navigator.bluetooth.getDevices().then(devices => {
             for (let device of devices) {
                 if (device.id === id) {
+                    connStatusElement.classList.add('disabled')
+                    button.insertAdjacentHTML('beforeend', ' <div class="loader"></div>')
                     connectToDevice(device)
                     break
                 }
             }
         })
+    }
+
+    function showError(err) {
+        connErrorElement.innerHTML = err
+        if (connErrTimer !== null) clearTimeout(connErrTimer)
+        connErrTimer = setTimeout(() => {
+            connErrorElement.innerHTML = ""
+            connErrTimer = null
+        }, 5000)
     }
 
     function onConnect() {
