@@ -402,12 +402,11 @@ void XInput::setTriggers(uint16_t left, uint16_t right)
 {
     left = constrain(left, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
     right = constrain(right, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
-    _inputReport.brake = left;
-    _inputReport.accelerator = right;
-
     if (_inputReport.brake != left || _inputReport.accelerator != right) {
         _inputReportDirty = true;
     }
+    _inputReport.brake = left;
+    _inputReport.accelerator = right;
 }
 
 static uint8_t dPadDirectionToValue(XboxDpadFlags direction)
