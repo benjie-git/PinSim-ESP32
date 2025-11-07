@@ -8,7 +8,7 @@
 CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback)
 {
     NimBLEService *cmdService = server->createService(COMMAND_SERVICE_ID);
-    server->addService(cmdService);
+    // server->addService(cmdService);
 
     _commandCharacteristic = cmdService->createCharacteristic(
         COMMAND_CHARACTERISTIC_ID,
@@ -18,7 +18,7 @@ CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback)
     uint8_t commandData[4] = {0, 0, 0, 0};
     _commandCharacteristic->setValue((uint8_t*)commandData, 4);
     _commandCallback = callback;
-    cmdService->addCharacteristic(_commandCharacteristic);
+    // cmdService->addCharacteristic(_commandCharacteristic);
 
     _versionCharacteristic = cmdService->createCharacteristic(
         COMMAND_VERSION_CHARACTERISTIC_ID,
@@ -26,7 +26,7 @@ CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback)
         2);
     uint8_t versionData[2] = COMMAND_VERSION;
     _versionCharacteristic->setValue((uint8_t*)versionData, 2);
-    cmdService->addCharacteristic(_versionCharacteristic);
+    // cmdService->addCharacteristic(_versionCharacteristic);
 
     cmdService->start();
 }

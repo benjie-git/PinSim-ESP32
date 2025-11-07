@@ -230,12 +230,15 @@ void BLEKeyboard::begin(const std::string& deviceName,
     ad.setName(std::string(deviceName));
     this->_advertising->setAdvertisementData(ad);
     this->_advertising->setAppearance(HID_KEYBOARD);
-    this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
-    this->_advertising->addServiceUUID(COMMAND_SERVICE_ID);
+
+    NimBLEAdvertisementData sr = this->_advertising->getScanData();
+    sr.addServiceUUID(this->_hid->getHidService()->getUUID());
+    sr.addServiceUUID(COMMAND_SERVICE_ID);
+    this->_advertising->setScanResponseData(sr);
+
     this->_advertising->enableScanResponse(true);
     this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });
-    this->_advertising->setScanFilter(true, true);
-    printf("KB is set up\n");
+    this->_allowNewConnections = false;
 
     this->loadWhitelist();
 }
@@ -262,7 +265,7 @@ void BLEKeyboard::startAdvertising()
         return;
     }
 
-    int cnt = pairedAddresses.size();
+    uint cnt = pairedAddresses.size();
     if (this->_allowNewConnections == false && cnt == 0) {
         this->_allowNewConnections = true;
     }
@@ -275,7 +278,7 @@ void BLEKeyboard::startAdvertising()
     }
     else {
         printf("Start Advertising (allow all - 30sec)\n");
-        this->_advertising->stop();  // 30 sec
+        this->_advertising->stop();
         this->_advertising->setScanFilter(false, false);
         this->_advertising->start(30000);  // 30 sec
     }
