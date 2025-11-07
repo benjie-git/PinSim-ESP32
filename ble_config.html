@@ -138,7 +138,8 @@
         <button id="scan-button" onclick="scanForDevices()">Scan...</button>
     </h2>
     <a href="javascript:0" id="edit-link" onclick="editDevicesMode = !editDevicesMode; showAllowedDevices()">[Edit]</a><br/>
-    <div id="conn-status"><span class="disabled">No Devices Found</span></div>
+    <div id="conn-status-enabled" style="display: inline-block"></div>
+    <div id="conn-status-disabled" class="disabled" style="display: inline-block"><span>No Devices Found</span></div>
     <div id="conn-error"></div>
 </div>
 
@@ -269,8 +270,10 @@
     const COMMAND_SERVICE_ID                = "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
     const COMMAND_CHARACTERISTIC_ID         = "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
     const COMMAND_VERSION_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
+    const BLE_STALE_TIME                    = 60000
 
-    const connStatusElement = document.getElementById("conn-status")
+    const connStatusEnabledElement = document.getElementById("conn-status-enabled")
+    const connStatusDisabledElement = document.getElementById("conn-status-disabled")
     const connErrorElement = document.getElementById("conn-error")
     const pinsimLabelElement = document.getElementById("gamepad-label-pinsimID")
     const pairingsStatusElement = document.getElementById("gamepad-status-pairings")
@@ -418,15 +421,16 @@
     let kbGetKeyData = [null, null]  // Button index, and key code for new mapping
     let editDevicesMode = false // When true, show [X] links next to each known device
     let connErrTimer = null
-
+    let seenAdvertisements = []
+    let watchingDevices = []
 
     /////////////////////////////////////
     // Connection-related functions
 
     function showAllowedDevices() {
-        connStatusElement.classList.remove('disabled')
+        connStatusEnabledElement.classList.remove('disabled')
         if (navigator.bluetooth.getDevices === undefined) {
-            connStatusElement.innerHTML = 'To use the PinSim web config tool, please enable the Chrome flags:<br/>\n\
+            connStatusEnabledElement.innerHTML = 'To use the PinSim web config tool, please enable the Chrome flags:<br/>\n\
   <b>chrome://flags#enable-experimental-web-platform-features</b> <a href="javascript:0" onclick="navigator.clipboard.writeText(\'chrome://flags#enable-experimental-web-platform-features\');">[Copy Link]</a><br/>\n\
   <b>chrome://flags#enable-web-bluetooth-new-permissions-backend</b> <a href="javascript:0" onclick="navigator.clipboard.writeText(\'chrome://flags#enable-web-bluetooth-new-permissions-backend\');">[Copy Link]</a>'
         }
@@ -434,27 +438,56 @@
             console.log('Getting Allowed Bluetooth Devices...')
             navigator.bluetooth.getDevices().then(devices => {
                 console.log(`Found ${devices.length} BLE Device/s.`)
-                let pickerHtml = ""
+                let enabledHtml = ""
+                let disabledHtml = ""
                 if (devices.length >= 1) {
                     for (let device of devices) {
                         if (device) {
                             let devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
                             if (devName === null) devName = "Unknown Device"
-                            pickerHtml += `<button onclick="connectToDeviceWithId('${device.id}', this)">${devName}</button>`
+                            const seen = (seenAdvertisements[device.id] && seenAdvertisements[device.id] > Date.now() - BLE_STALE_TIME)
+                            const icon = (seen) ? "📶" : "⃠"
+                            let buttonHtml = ""
+                            buttonHtml += `<button onclick="connectToDeviceWithId('${device.id}', this)"><span id="icon-${device.id}">${icon}</span> ${devName}</button>`
                             if (editDevicesMode) {
-                                pickerHtml += `<a href="javascript:0" onclick="forgetDevice('${device.id}')">[X]</a>`
+                                buttonHtml += `<a href="javascript:0" onclick="forgetDevice('${device.id}')">[X]</a>`
                             }
-                            pickerHtml += " "
+                            buttonHtml += " "
+                            if (seen) {
+                                enabledHtml += buttonHtml
+                            } else {
+                                disabledHtml += buttonHtml
+                            }
+                            if (!watchingDevices.includes(device.id)) {
+                                watchingDevices += device.id
+                                device.addEventListener("advertisementreceived", (event) => {
+                                    console.log(`adv: ${device.id}`)
+                                    const oldSeen = (seenAdvertisements[device.id] && seenAdvertisements[device.id] > Date.now() - BLE_STALE_TIME)
+                                    seenAdvertisements[device.id] = Date.now()
+                                    if (!oldSeen) {
+                                        showAllowedDevices()
+                                    } else {
+                                        document.getElementById(`icon-${device.id}`).innerHTML = "📶"
+                                    }
+                                    device.watchAdvertisements()
+                                })
+                            }
                             device.watchAdvertisements()
                         }
                     }
-                    connStatusElement.innerHTML = pickerHtml
+                    connStatusEnabledElement.innerHTML = enabledHtml
+                    connStatusDisabledElement.innerHTML = disabledHtml
+                    if (editDevicesMode) {
+                        connStatusEnabledElement.classList.add("disabled")
+                    } else {
+                        connStatusEnabledElement.classList.remove("disabled")
+                    }
                 }
                 else {
-                    connStatusElement.innerHTML = '<span class="disabled">No Devices Found</span>'
+                    connStatusDisabledElement.innerHTML = '<span>No Devices Found</span>'
                 }
             }).catch((e) => {
-                connStatusElement.innerHTML = '<span class="disabled">No Devices Found</span>'
+                connStatusDisabledElement.innerHTML = '<span>No Devices Found</span>'
                 showError(`Error Listing Devices (${e})`)
             })
         }
@@ -548,7 +581,7 @@
         navigator.bluetooth.getDevices().then(devices => {
             for (let device of devices) {
                 if (device.id === id && device !== cmdDevice) {
-                    connStatusElement.classList.add('disabled')
+                    connStatusEnabledElement.classList.add('disabled')
                     button.insertAdjacentHTML('beforeend', ' <div class="loader"></div>')
                     connectToDevice(device)
                     break
@@ -833,7 +866,12 @@
     }
 
     function onKeyUp(event) {
-        if (cmdCharacteristic && keyboardMode) {
+        if (keyboardMode && kbGetKeyMode === 1) {
+            if (event.key === "Escape") {
+                setKeyMapUI(0)
+            }
+        }
+        else if (cmdCharacteristic && keyboardMode) {
             let key = event.key
             if (modifierKeys.includes(key)) key = event.code
             const index = keyMap.indexOf(key)
