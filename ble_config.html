@@ -133,20 +133,21 @@
 <h1>PinSim Web Configurator</h1>
 
 <div class="outer-section">
-    <h2>PinSim Devices:</h2>
-    <div id="conn-status"><span class="disabled">No Devices Found</span></div>
-    <br/>
-    <button id="scan-button" onclick="scanForDevices()">Scan for PinSim Devices...</button>
+    <h2 style="display: inline-block">
+        PinSim Devices:
+        <button id="scan-button" onclick="scanForDevices()">Scan...</button>
+    </h2>
     <a href="javascript:0" id="edit-link" onclick="editDevicesMode = !editDevicesMode; showAllowedDevices()">[Edit]</a><br/>
+    <div id="conn-status"><span class="disabled">No Devices Found</span></div>
     <div id="conn-error"></div>
 </div>
 
 <div class="outer-section">
     <div id="gamepad-controls" class="inner-section disabled">
-        <h3>
-            <button id="disconnect-button" onclick="disconnect()">Disconnect</button>
+        <h2>
             PinSim Controls <span id="gamepad-label-pinsimID"></span>
-        </h3>
+            <button id="disconnect-button" onclick="disconnect()">Disconnect</button>
+        </h2>
         <div class="pinsim-box">
             <div id="button-status-l-flipper" class="button" style="left: 20px; top: 120px;">L<div class="key"></div></div>
             <div id="button-status-r-flipper" class="button" style="left: 585px; top: 120px;">R<div class="key"></div></div>
@@ -155,6 +156,11 @@
             <div id="button-status-menu" class="button" style="left: 130px; top: 20px;">Menu<div class="key"></div></div>
             <div id="button-status-start" class="button" style="left: 65px; top: 195px;">Start<div class="key"></div></div>
 
+            <div id="button-status-dpad-up" class="button" style="left: 270px; top: 25px;">Up<div class="key"></div></div>
+            <div id="button-status-dpad-down" class="button" style="left: 270px; top: 95px;">Down<div class="key"></div></div>
+            <div id="button-status-dpad-left" class="button" style="left: 235px; top: 60px;">Left<div class="key"></div></div>
+            <div id="button-status-dpad-right" class="button" style="left: 305px; top: 60px;">Right<div class="key"></div></div>
+
             <div id="button-status-x" class="button" style="left: 400px; top: 20px;">X<div class="key"></div></div>
             <div id="button-status-y" class="button" style="left: 450px; top: 20px;">Y<div class="key"></div></div>
             <div id="button-status-z" class="button" style="left: 500px; top: 20px;">Z<div class="key"></div></div>
@@ -162,10 +168,7 @@
             <div id="button-status-b" class="button" style="left: 450px; top: 70px;">B<div class="key"></div></div>
             <div id="button-status-c" class="button" style="left: 500px; top: 70px;">C<div class="key"></div></div>
 
-            <div id="button-status-dpad-up" class="button" style="left: 270px; top: 25px;">Up<div class="key"></div></div>
-            <div id="button-status-dpad-down" class="button" style="left: 270px; top: 95px;">Down<div class="key"></div></div>
-            <div id="button-status-dpad-left" class="button" style="left: 235px; top: 60px;">Left<div class="key"></div></div>
-            <div id="button-status-dpad-right" class="button" style="left: 305px; top: 60px;">Right<div class="key"></div></div>
+            <button id="end-mapping" onclick="setKeyMapUI(0)" style="left: 575px; top: 15px; display: none; position: absolute;">Done</button>
 
             <div class="stick-visual" style="left: 150px; top: 120px;">
                 <div id="left-stick" class="thumbstick"></div>
@@ -222,15 +225,15 @@
 
         <h3>Testing</h3>
         <div class="inner-section">
-            <button onclick="sendCommand(COMMAND_FIRE_SOLENOID,0,1); setTimeout(()=>{sendCommand(COMMAND_FIRE_SOLENOID,0,0)}, 300)">Test Left Solenoid</button>
-            <button onclick="sendCommand(COMMAND_FIRE_SOLENOID,1,1); setTimeout(()=>{sendCommand(COMMAND_FIRE_SOLENOID,1,0)}, 300)">Test Right Solenoid</button>
+            <button onmousedown="sendCommand(COMMAND_FIRE_SOLENOID,0,1)" onmouseup="sendCommand(COMMAND_FIRE_SOLENOID,0,0)">Test Left Solenoid</button>
+            <button onmousedown="sendCommand(COMMAND_FIRE_SOLENOID,1,1)" onmouseup="sendCommand(COMMAND_FIRE_SOLENOID,1,0)">Test Right Solenoid</button>
         </div>
 
         <div id="key-mapping-commands" class="disabled">
             <h3>Key Mapping</h3>
             <div class="inner-section">
                 <button onclick="sendCommand(COMMAND_RESET_KEY_MAPPING)">Reset to Default Key Map</button>
-                <button onclick="setKeyMapUI(1)">Set Key...</button>
+                <button id="start-mapping" onclick="setKeyMapUI(1)">Start Mapping Keys...</button>
             </div>
         </div>
     </div>
@@ -280,6 +283,8 @@
     const rightStickElement = document.getElementById('right-stick')
     const keyMappingCommandsElement = document.getElementById("key-mapping-commands")
     const editLinkElement = document.getElementById("edit-link")
+    const startMappingKeysElement = document.getElementById("start-mapping")
+    const endMappingKeysElement = document.getElementById("end-mapping")
 
     const buttonMap = [
         "button-status-a", "button-status-b", "button-status-x", "button-status-y",
@@ -328,12 +333,14 @@
     ]
 
     const keyCodeMap = {
-        0x80: "Ctrl",
-        0x81: "Shift",
-        0x82: "Alt",
-        0x84: "Ctrl",
-        0x85: "Shift",
-        0x86: "Alt",
+        0x80: "ControlLeft",
+        0x81: "ShiftLeft",
+        0x82: "AltLeft",
+        0x83: "MetaLeft",
+        0x84: "ControlRight",
+        0x85: "ShiftRight",
+        0x86: "AltRight",
+        0x87: "MetaRight",
         0xDA: "ArrowUp",
         0xD9: "ArrowDown",
         0xD8: "ArrowLeft",
@@ -344,15 +351,20 @@
         0xB1: "Escape",
         0xD4: "Delete",
         0xB2: "Backspace",
+        0xC1: "CapsLock",
     }
 
+    const modifierKeys = ["Shift", "Alt", "Control", "Meta"]
+
     const keyCodeMapInv = {
-        "Ctrl": 0x80,
-        "Shift": 0x81,
-        "Alt": 0x82,
-        // "Ctrl": 0x84,
-        // "Shift": 0x85,
-        // "Alt": 0x86,
+        "ControlLeft": 0x80,
+        "ShiftLeft": 0x81,
+        "AltLeft": 0x82,
+        "MetaLeft": 0x83,
+        "ControlRight": 0x84,
+        "ShiftRight": 0x85,
+        "AltRight": 0x86,
+        "MetaRight": 0x87,
         "ArrowUp": 0xDA,
         "ArrowDown": 0xD9,
         "ArrowLeft": 0xD8,
@@ -363,13 +375,32 @@
         "Escape": 0xB1,
         "Delete": 0xD4,
         "Backspace": 0xB2,
+        "CapsLock": 0xC1,
     }
 
+    const keyCodeDisplayMap = {
+        "ControlLeft": "LCtrl",
+        "ShiftLeft": "LShift",
+        "AltLeft": "LAlt",
+        "MetaLeft": "LCmd",
+        "ControlRight": "RCtrl",
+        "ShiftRight": "RShift",
+        "AltRight": "RAlt",
+        "MetaRight": "RCmd",
+        "ArrowUp": "Up",
+        "ArrowDown": "Down",
+        "ArrowLeft": "Left",
+        "ArrowRight": "Right",
+        "Backspace": "Bkspace",
+        "CapsLock": "Caps",
+    }
+    // Set up event listeners
     window.addEventListener("gamepadconnected", (event) => { connectGamepadWithPinsimID() })
     window.addEventListener("keydown", onKeyDown)
     window.addEventListener("keyup", onKeyUp)
     for (let i in keyMapButtonOrder) {
-        document.getElementById(keyMapButtonOrder[i]).addEventListener("click", (e) => {onClickButton(e, i)})
+        document.getElementById(keyMapButtonOrder[i]).addEventListener("click", (e) => {onClickButton(e, i, 0)})
+        document.getElementById(keyMapButtonOrder[i]).addEventListener("dblclick", (e) => {onClickButton(e, i, 1)})
     }
 
     const leftTriggerIndex = 6
@@ -414,6 +445,7 @@
                                 pickerHtml += `<a href="javascript:0" onclick="forgetDevice('${device.id}')">[X]</a>`
                             }
                             pickerHtml += " "
+                            device.watchAdvertisements()
                         }
                     }
                     connStatusElement.innerHTML = pickerHtml
@@ -438,9 +470,16 @@
             if (device) {
                 connectToDevice(device)
             }
+            else {
+                showAllowedDevices()
+            }
         }).catch((e) => {
             console.log(e)
-            showError(`Error Scanning for Devices (${e})`)
+            if (e.name === "NotFoundError" && e.code === 8) {
+                // skip "User cancelled the requestDevice() chooser" error
+            } else {
+                showError(`Error Scanning for Devices (${e})`)
+            }
             showAllowedDevices()
         })
     }
@@ -496,6 +535,11 @@
         }).catch((e) => {
             console.log(e)
             showError(`Error Connecting to Device (${e})`)
+            if (e.name === "NetworkError" && e.code === 19) {
+                // On "Device is no longer in range" error, do nothing
+            } else {
+                forgetDevice(device.id)
+            }
             showAllowedDevices()
         })
     }
@@ -670,12 +714,16 @@
     // Display Button Status and Run Key Mapping Process
 
     function setKeyMapUI(val) {
+        if (!keyboardMode) return
+
         if (val === 0) {
             kbGetKeyMode = 0
             kbGetKeyData = [null, null]
             for (let i=0; i<keyMapButtonOrder.length; i++) {
                 document.getElementById(keyMapButtonOrder[i]).classList.remove("keyMap")
             }
+            startMappingKeysElement.classList.remove("disabled")
+            endMappingKeysElement.style.display = "none"
         }
         if (val === 1) {
             kbGetKeyMode = 1
@@ -684,6 +732,8 @@
                     document.getElementById(keyMapButtonOrder[i]).classList.add("keyMap")
                 }
             }
+            startMappingKeysElement.classList.add("disabled")
+            endMappingKeysElement.style.display = "inline-block"
         }
         else if (val === 2) {
             kbGetKeyMode = 2
@@ -696,13 +746,23 @@
         else if (val === 3) {
             document.getElementById(keyMapButtonOrder[kbGetKeyData[0]]).classList.remove("keyMap")
             sendCommand(COMMAND_SET_KEY_MAPPING, kbGetKeyData[0], kbGetKeyData[1])
-            kbGetKeyMode = 0
+            kbGetKeyData = [null, null]
+            setKeyMapUI(1)
         }
     }
 
-    function onClickButton(e, b) {
-        kbGetKeyData[0] = b
-        setKeyMapUI(2)
+    function onClickButton(e, b, isDouble) {
+        if (keyboardMode && isDouble) {
+            setKeyMapUI(1)
+            kbGetKeyData[0] = b
+            setKeyMapUI(2)
+        }
+        else if (keyboardMode && kbGetKeyMode === 1) {
+            kbGetKeyData[0] = b
+            setKeyMapUI(2)
+        }
+        e.stopPropagation()
+        e.preventDefault()
     }
 
     // There are no events for gamepad button press/release, so poll every animation frame instead
@@ -743,22 +803,30 @@
     function onKeyDown(event) {
         if (cmdCharacteristic && keyboardMode) {
             if (kbGetKeyMode === 2) {
-                if (keyCodeMapInv[event.key]) {
-                    kbGetKeyData[1] = keyCodeMapInv[event.key]
+                let key = event.key
+                if (modifierKeys.includes(key)) key = event.code
+                if (keyCodeMapInv[key]) {
+                    kbGetKeyData[1] = keyCodeMapInv[key]
                 }
                 else {
-                    kbGetKeyData[1] = event.key.charCodeAt(0)
+                    kbGetKeyData[1] = key.charCodeAt(0)
                 }
                 setKeyMapUI(3)
+                event.stopPropagation()
+                event.preventDefault()
             }
             else {
-                const index = keyMap.indexOf(event.key)
+                let key = event.key
+                if (modifierKeys.includes(key)) key = event.code
+                const index = keyMap.indexOf(key)
                 if (index >= 0) {
                     if (keyMapButtonOrder[index] === "plunger") {
                         updateStick(rightStickElement, 0, 1, 100)
                     } else {
                         document.getElementById(keyMapButtonOrder[index]).classList.add("pressed")
                     }
+                    event.stopPropagation()
+                    event.preventDefault()
                 }
             }
         }
@@ -766,13 +834,17 @@
 
     function onKeyUp(event) {
         if (cmdCharacteristic && keyboardMode) {
-            const index = keyMap.indexOf(event.key)
+            let key = event.key
+            if (modifierKeys.includes(key)) key = event.code
+            const index = keyMap.indexOf(key)
             if (index >= 0) {
                 if (keyMapButtonOrder[index] === "plunger") {
                     updateStick(rightStickElement, 0, 0, 100)
                 } else {
                     document.getElementById(keyMapButtonOrder[index]).classList.remove("pressed")
                 }
+                event.stopPropagation()
+                event.preventDefault()
             }
         }
     }
@@ -781,7 +853,7 @@
         for (let i=0; i<keyMapButtonOrder.length; i++) {
             if (cmdCharacteristic && keyboardMode) {
                 let disp = keyMap[i]
-                if (disp.startsWith("Arrow")) disp = disp.replace("Arrow", "")
+                if (keyCodeDisplayMap[disp]) disp = keyCodeDisplayMap[disp]
                 document.getElementById(keyMapButtonOrder[i]).getElementsByClassName("key")[0].innerHTML = disp
             }
             else {
