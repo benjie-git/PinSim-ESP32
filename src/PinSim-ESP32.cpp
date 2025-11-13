@@ -1335,8 +1335,6 @@ void handlePendingCommand()
             printf("Command: Toggle Keyboard\n");
             useKeyboardMode = !useKeyboardMode;
             preferences.putBool("useKeyboardMode", useKeyboardMode);
-            runtimeFeedbackBlinks(useKeyboardMode ? 2 : 1);
-            delay(500);
             ESP.restart();
             break; // LOL not needed
 

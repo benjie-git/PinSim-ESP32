@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en-US">
 <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <title>PinSim Web Configurator</title>
     <style>
         body {
@@ -52,9 +53,6 @@
         }
         div.button.keyMap {
             border-color: #F00;
-        }
-        input[type="radio"]:checked + label {
-            font-weight: bold;
         }
         .disabled {
             color: grey;
@@ -138,8 +136,8 @@
         <button id="scan-button" onclick="scanForDevices()">Scan...</button>
     </h2>
     <a href="javascript:0" id="edit-link" onclick="editDevicesMode = !editDevicesMode; showAllowedDevices()">[Edit]</a><br/>
-    <div id="conn-status-enabled" style="display: inline-block"></div>
-    <div id="conn-status-disabled" class="disabled" style="display: inline-block"><span>No Devices Found</span></div>
+    <div id="conn-status-enabled" style="display: inline-block; position: relative"></div>
+    <div id="conn-status-disabled" class="disabled" style="display: inline-block; position: relative"><span>No Devices Found</span></div>
     <div id="conn-error"></div>
 </div>
 
@@ -397,14 +395,6 @@
         "Backspace": "Bkspace",
         "CapsLock": "Caps",
     }
-    // Set up event listeners
-    window.addEventListener("gamepadconnected", (event) => { connectGamepadWithPinsimID() })
-    window.addEventListener("keydown", onKeyDown)
-    window.addEventListener("keyup", onKeyUp)
-    for (let i in keyMapButtonOrder) {
-        document.getElementById(keyMapButtonOrder[i]).addEventListener("click", (e) => {onClickButton(e, i, 0)})
-        document.getElementById(keyMapButtonOrder[i]).addEventListener("dblclick", (e) => {onClickButton(e, i, 1)})
-    }
 
     const leftTriggerIndex = 6
     const rightTriggerIndex = 7
@@ -423,6 +413,25 @@
     let connErrTimer = null
     let seenAdvertisements = []
     let watchingDevices = []
+    let shouldAutoconnectToPSID = null
+
+    // Set up event listeners
+    // window.addEventListener("gamepadconnected", (event) => { connectGamepadWithPinsimID() })
+    window.addEventListener("keydown", onKeyDown)
+    window.addEventListener("keyup", onKeyUp)
+    for (let i in keyMapButtonOrder) {
+        document.getElementById(keyMapButtonOrder[i]).addEventListener("click", (event) => {onClickButton(event, i, 0)})
+        document.getElementById(keyMapButtonOrder[i]).addEventListener("dblclick", (event) => {onClickButton(event, i, 1)})
+    }
+    window.addEventListener("load", onLoad)
+
+    function onLoad(event) {
+        // console.log("didLoad")
+        shouldAutoconnectToPSID = parseInt(localStorage.getItem("PinSimLastConnectedPinSimID"))
+        requestAnimationFrame(updateGamepadState)
+        showAllowedDevices()
+    }
+
 
     /////////////////////////////////////
     // Connection-related functions
@@ -435,9 +444,9 @@
   <b>chrome://flags#enable-web-bluetooth-new-permissions-backend</b> <a href="javascript:0" onclick="navigator.clipboard.writeText(\'chrome://flags#enable-web-bluetooth-new-permissions-backend\');">[Copy Link]</a>'
         }
         else {
-            console.log('Getting Allowed Bluetooth Devices...')
+            // console.log('showAllowedDevices')
             navigator.bluetooth.getDevices().then(devices => {
-                console.log(`Found ${devices.length} BLE Device/s.`)
+                // console.log(`Found ${devices.length} BLE Device/s.`)
                 let enabledHtml = ""
                 let disabledHtml = ""
                 if (devices.length >= 1) {
@@ -460,19 +469,9 @@
                             }
                             if (!watchingDevices.includes(device.id)) {
                                 watchingDevices += device.id
-                                device.addEventListener("advertisementreceived", (event) => {
-                                    console.log(`adv: ${device.id}`)
-                                    const oldSeen = (seenAdvertisements[device.id] && seenAdvertisements[device.id] > Date.now() - BLE_STALE_TIME)
-                                    seenAdvertisements[device.id] = Date.now()
-                                    if (!oldSeen) {
-                                        showAllowedDevices()
-                                    } else {
-                                        document.getElementById(`icon-${device.id}`).innerHTML = "📶"
-                                    }
-                                    device.watchAdvertisements()
-                                })
+                                device.onadvertisementreceived = onAdvReceived
+                                device.watchAdvertisements()
                             }
-                            device.watchAdvertisements()
                         }
                     }
                     connStatusEnabledElement.innerHTML = enabledHtml
@@ -485,18 +484,40 @@
                 }
                 else {
                     connStatusDisabledElement.innerHTML = '<span>No Devices Found</span>'
+                    shouldAutoconnectToPSID = null
                 }
-            }).catch((e) => {
+            }).catch((error) => {
                 connStatusDisabledElement.innerHTML = '<span>No Devices Found</span>'
-                showError(`Error Listing Devices (${e})`)
+                showError(`Error Listing Devices (${error})`)
             })
         }
         editLinkElement.innerText = (editDevicesMode) ? "[Done]" : "[Edit]"
     }
-    showAllowedDevices()
+
+    function onAdvReceived(event) {
+        let device = event.device
+        // console.log(`onAdvReceived: ${device.id}`)
+        const oldSeen = (seenAdvertisements[device.id] && seenAdvertisements[device.id] > Date.now() - BLE_STALE_TIME)
+        seenAdvertisements[device.id] = Date.now()
+        if (!oldSeen) {
+            showAllowedDevices()
+        } else {
+            document.getElementById(`icon-${device.id}`).innerHTML = "📶"
+        }
+        device.watchAdvertisements()
+
+        let devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
+        if (devName) {
+            let devPSID = parseInt(devName.split(":")[1].trim())
+            if (shouldAutoconnectToPSID === devPSID) {
+                // console.log(`Attempt to re-connect`)
+                connectToDevice(device)
+            }
+        }
+    }
 
     function scanForDevices() {
-        console.log('Requesting Bluetooth Device...')
+        // console.log('scanForDevices')
         navigator.bluetooth.requestDevice({ acceptAllDevices: true,
             optionalServices: [COMMAND_SERVICE_ID]
         }).then(device => {
@@ -506,12 +527,12 @@
             else {
                 showAllowedDevices()
             }
-        }).catch((e) => {
-            console.log(e)
-            if (e.name === "NotFoundError" && e.code === 8) {
+        }).catch((error) => {
+            // console.log(error)
+            if (error.name === "NotFoundError" && error.code === 8) {
                 // skip "User cancelled the requestDevice() chooser" error
             } else {
-                showError(`Error Scanning for Devices (${e})`)
+                showError(`Error Scanning for Devices (${error})`)
             }
             showAllowedDevices()
         })
@@ -531,16 +552,19 @@
     }
 
     function connectToDevice(device) {
+        // console.log("connectToDevice")
+        shouldAutoconnectToPSID = null
+
         if (cmdDevice === device)
             return
 
         disconnect()
         device.gatt.connect().then(gatt => {
+            // console.log('Getting Service...')
             cmdDevice = gatt.device
-            console.log('Getting Service...')
             return gatt.getPrimaryService(COMMAND_SERVICE_ID)
         }).then(async service => {
-            console.log('Getting Characteristics...')
+            // console.log('Getting Characteristics...')
             const characteristic = await service.getCharacteristic(COMMAND_VERSION_CHARACTERISTIC_ID)
             if (characteristic) {
                 const v = await characteristic.readValue()
@@ -553,22 +577,23 @@
             }
             return service.getCharacteristic(COMMAND_CHARACTERISTIC_ID)
         }).then(characteristic => {
+            // console.log('Requesting Notifications...')
             cmdCharacteristic = characteristic
             cmdDevice.addEventListener('gattserverdisconnected', onDisconnect)
-            console.log('Requesting Notifications...')
             return cmdCharacteristic.startNotifications()
         }).then(_ => {
+            // console.log('Set up Notifications.')
             if (cmdCharacteristic.properties.notify) {
                 onConnect()
             }
             else {
-                console.log('Notifications not available.')
+                // console.log('Notifications not available.')
                 didDisconnect(cmdDevice)
             }
-        }).catch((e) => {
-            console.log(e)
-            showError(`Error Connecting to Device (${e})`)
-            if (e.name === "NetworkError" && e.code === 19) {
+        }).catch((error) => {
+            // console.log(error)
+            showError(`Error Connecting to Device (${error})`)
+            if (error.name === "NetworkError" && error.code === 19) {
                 // On "Device is no longer in range" error, do nothing
             } else {
                 forgetDevice(device.id)
@@ -578,6 +603,7 @@
     }
 
     function connectToDeviceWithId(id, button) {
+        // console.log("connectToDeviceWithId")
         navigator.bluetooth.getDevices().then(devices => {
             for (let device of devices) {
                 if (device.id === id && device !== cmdDevice) {
@@ -605,23 +631,36 @@
     }
 
     function onConnect() {
+        // console.log("onConnect")
         showError(null)
         cmdCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
-        console.log('Notifications started.')
+        // console.log('Notifications started.')
         gamepadSectionElement.classList.remove("disabled")
         bleSectionElement.classList.remove("disabled")
         disconnectButtonElement.classList.remove("disabled")
         setKeyMapUI(0)
         showAllowedDevices()
         sendCommand(COMMAND_SEND_STATUS)
+
+        navigator.bluetooth.getDevices().then(devices => {
+            for (let device of devices) {
+                if (watchingDevices.includes(device.id)) {
+                    device.onadvertisementreceived = undefined
+                }
+            }
+            watchingDevices = []
+        })
     }
 
     function onDisconnect(event) {
+        // console.log("onDisconnect")
+        shouldAutoconnectToPSID = parseInt(localStorage.getItem("PinSimLastConnectedPinSimID"))
         didDisconnect(event.target)
     }
 
     function didDisconnect(device) {
         if (device === cmdDevice) {
+            // console.log("didDisconnect")
             cmdCharacteristic = null
             cmdDevice = null
             gamepadIndex = null
@@ -633,17 +672,19 @@
             disconnectButtonElement.classList.add("disabled")
             keyMappingCommandsElement.classList.add("disabled")
             setKeyMapUI(0)
-            showAllowedDevices()
             displayKeys()
             updateStick(leftStickElement, 0, 0, 40)
             updateStick(rightStickElement, 0, 0, 100)
+            showAllowedDevices()
         }
     }
 
     function disconnect() {
         if (cmdDevice) {
+            // console.log("disconnect")
             cmdDevice.gatt.disconnect()
         }
+        shouldAutoconnectToPSID = null
     }
 
     function scaleTriggerToInt(v) {
@@ -662,6 +703,7 @@
                 const rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
                 const gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
                 if (gp_pinsimID === pinsimID) {
+                    // console.log("Connected to HID gamepad")
                     gamepadIndex = i
                     showAllowedDevices()
                 }
@@ -677,7 +719,7 @@
 
     function sendCommand(b0, b1=null, b2=null) {
         if (cmdCharacteristic) {
-            console.log(`Sending Command ${b0} (${b1}, ${b2})`)
+            // console.log(`Sending Command ${b0} (${b1}, ${b2})`)
             let arr
             if (b1 === null) {
                 arr = new Uint8Array([b0])
@@ -689,6 +731,11 @@
                 arr = new Uint8Array([b0, b1, b2])
             }
             cmdCharacteristic.writeValueWithoutResponse(arr)
+
+            if (b0 === COMMAND_TOGGLE_KEYBOARD) {
+                // Reconnect after mode switch / reboot
+                shouldAutoconnectToPSID = pinsimID
+            }
         }
     }
 
@@ -698,7 +745,7 @@
             const command = value.getUint8(0)
 
             if (command === COMMAND_RESPONSE_STATUS && value.byteLength === 4) {
-                console.log(`Command Response: ${command} ${value.getUint8(1)} ${value.getUint8(2)} ${value.getUint8(3)}`)
+                // console.log(`Command Response: ${command} ${value.getUint8(1)} ${value.getUint8(2)} ${value.getUint8(3)}`)
                 // Extract PinSim Status data from command
                 pinsimID = value.getUint8(1)
                 const numPairs = value.getUint8(2)
@@ -718,8 +765,9 @@
                 else {
                     keyMappingCommandsElement.classList.add("disabled")
                 }
-                displayName = `PinSim ${keyboardMode?"Keyboard":"Gamepad"}: ${pinsimID}`
+                let displayName = `PinSim ${keyboardMode?"Keyboard":"Gamepad"}: ${pinsimID}`
                 localStorage.setItem(`PinSimDisplayName-${cmdDevice.id}`, displayName)
+                localStorage.setItem("PinSimLastConnectedPinSimID", pinsimID)
                 pinsimLabelElement.innerHTML = ` (${displayName})`
                 if (gamepadIndex === null) {
                     connectGamepadWithPinsimID()
@@ -728,7 +776,7 @@
             else if (command === COMMAND_RESPONSE_KEYMAP && value.byteLength === 17) {
                 let dataString = ""
                 for (let i = 0; i < 16; i++) { dataString += value.getUint8(i+1) + " " }
-                console.log(`Command Response: ${command} ${dataString}`)
+                // console.log(`Command Response: ${command} ${dataString}`)
                 for (let i = 0; i < 16; i++) {
                     let substitution = keyCodeMap[value.getUint8(i+1)]
                     if (substitution) {
@@ -771,7 +819,7 @@
         else if (val === 2) {
             kbGetKeyMode = 2
             for (let i=0; i<keyMapButtonOrder.length; i++) {
-                if (i != kbGetKeyData[0]) {
+                if (i !== parseInt(kbGetKeyData[0])) {
                     document.getElementById(keyMapButtonOrder[i]).classList.remove("keyMap")
                 }
             }
@@ -831,7 +879,6 @@
             }
         }
     }
-    requestAnimationFrame(updateGamepadState)
 
     function onKeyDown(event) {
         if (cmdCharacteristic && keyboardMode) {
@@ -867,7 +914,7 @@
 
     function onKeyUp(event) {
         if (keyboardMode && kbGetKeyMode === 1) {
-            if (event.key === "Escape") {
+            if (event.key === "Escape" || event.key === "Enter" || event.key === "Return") {
                 setKeyMapUI(0)
             }
         }
