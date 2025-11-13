@@ -607,7 +607,7 @@
         navigator.bluetooth.getDevices().then(devices => {
             for (let device of devices) {
                 if (device.id === id && device !== cmdDevice) {
-                    connStatusEnabledElement.classList.add('disabled')
+                    button.classList.add('disabled')
                     button.insertAdjacentHTML('beforeend', ' <div class="loader"></div>')
                     connectToDevice(device)
                     break
