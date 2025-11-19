@@ -22,3 +22,7 @@ cp .pio/build/devel/firmware.bin $TOOL_DIR/
 mv PinSim_FW_updater PinSim_FW_updater_PCB5_$CUR_DATE
 zip -r dist/PinSim_FW_updater_PCB5_$CUR_DATE.zip PinSim_FW_updater_PCB5_$CUR_DATE
 mv PinSim_FW_updater_PCB5_$CUR_DATE PinSim_FW_updater
+
+scp dist/PinSim_FW_updater_PCB3_$CUR_DATE.zip dist/PinSim_FW_updater_PCB5_$CUR_DATE.zip $1:www/files/
+echo "https://$2/files/PinSim_FW_updater_PCB3_$CUR_DATE.zip"
+echo "https://$2/files/PinSim_FW_updater_PCB5_$CUR_DATE.zip"
