@@ -634,7 +634,7 @@
         // console.log("onConnect")
         showError(null)
         cmdCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
-        // console.log('Notifications started.')
+        console.log('Connected to BLE device')
         gamepadSectionElement.classList.remove("disabled")
         bleSectionElement.classList.remove("disabled")
         disconnectButtonElement.classList.remove("disabled")
@@ -703,7 +703,7 @@
                 const rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
                 const gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
                 if (gp_pinsimID === pinsimID) {
-                    // console.log("Connected to HID gamepad")
+                    console.log(`Connected to HID gamepad (${gp_pinsimID})`)
                     gamepadIndex = i
                     showAllowedDevices()
                 }

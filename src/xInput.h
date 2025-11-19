@@ -97,6 +97,7 @@ public:
     bool isDPadPressed(XboxDpadFlags direction);
     void pressShare();
     void releaseShare();
+    void setDirty();
     
     void sendGamepadReport();
     void send_command(const uint8_t* data, uint8_t length=4);

@@ -148,6 +148,7 @@ public:
         printf("Auth complete                (%s)\n", connInfo.getIdAddress().toString().c_str());
         
         this->_xInput->startAdvertising();
+        this->_xInput->setDirty();
     }
 
     void onIdentity(NimBLEConnInfo& connInfo) override
@@ -181,7 +182,6 @@ void XInput::startServer(const char *device_name, const char *manufacturer, Comm
     NimBLEDevice::init(device_name);
     NimBLEDevice::setSecurityAuth(true, false, false);
 
-    this->_inputReportDirty = true;
     this->_server = NimBLEDevice::createServer();
     this->_serverCallbacks = new ServerCallbacks(this);
     this->_server->setCallbacks(this->_serverCallbacks);
@@ -200,6 +200,7 @@ void XInput::startServer(const char *device_name, const char *manufacturer, Comm
     this->_hidOutputCallbacks = new HIDOutputCallbacks(this);
     this->_output->setCallbacks(this->_hidOutputCallbacks);
 
+    this->_inputReportDirty = true;
     this->_dirtySkipCount = 0;
 
     // Create device UUID
@@ -508,6 +509,11 @@ void XInput::releaseShare()
         _inputReport.share ^= XBOX_BUTTON_SHARE;
         _inputReportDirty = true;
     }
+}
+
+void XInput::setDirty()
+{
+    this->_inputReportDirty = true;
 }
 
 void XInput::sendGamepadReport()

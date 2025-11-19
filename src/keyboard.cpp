@@ -117,6 +117,7 @@ public:
         printf("Auth complete                (%s)\n", connInfo.getIdAddress().toString().c_str());
 
         this->_keyboard->startAdvertising();
+        this->_keyboard->setDirty();
     }
 
     void onIdentity(NimBLEConnInfo& connInfo) override
@@ -204,7 +205,6 @@ void BLEKeyboard::begin(const std::string& deviceName,
     NimBLEDevice::init(deviceName);
     NimBLEDevice::setSecurityAuth(true, true, true);
 
-    this->_inputReportDirty = true;
     this->_server = NimBLEDevice::createServer();
     this->_serverCallbacks = new KBServerCallbacks(this);
     this->_server->setCallbacks(this->_serverCallbacks);
@@ -223,6 +223,8 @@ void BLEKeyboard::begin(const std::string& deviceName,
     this->_hid->setBatteryLevel(100);
 
     this->_hid->startServices();
+    this->_inputReportDirty = true;
+
 
     // Start BLE advertisement
     this->_advertising = this->_server->getAdvertising();
@@ -551,6 +553,12 @@ void BLEKeyboard::releaseAll(void)
 	_keyReport.keys[5] = 0;
 	_keyReport.modifiers = 0;
 	_inputReportDirty = true;
+}
+
+
+void BLEKeyboard::setDirty()
+{
+    this->_inputReportDirty = true;
 }
 
 

@@ -111,6 +111,7 @@ public:
     size_t set(uint8_t k, bool pressed);
     void releaseAll();
 
+    void setDirty();
     void sendReport();
     void send_command(const uint8_t* data, uint8_t length=4);
 
