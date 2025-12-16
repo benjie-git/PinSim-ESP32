@@ -4,7 +4,6 @@
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
 #include <NimBLEAdvertising.h>
-#include <Callback.h>
 #include "xInput_defs.h"
 #include "command.h"
 
@@ -67,6 +66,8 @@ struct XboxGamepadOutputReportData {
     {}
 };
 
+typedef void (*VibrateCallback_t)(XboxGamepadOutputReportData data);
+
 
 class XInput
 {
@@ -81,7 +82,7 @@ public:
     void clearWhitelist();
     uint getPairCount();
 
-    Signal<XboxGamepadOutputReportData> onVibrate;
+    VibrateCallback_t onVibrate;
 
     void press(uint16_t button = XBOX_BUTTON_A);
     void release(uint16_t button = XBOX_BUTTON_A);

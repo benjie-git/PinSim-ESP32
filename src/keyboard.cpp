@@ -231,12 +231,12 @@ void BLEKeyboard::begin(const std::string& deviceName,
     NimBLEAdvertisementData ad = this->_advertising->getAdvertisementData();
     ad.setName(std::string(deviceName));
     this->_advertising->setAdvertisementData(ad);
-    this->_advertising->setAppearance(HID_KEYBOARD);
+    this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
+    this->_advertising->setAppearance(HID_GAMEPAD);
 
-    NimBLEAdvertisementData sr = this->_advertising->getScanData();
-    sr.addServiceUUID(this->_hid->getHidService()->getUUID());
-    sr.addServiceUUID(COMMAND_SERVICE_ID);
-    this->_advertising->setScanResponseData(sr);
+    this->_advertising->enableScanResponse(true);
+    this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });
+    this->_allowNewConnections = false;
 
     this->_advertising->enableScanResponse(true);
     this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });

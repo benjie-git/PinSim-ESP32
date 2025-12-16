@@ -91,7 +91,7 @@ public:
     {
         // An example packet we might receive from XInput might look like 0x0300002500ff00ff
         XboxGamepadOutputReportData vibrationData = pCharacteristic->getValue<uint64_t>();
-        this->_xInput->onVibrate.fire(vibrationData);
+        this->_xInput->onVibrate(vibrationData);
     }
 
 private:
@@ -180,7 +180,7 @@ void XInput::startServer(const char *device_name, const char *manufacturer, Comm
     NIMBLE_NVS_NAMESPACE = "nim_bond_xb";
 
     NimBLEDevice::init(device_name);
-    NimBLEDevice::setSecurityAuth(true, false, false);
+    NimBLEDevice::setSecurityAuth(true, true, true);
 
     this->_server = NimBLEDevice::createServer();
     this->_serverCallbacks = new ServerCallbacks(this);
@@ -236,12 +236,8 @@ void XInput::startServer(const char *device_name, const char *manufacturer, Comm
     NimBLEAdvertisementData ad = this->_advertising->getAdvertisementData();
     ad.setName(std::string(device_name));
     this->_advertising->setAdvertisementData(ad);
+    this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
     this->_advertising->setAppearance(HID_GAMEPAD);
-
-    NimBLEAdvertisementData sr = this->_advertising->getScanData();
-    sr.addServiceUUID(this->_hid->getHidService()->getUUID());
-    sr.addServiceUUID(COMMAND_SERVICE_ID);
-    this->_advertising->setScanResponseData(sr);
 
     this->_advertising->enableScanResponse(true);
     this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });
