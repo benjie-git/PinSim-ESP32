@@ -232,7 +232,7 @@ void BLEKeyboard::begin(const std::string& deviceName,
     ad.setName(std::string(deviceName));
     this->_advertising->setAdvertisementData(ad);
     this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
-    this->_advertising->setAppearance(HID_GAMEPAD);
+    this->_advertising->setAppearance(HID_KEYBOARD);
 
     this->_advertising->enableScanResponse(true);
     this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });
