@@ -109,6 +109,12 @@ boolean plungerEnabled = true;
 boolean solenoidEnabled = true;
 boolean solenoidOverrides[2] = {false, false};
 
+#if PCB_VERSION == 3
+boolean useResistivePlunger = false;  // Use old style plunger
+#else
+boolean useResistivePlunger = true;   // Use new style plunger
+#endif
+
 boolean waitingForDeadzoneSetting = false;
 boolean waitingForAccelSetting = false;
 boolean useKeyboardMode = false;
@@ -162,42 +168,7 @@ int32_t accY = 0;
 uint8_t pinsimID = 0;
 
 // Pin Declarations
-#if PCB_VERSION == 2
-// PCB Version 0.2
-#define pinLEDStart 2   // Start Button LED
-#define pinLEDLR    0   // Left/Right Buttons LED
-#define pinLEDABC   0   // ABC Buttons LED
-#define pinLEDBG    0   // BG Buttons LED
-#define pinLEDXYZ   0   // XYZ Buttons LED
-#define pinLEDg     6   // PCB LED GREEN
-#define pinLEDr     7   // PCB LED RED
-#define pinACC_SCL 3    // Accelerometer SCL pin
-#define pinRT 4         // Right Flipper
-#define pinPlunger 5    // IR distance for plunger
-#define rumbleSmall 8   // Large Rumble Motor
-#define pinACC_SDA 9    // Accelerometer SDA pin
-#define rumbleLarge 10  // Large Rumble Motor
-#define pinDpadD 12     // Down on DPAD
-#define pinDpadU 14     // Up on DPAD
-#define pinB1 15        // Button 1 (A)
-#define pinB2 16        // Button 2 (B)
-#define pinB3 17        // Button 3 (X)
-#define pinB4 18        // Button 4 (Y)
-#define pinDpadL 38     // Left on DPAD
-#define pinST 39        // Button 8 (Start)
-#define pinBK 40        // Button 7 (Back)
-#define pinXB 41        // XBOX Guide Button
-#define pinLT 42        // Left Flipper
-#define pinDpadR 48     // Right on DPAD
-#define pinB9 47        // Button 9 (L3)   -- Exposed in GPIO header
-#define pinB10 21       // Button 10 (R3)  -- Exposed in GPIO header
-#define pinGPIO11 11    // Exposed in GPIO header
-#define pinGPIO13 13    // Exposed in GPIO header
-#define pinGPIO35 35
-#define pinGPIO36 36
-#define pinGPIO37 37
-
-#elif PCB_VERSION == 3
+#if PCB_VERSION == 3
 // PCB Versions 0.3, 0.4
 #define pinLEDStart 42  // Start Button LED
 #define pinLEDLR 0      // Left/Right Buttons LED
@@ -480,6 +451,11 @@ void runtimeFeedbackBlinks(int n)
 
 uint16_t readingToDistance(int16_t reading)
 {
+    if (useResistivePlunger) {
+        // Magic numbers to convert resistive readings to distances
+        return map(reading, 185, 2700, 1200, 175);
+    }
+
     // The signal from the IR distance detector is curved. Let's linearize. Thanks for the help Twitter!
     float voltage = reading / 310.0f;
     if (voltage == 0) return 0; // Avoid divide by zero
@@ -493,7 +469,16 @@ void getPlungerSamples()
     int total = 0;
 
     for (int i = 0; i < numSamples; i++) {
-        total += analogRead(pinPlunger);
+        int v = analogRead(pinPlunger);
+
+        if (useResistivePlunger) {
+            // Convert resistive plunger values to IR sensor values
+            // scale range from 2800-1000 to 170-2700
+            total += map(v, 2810, 1000, 173, 2700);
+        }
+        else {
+            total += v;
+        }
     }
     plungerAverage = (total + numSamples / 2) / numSamples;
 }
@@ -1019,7 +1004,7 @@ void processInputs()
                 // Attempt to detect plunge
                 int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance,
                                                     plungeTrigger / 2, plungeTrigger);
-                if (currentDistance - lastDistance >= adjustedPlungeTrigger) {
+                if (currentDistance - lastDistance >= adjustedPlungeTrigger && currentDistance > plungerMaxDistance - (plungerMaxDistance - plungerMinDistance) / 8) {
                     // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
                     if (!useKeyboardMode) {
                         if (controlShuffle) {
@@ -1033,17 +1018,17 @@ void processInputs()
                     }
                     distanceBuffer = plungerMaxDistance;
                     lastDistance = plungerMaxDistance;
-                    plungerEnableTime = millis() + 1000;
+                    plungerEnableTime = millis() + 400;
                     return;
                 }
                 lastDistance = currentDistance;
 
-                // Disable accelerometer while plunging and for 1 second afterwards.
+                // Disable accelerometer while plunging and for 0.8 second afterwards.
                 if (currentDistance < plungerMaxDistance - 20)
-                    tiltEnableTime = millis() + 1000;
+                    tiltEnableTime = millis() + 800;
             } else if (currentDistance <= plungerMinDistance) {
                 // cap max
-                tiltEnableTime = millis() + 1000;
+                tiltEnableTime = millis() + 800;
                 distanceBuffer = plungerMinDistance;
             } else if (currentDistance > plungerMaxDistance) {
                 // cap min

@@ -1,2 +1,4 @@
-.theia/launch.json
-.theia/settings.json
+.idea
+.pio
+.vscode
+dist
