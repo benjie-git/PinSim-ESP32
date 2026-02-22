@@ -110,9 +110,9 @@ boolean solenoidEnabled = true;
 boolean solenoidOverrides[2] = {false, false};
 
 #if PCB_VERSION == 3
-boolean useResistivePlunger = false;  // Use old style plunger
+boolean useResistivePlunger = false;  // Use old style plunger on old boards
 #else
-boolean useResistivePlunger = true;   // Use new style plunger
+boolean useResistivePlunger = true;   // Use new style plunger on new boards
 #endif
 
 boolean waitingForDeadzoneSetting = false;
@@ -204,7 +204,7 @@ uint8_t pinsimID = 0;
 #define pinGPIO37 37
 
 #elif PCB_VERSION == 5
-// PCB Version 0.5
+// PCB Version 0.5, 0.6, 0.7
 #define pinLEDStart 45  // Start Button LED
 #define pinLEDLR 2      // Left/Right Buttons LED
 #define pinLEDABC 7     // ABC Buttons LED
