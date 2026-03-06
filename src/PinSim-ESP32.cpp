@@ -70,6 +70,7 @@
 
 #include <Arduino.h>
 #include <esp_mac.h>
+#include <driver/gpio.h>
 #include <Preferences.h>
 #include <Button2.h>
 #include "solenoid.h"
@@ -202,6 +203,7 @@ uint8_t pinsimID = 0;
 #define pinGPIO35 35
 #define pinGPIO36 36
 #define pinGPIO37 37
+#define pinPairBtn 0
 
 #elif PCB_VERSION == 5
 // PCB Version 0.5, 0.6, 0.7
@@ -237,6 +239,7 @@ uint8_t pinsimID = 0;
 #define pinGPIO35 35    // Exposed in GPIO header
 #define pinGPIO36 36    // Exposed in GPIO header
 #define pinGPIO37 37    // Exposed in GPIO header
+#define pinPairBtn 44   // Pairing button to trigger BLE pairing mode
 
 #else
 #error "Please set PCB_VERSION to a valid value"
@@ -369,6 +372,11 @@ void setupPins()
     pinMode(pinXB, INPUT_PULLUP);
     pinMode(rumbleSmall, OUTPUT);
     pinMode(rumbleLarge, OUTPUT);
+
+    if (pinPairBtn) {
+        gpio_reset_pin((gpio_num_t)pinPairBtn); // Ensure UART0 is detached from pinPairBtn
+        pinMode(pinPairBtn, INPUT_PULLUP);
+    }
 
     if (pinLEDStart) pinMode(pinLEDStart, OUTPUT);
     if (pinLEDLR) pinMode(pinLEDLR, OUTPUT);
@@ -917,6 +925,21 @@ void processInputs()
     if (!buttonStatus[POSST]) {
         setButton(XBOX_BUTTON_LS, POSB9, buttonStatus[POSB9]);
         setButton(XBOX_BUTTON_RS, POSB10, buttonStatus[POSB10]);
+    }
+
+    if (pinPairBtn && digitalRead(pinPairBtn) == LOW) {
+        printf("Button: Start Pairing\n");
+        if (useKeyboardMode) {
+            kb.allowNewConnections(true);
+            kb.startAdvertising();
+        } else {
+            gamepad.allowNewConnections(true);
+            gamepad.startAdvertising();
+        }
+        while (digitalRead(pinPairBtn) == LOW) {
+            // Wait for button release
+            delay(16);
+        }
     }
 
     // If we're still waiting for DeadZone calibration, and Start is pressed, set new plunger dead zone
