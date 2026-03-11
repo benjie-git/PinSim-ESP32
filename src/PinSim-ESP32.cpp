@@ -957,8 +957,14 @@ void processInputs()
     setButton(XBOX_BUTTON_RB, POSR1, buttonStatus[POSR1]);
 
     // Middle Buttons: Start, Select, Home
-    pressHome(buttonStatus[POSXB]);
-    pressStart(buttonStatus[POSST]);
+    if (useKeyboardMode) {
+        setButton(XBOX_BUTTON_HOME, POSXB, buttonStatus[POSXB]);
+        setButton(XBOX_BUTTON_START, POSST, buttonStatus[POSST]);
+    }
+    else {
+        pressHome(buttonStatus[POSXB]);
+        pressStart(buttonStatus[POSST]);
+    }
     setButton(XBOX_BUTTON_SELECT, POSBK, buttonStatus[POSBK]);
 
     // Tilt
