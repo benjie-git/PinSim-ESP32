@@ -416,7 +416,7 @@
     let shouldAutoconnectToPSID = null
 
     // Set up event listeners
-    // window.addEventListener("gamepadconnected", (event) => { connectGamepadWithPinsimID() })
+    window.addEventListener("gamepadconnected", (event) => { connectGamepadWithPinsimID() })
     window.addEventListener("keydown", onKeyDown)
     window.addEventListener("keyup", onKeyUp)
     for (let i in keyMapButtonOrder) {
@@ -559,7 +559,21 @@
             return
 
         disconnect()
-        device.gatt.connect().then(gatt => {
+
+        const connectGATTWithRetry = async (dev, retries = 3) => {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const gatt = await dev.gatt.connect()
+                    await new Promise(r => setTimeout(r, 500))
+                    return gatt
+                } catch (err) {
+                    if (i === retries - 1) throw err
+                    await new Promise(r => setTimeout(r, 500 * (i + 1)))
+                }
+            }
+        }
+
+        connectGATTWithRetry(device).then(gatt => {
             // console.log('Getting Service...')
             cmdDevice = gatt.device
             return gatt.getPrimaryService(COMMAND_SERVICE_ID)
@@ -596,7 +610,7 @@
             if (error.name === "NetworkError" && error.code === 19) {
                 // On "Device is no longer in range" error, do nothing
             } else {
-                forgetDevice(device.id)
+                // Removed forgetDevice(device.id) to avoid losing permissions on transient connection errors
             }
             showAllowedDevices()
         })
@@ -692,7 +706,7 @@
     }
 
     // Connect to gamepad to get button states, separate from main BLE connection
-    function connectGamepadWithPinsimID(retries=3) {
+    function connectGamepadWithPinsimID(retries=15) {
         if (pinsimID === null) return
 
         const gamepads = navigator.getGamepads()
@@ -831,6 +845,7 @@
             setKeyMapUI(1)
         }
     }
+
 
     function onClickButton(e, b, isDouble) {
         if (keyboardMode && isDouble) {
