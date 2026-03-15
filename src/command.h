@@ -30,6 +30,7 @@
 #define COMMAND_RESET_KEY_MAPPING   15
 #define COMMAND_SET_SOLENOIDS       16
 #define COMMAND_FIRE_SOLENOID       17
+#define COMMAND_RESET_PINSIM_ID     18
 
 // Command response num in commandData[0]
 #define COMMAND_RESPONSE_STATUS     130

@@ -1206,10 +1206,10 @@ void OnVibrateEvent(XboxGamepadOutputReportData data)
 void updateTriggerStatus()
 {
     uint16_t leftStatus = (pinsimID & 0b11110000) >> 2;
-    gamepad.setLeftTrigger(leftStatus); // Using bits 0b000XXXXX00
+    gamepad.setLeftTrigger(leftStatus); // Using bits 0b0000XXXX00
 
     uint16_t rightStatus = (pinsimID & 0b00001111) << 2;
-    gamepad.setRightTrigger(rightStatus); // Using bits 0b000XXXXX00
+    gamepad.setRightTrigger(rightStatus); // Using bits 0b0000XXXX00
 }
 
 void sendKeymap()
@@ -1235,11 +1235,11 @@ void sendStatus()
     if (useKeyboardMode) status[3] += COMMAND_STATUS_KEYBOARD_MODE;
     if (useKeyboardMode) {
         kb.send_command(status);
+        vTaskDelay_ms(16);
+        sendKeymap();
     } else {
         gamepad.send_command(status);
     }
-    vTaskDelay_ms(16);
-    sendKeymap();
 }
 
 void rxCommand(const uint8_t *commandData, const uint8_t length)
@@ -1358,13 +1358,31 @@ void handlePendingCommand()
             if (!useKeyboardMode) {
                 updateTriggerStatus();
                 gamepad.sendGamepadReport();
+                vTaskDelay_ms(16);
             }
+
             sendStatus();
             runtimeFeedbackBlinks(1);
             break;
 
+        case COMMAND_RESET_PINSIM_ID:
+            if (!useKeyboardMode) {
+                int oldID = pinsimID;
+                pinsimID = 0;
+                updateTriggerStatus();
+                gamepad.sendGamepadReport();
+                vTaskDelay_ms(100);
+                pinsimID = oldID;
+                updateTriggerStatus();
+                gamepad.sendGamepadReport();
+                vTaskDelay_ms(16);
+            }
+            break;
+        
         case COMMAND_SEND_STATUS:
             printf("Command: Send Status\n");
+            updateTriggerStatus();
+            gamepad.sendGamepadReport();
             sendStatus();
             break;
 

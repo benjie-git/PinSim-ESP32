@@ -384,18 +384,18 @@ void XInput::setLeftTrigger(uint16_t value)
 {
     value = constrain(value, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
     if (_inputReport.brake != value) {
+        _inputReport.brake = value;
         _inputReportDirty = true;
     }
-    _inputReport.brake = value;
 }
 
 void XInput::setRightTrigger(uint16_t value)
 {
     value = constrain(value, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
     if (_inputReport.accelerator != value) {
+        _inputReport.accelerator = value;
         _inputReportDirty = true;
     }
-    _inputReport.accelerator = value;
 }
 
 void XInput::setTriggers(uint16_t left, uint16_t right)
@@ -403,10 +403,10 @@ void XInput::setTriggers(uint16_t left, uint16_t right)
     left = constrain(left, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
     right = constrain(right, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
     if (_inputReport.brake != left || _inputReport.accelerator != right) {
+        _inputReport.brake = left;
+        _inputReport.accelerator = right;
         _inputReportDirty = true;
     }
-    _inputReport.brake = left;
-    _inputReport.accelerator = right;
 }
 
 static uint8_t dPadDirectionToValue(XboxDpadFlags direction)

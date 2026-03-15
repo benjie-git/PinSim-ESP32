@@ -255,6 +255,7 @@
     const COMMAND_RESET_KEY_MAPPING   = 15
     const COMMAND_SET_SOLENOIDS       = 16  // commandData[1] contains bool for solenoids enabled
     const COMMAND_FIRE_SOLENOID       = 17  // commandData[1] contains isLeft(bool), [2]: isPressed(bool)
+    const COMMAND_RESET_PINSIM_ID     = 18
 
     // Command response num in commandData[0]
     const COMMAND_RESPONSE_STATUS     = 130  // 4 bytes
@@ -716,6 +717,10 @@
                 const leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
                 const rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
                 const gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
+                if (pinsimID > 0 && gp_pinsimID === 0) {
+                    console.log("HID PinSimID shows up as 0.  Resetting...")
+                    sendCommand(COMMAND_RESET_PINSIM_ID)
+                }
                 if (gp_pinsimID === pinsimID) {
                     console.log(`Connected to HID gamepad (${gp_pinsimID})`)
                     gamepadIndex = i
@@ -724,7 +729,7 @@
             }
         }
         if (gamepadIndex === null && retries > 0) {
-            setTimeout(() => { connectGamepadWithPinsimID(retries - 1) }, 500)
+            setTimeout(() => { connectGamepadWithPinsimID(retries - 1) }, 200)
         }
     }
 
