@@ -192,7 +192,7 @@
     <div id="ble-section" class="inner-section disabled">
         <h3>Bluetooth Pairing</h3>
         <div class="inner-section">
-            <button onclick="const i = Math.max(0, Math.min(255, prompt('New PinSim ID (0-255)'))); sendCommand(COMMAND_SET_PINSIM_ID, i);">Set PinSim ID...</button>
+            <button onclick="let input = prompt('New PinSim ID (0-255)'); if (input !== null && input.trim() !== '') { sendCommand(COMMAND_SET_PINSIM_ID, Math.max(0, Math.min(255, parseInt(input)))); }">Set PinSim ID...</button>
             <button onclick="sendCommand(COMMAND_PAIR_START)">Start Pairing Mode</button>
             <button onclick="sendCommand(COMMAND_PAIR_CLEAR)">Clear All Pairing Info</button>
         </div>
@@ -412,7 +412,7 @@
     let kbGetKeyData = [null, null]  // Button index, and key code for new mapping
     let editDevicesMode = false // When true, show [X] links next to each known device
     let connErrTimer = null
-    let seenAdvertisements = []
+    let seenAdvertisements = {}
     let watchingDevices = []
     let shouldAutoconnectToPSID = null
 
@@ -455,8 +455,9 @@
                         if (device) {
                             let devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
                             if (devName === null) devName = "Unknown Device"
-                            const seen = (seenAdvertisements[device.id] && seenAdvertisements[device.id] > Date.now() - BLE_STALE_TIME)
-                            const icon = (seen) ? "📶" : "⃠"
+                            const isConnected = (cmdDevice && device.id === cmdDevice.id)
+                            const seen = isConnected || (seenAdvertisements[device.id] && seenAdvertisements[device.id] > Date.now() - BLE_STALE_TIME)
+                            const icon = isConnected ? "🔗" : (seen ? "📶" : "⃠")
                             let buttonHtml = ""
                             buttonHtml += `<button onclick="connectToDeviceWithId('${device.id}', this)"><span id="icon-${device.id}">${icon}</span> ${devName}</button>`
                             if (editDevicesMode) {
@@ -469,7 +470,7 @@
                                 disabledHtml += buttonHtml
                             }
                             if (!watchingDevices.includes(device.id)) {
-                                watchingDevices += device.id
+                                watchingDevices.push(device.id)
                                 device.onadvertisementreceived = onAdvReceived
                                 device.watchAdvertisements()
                             }
@@ -485,7 +486,6 @@
                 }
                 else {
                     connStatusDisabledElement.innerHTML = '<span>No Devices Found</span>'
-                    shouldAutoconnectToPSID = null
                 }
             }).catch((error) => {
                 connStatusDisabledElement.innerHTML = '<span>No Devices Found</span>'
@@ -503,12 +503,13 @@
         if (!oldSeen) {
             showAllowedDevices()
         } else {
-            document.getElementById(`icon-${device.id}`).innerHTML = "📶"
+            let iconEl = document.getElementById(`icon-${device.id}`)
+            if (iconEl) iconEl.innerHTML = (cmdDevice && device.id === cmdDevice.id) ? "🔗" : "📶"
         }
         device.watchAdvertisements()
 
         let devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
-        if (devName) {
+        if (devName && devName.includes(":")) {
             let devPSID = parseInt(devName.split(":")[1].trim())
             if (shouldAutoconnectToPSID === devPSID) {
                 // console.log(`Attempt to re-connect`)
@@ -613,6 +614,7 @@
             } else {
                 // Removed forgetDevice(device.id) to avoid losing permissions on transient connection errors
             }
+            didDisconnect(device)
             showAllowedDevices()
         })
     }
@@ -669,13 +671,16 @@
 
     function onDisconnect(event) {
         // console.log("onDisconnect")
-        shouldAutoconnectToPSID = parseInt(localStorage.getItem("PinSimLastConnectedPinSimID"))
+        if (cmdDevice === null || cmdDevice === event.target) {
+            shouldAutoconnectToPSID = parseInt(localStorage.getItem("PinSimLastConnectedPinSimID"))
+        }
         didDisconnect(event.target)
     }
 
     function didDisconnect(device) {
         if (device === cmdDevice) {
             // console.log("didDisconnect")
+            seenAdvertisements[device.id] = 0
             cmdCharacteristic = null
             cmdDevice = null
             gamepadIndex = null
@@ -739,6 +744,35 @@
     function sendCommand(b0, b1=null, b2=null) {
         if (cmdCharacteristic) {
             // console.log(`Sending Command ${b0} (${b1}, ${b2})`)
+            if (b0 === COMMAND_SET_PINSIM_ID) {
+                // Change the cached PSID for this device, _and_ for its counterpart
+                let newPSID = b1
+                let oldPinsimID = null
+                shouldAutoconnectToPSID = newPSID
+
+                const oldName = localStorage.getItem(`PinSimDisplayName-${cmdDevice.id}`)
+                if (oldName && oldName.includes(":")) {
+                    oldPinsimID = parseInt(oldName.split(":")[1].trim())
+                }
+
+                if (oldPinsimID !== null && oldPinsimID !== newPSID) {
+                    let counterpartPrefix = `PinSim ${keyboardMode?"Gamepad":"Keyboard"}: ${oldPinsimID}`
+                    let newCounterpartName = `PinSim ${keyboardMode?"Gamepad":"Keyboard"}: ${newPSID}`
+                    for (let i = 0; i < localStorage.length; i++) {
+                        let key = localStorage.key(i)
+                        if (key && key.startsWith("PinSimDisplayName-")) {
+                            if (localStorage.getItem(key) === counterpartPrefix) {
+                                localStorage.setItem(key, newCounterpartName)
+                            }
+                        }
+                    }
+                }
+
+                localStorage.setItem("PinSimLastConnectedPinSimID", newPSID)
+                shouldAutoconnectToPSID = newPSID
+                pinsimID = newPSID
+            }
+
             let arr
             if (b1 === null) {
                 arr = new Uint8Array([b0])
@@ -750,11 +784,6 @@
                 arr = new Uint8Array([b0, b1, b2])
             }
             cmdCharacteristic.writeValueWithoutResponse(arr)
-
-            if (b0 === COMMAND_TOGGLE_KEYBOARD) {
-                // Reconnect after mode switch / reboot
-                shouldAutoconnectToPSID = pinsimID
-            }
         }
     }
 
@@ -777,17 +806,20 @@
                 plungerStickStatusElement.innerHTML = plungerOnLeftStick ? "Left" : "Right"
                 solenoidsStatusElement.innerHTML = solenoidEnabled ? "On" : "Off"
 
+                let displayName = `PinSim ${keyboardMode?"Keyboard":"Gamepad"}: ${pinsimID}`
+                localStorage.setItem(`PinSimDisplayName-${cmdDevice.id}`, displayName)
+                localStorage.setItem("PinSimLastConnectedPinSimID", pinsimID)
+                pinsimLabelElement.innerHTML = ` (${displayName})`
+
                 showAllowedDevices()
+                
                 if (keyboardMode) {
                     keyMappingCommandsElement.classList.remove("disabled")
                 }
                 else {
                     keyMappingCommandsElement.classList.add("disabled")
                 }
-                let displayName = `PinSim ${keyboardMode?"Keyboard":"Gamepad"}: ${pinsimID}`
-                localStorage.setItem(`PinSimDisplayName-${cmdDevice.id}`, displayName)
-                localStorage.setItem("PinSimLastConnectedPinSimID", pinsimID)
-                pinsimLabelElement.innerHTML = ` (${displayName})`
+                
                 if (gamepadIndex === null) {
                     connectGamepadWithPinsimID()
                 }
