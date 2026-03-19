@@ -2,3 +2,5 @@
 .pio
 .vscode
 dist
+PinSim_FW_updater/data/firmware.bin
+TODO.txt
