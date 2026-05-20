@@ -527,6 +527,7 @@ void getPlungerMax()
 
     plungerMaxDistance = readingToDistance(plungerMin);
     plungerMinDistance = readingToDistance(plungerMax);
+    if (plungerMaxDistance == plungerMinDistance) plungerMaxDistance = plungerMinDistance + 1; // Avoid divide by zero later
     lastDistance = plungerMaxDistance;
 
     // Reset plungerZero to make sure we have full plunger movement so we can preperly set a new zero value
@@ -778,6 +779,7 @@ void setup()
         // linear conversions
         plungerMaxDistance = readingToDistance(plungerMin);
         plungerMinDistance = readingToDistance(plungerMax);
+        if (plungerMaxDistance == plungerMinDistance) plungerMaxDistance = plungerMinDistance + 1; // Avoid divide by zero later
         lastDistance = plungerMaxDistance;
     }
 
@@ -1341,6 +1343,7 @@ void handlePendingCommand()
             printf("Command: Plunger Set Min\n");
             plungerMin = plungerAverage;
             plungerMaxDistance = readingToDistance(plungerMin);
+            if (plungerMaxDistance == plungerMinDistance) plungerMaxDistance = plungerMinDistance + 1; // Avoid divide by zero later
             preferences.putInt("plungerMin", plungerMin);
             runtimeFeedbackBlinks(1);
             break;
@@ -1349,6 +1352,7 @@ void handlePendingCommand()
             printf("Command: Plunger Set Max\n");
             plungerMax = plungerAverage;
             plungerMinDistance = readingToDistance(plungerMax);
+            if (plungerMinDistance == plungerMaxDistance) plungerMinDistance = plungerMaxDistance - 1; // Avoid divide by zero later
             preferences.putInt("plungerMax", plungerMax);
             runtimeFeedbackBlinks(1);
             break;
