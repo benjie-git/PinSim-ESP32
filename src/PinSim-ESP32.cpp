@@ -123,7 +123,7 @@ int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITH
 
 // Store settings to EEPROM using preferences storage name: PinSimESP32
 // Fields: (int)plungerMin, (int)plungerMax, (int)plungerZero,
-//         (int)accelZeroX, (int)accelZeroY,
+//         (int)accelZeroX, (int)accelZeroY, (int)accelOrient,
 //         (bool)controlShuffle, (bool)solenoidEnabled,
 //         (uint8_t)pinsimID, (bool)useKeyboardMode
 // NOTE: field names have max length of 15 chars!!!
@@ -162,6 +162,11 @@ int32_t zeroX = 0;                  // Accelerometer X calibration
 int32_t zeroY = 15000;              // Accelerometer Y calibration (non-zero due to tilted cabinet cover)
 int32_t accX = 0;
 int32_t accY = 0;
+
+// 0 for horizontal with antenna back, 2 for vertical antenna up, 4 for vertical antenna right
+// and +1 from those for spun 180 around the PCB's short axis
+int8_t  accelOrientation = 0;
+
 uint8_t pinsimID = 0;
 
 // Pin Declarations
@@ -730,13 +735,14 @@ void setup()
         printf("Accelerometer setup failed\n");
         /* There was a problem detecting the ADXL345 ... check your connections */
         accelerometerEnabled = false;
-
+    } else {
         accel.setRange(ADXL345_RANGE_2_G);
         delay(100);
-
-        zeroX = preferences.getInt("accelZeroX", zeroX);
-        zeroY = preferences.getInt("accelZeroY", zeroY);
     }
+
+    zeroX = preferences.getInt("accelZeroX", zeroX);
+    zeroY = preferences.getInt("accelZeroY", zeroY);
+    accelOrientation = preferences.getInt("accelOrient", accelOrientation);
 
     if (plungerEnabled) {
         plungerMin = preferences.getInt("plungerMin", plungerMin); // With default value
@@ -896,6 +902,77 @@ void pressStart(bool isPressed)
 }
 
 
+void accelDetermineOrientation(sensors_event_t &event)
+{
+    printf("---- Raw accel X: %f, Y: %f, Z: %f\n", event.acceleration.x, event.acceleration.y, event.acceleration.z);
+    if (fabs(event.acceleration.x) > fabs(event.acceleration.y) && fabs(event.acceleration.x) > fabs(event.acceleration.z)) {
+        // X axis is dominant
+        if (event.acceleration.x < 0) accelOrientation = 4; // vertical mount, antenna right
+        else accelOrientation = 5; // vertical mount, antenna right, flipped 180 degrees
+    } else if (fabs(event.acceleration.y) > fabs(event.acceleration.z)) {
+        // Y axis is dominant
+         if (event.acceleration.y < 0) accelOrientation = 2; // vertical mount, antenna up
+         else accelOrientation = 3; // vertical mount, antenna up, flipped 180 degrees
+    } else {
+        // Z axis is dominant
+         if (event.acceleration.z < 0) accelOrientation = 0; // flat mount, antenna back, upright
+         else accelOrientation = 1; // flat mount, antenna back, upside down
+    }
+    printf("---- accelOrientation: %d\n", accelOrientation);
+
+}
+
+void accelOrientEvent(sensors_event_t &event)
+{
+    // Determine X and Y acceleration in case frame
+    switch (accelOrientation) {
+        case 0:
+        case 1:
+            // flat mount antenna back
+            // nudgeMultiplier is used to adjust the sensitivity of the accelerometer input.  Increase if you want to have to tilt more to get full movement, decrease if you want less tilt for full movement.
+            accX = event.acceleration.x * nudgeMultiplier * -1;
+            accY = event.acceleration.y * nudgeMultiplier * -1;
+            break;
+        case 2:
+        case 3:
+            // vertical mount, antenna up
+            accX = event.acceleration.x * nudgeMultiplier;
+            accY = event.acceleration.z * nudgeMultiplier * -1;
+            break;
+        case 4:
+        case 5:
+            // vertical mount, antenna right
+            accX = event.acceleration.z * nudgeMultiplier;
+            accY = event.acceleration.y * nudgeMultiplier * -1;
+            break;
+    }
+    if (accelOrientation & 1) {
+        accX = -accX;
+    }
+}
+
+void accelSetCalibration()
+{
+    zeroX = accX;
+    zeroY = accY;
+    preferences.putInt("accelZeroX", zeroX);
+    preferences.putInt("accelZeroY", zeroY);
+    preferences.putInt("accelOrient", accelOrientation);
+    printf("Recalibrated accelerometers.\n");
+    printf("---- accelZeroX: %d, accelZeroY: %d, accelOrient: %d\n", zeroX, zeroY, accelOrientation);
+}
+
+void accelCalibrate()
+{
+    vTaskDelay_ms(16 / portTICK_PERIOD_MS); // Short delay before hitting the accelerometer again
+    sensors_event_t event;
+    accel.getEvent(&event);
+    accelDetermineOrientation(event);
+    accelOrientEvent(event);
+    accelSetCalibration();
+}
+
+
 // ProcessInputs
 void processInputs()
 {
@@ -969,17 +1046,16 @@ void processInputs()
         sensors_event_t event;
         accel.getEvent(&event);
 
-        accX = event.acceleration.x * nudgeMultiplier * -1;
-        accY = event.acceleration.y * nudgeMultiplier * -1;
+        // Re-calibrate accelerometer if we're waiting for Accel setting, and Start is pressed
+        if (waitingForAccelSetting && buttonStatus[POSST]) {
+            accelDetermineOrientation(event);
+        }
+
+        accelOrientEvent(event);
 
         // Re-calibrate accelerometer if we're waiting for Accel setting, and Start is pressed
         if (waitingForAccelSetting && buttonStatus[POSST]) {
-            zeroX = accX;
-            zeroY = accY;
-            preferences.putInt("accelZeroX", zeroX);
-            preferences.putInt("accelZeroY", zeroY);
-            printf("Recalibrated accelerometers.\n");
-            printf("---- accelZeroX: %d, accelZeroY: %d\n", zeroX, zeroY);
+            accelSetCalibration();
             configFeedbackBlinks(1);
             waitingForAccelSetting = false;
         }
@@ -1257,11 +1333,7 @@ void handlePendingCommand()
 
     switch (command) {
         case COMMAND_ACCEL_CAL:
-            printf("Command: Calibrate Accels\n");
-            zeroX = accX;
-            zeroY = accY;
-            preferences.putInt("accelZeroX", zeroX);
-            preferences.putInt("accelZeroY", zeroY);
+            accelCalibrate();
             runtimeFeedbackBlinks(1);
             break;
 
