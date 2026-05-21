@@ -203,7 +203,7 @@
                 <tr>
                     <th>Tilt Sensor:</th><td>
                         <button onclick="sendCommand(COMMAND_ACCEL_CAL)">Calibrate</button>
-                        <button onclick="sendCommand(COMMAND_SET_ACCEL_DEAD_ZONE, parseInt(prompt('New Dead Zone (0-100):', '60')))">Set Dead Zone</button>
+                        <button onclick="sendCommand(COMMAND_SET_ACCEL_DEAD_ZONE, parseInt(prompt('New Dead Zone (0-100):', accelDeadZone)))">Set Dead Zone</button>
                     </td>
                 </tr>
                 <tr>
@@ -260,7 +260,7 @@
     const COMMAND_SET_ACCEL_DEAD_ZONE = 19  // commandData[1] contains new dead zone as int percentage (0-100)
 
     // Command response num in commandData[0]
-    const COMMAND_RESPONSE_STATUS     = 130  // 4 bytes
+    const COMMAND_RESPONSE_STATUS     = 130  // 4-5 bytes
     const COMMAND_RESPONSE_KEYMAP     = 131  // 17 bytes
 
     const COMMAND_STATUS_PLUNGER_CONTROL_RIGHT    = 1
@@ -408,6 +408,7 @@
     let plungerOnLeftStick = false
     let solenoidEnabled = false
     let keyboardMode = false
+    let accelDeadZone = 60
     let lastTimestamp = 0
     let pinsimID = null
     let kbGetKeyMode = 0  // 0=Idle, 1=GetButton, 2=GetKey, 3=Send&End
@@ -794,12 +795,15 @@
         if (value.byteLength >= 1) {
             const command = value.getUint8(0)
 
-            if (command === COMMAND_RESPONSE_STATUS && value.byteLength === 4) {
+            if (command === COMMAND_RESPONSE_STATUS && (value.byteLength === 4 || value.byteLength === 5)) {
                 // console.log(`Command Response: ${command} ${value.getUint8(1)} ${value.getUint8(2)} ${value.getUint8(3)}`)
                 // Extract PinSim Status data from command
                 pinsimID = value.getUint8(1)
                 const numPairs = value.getUint8(2)
                 const flags = value.getUint8(3)
+                if (value.byteLength === 5) {
+                    accelDeadZone = value.getUint8(4)
+                }
                 plungerOnLeftStick = (flags & COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
                 solenoidEnabled = (flags & COMMAND_STATUS_SOLENOIDS_ENABLED)
                 keyboardMode = (flags & COMMAND_STATUS_KEYBOARD_MODE)

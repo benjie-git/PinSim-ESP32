@@ -1304,20 +1304,21 @@ void sendKeymap()
 
 void sendStatus()
 {
-    uint8_t status[4];
+    uint8_t status[5];
     status[0] = COMMAND_RESPONSE_STATUS;
     status[1] = pinsimID;
     status[2] = (useKeyboardMode) ? kb.getPairCount() : gamepad.getPairCount();
     status[3] = 0;
+    status[4] = (accelDeadZone+0.001) * 100;
     if (controlShuffle) status[3] += COMMAND_STATUS_PLUNGER_CONTROL_RIGHT;
     if (solenoidEnabled) status[3] += COMMAND_STATUS_SOLENOIDS_ENABLED;
     if (useKeyboardMode) status[3] += COMMAND_STATUS_KEYBOARD_MODE;
     if (useKeyboardMode) {
-        kb.send_command(status);
+        kb.send_command(status, 5);
         vTaskDelay_ms(16);
         sendKeymap();
     } else {
-        gamepad.send_command(status);
+        gamepad.send_command(status, 5);
     }
 }
 
@@ -1433,6 +1434,7 @@ void handlePendingCommand()
             accelDeadZone = pendingCommand[1]/100.0;
             printf("Command: Set Accel Dead Zone to %d\n", pendingCommand[1]);
             preferences.putFloat("accelDeadZone", accelDeadZone);
+            sendStatus();
             runtimeFeedbackBlinks(1);
             break;
 

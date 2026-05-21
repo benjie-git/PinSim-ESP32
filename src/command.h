@@ -49,7 +49,7 @@ class CommandHandler : public NimBLECharacteristicCallbacks
 {
 public:
     CommandHandler(NimBLEServer *server, CommandCallback_t callback);
-    void send_command(const uint8_t* data, uint8_t length=4);
+    void send_command(const uint8_t* data, uint8_t length);
 
 private:
     void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override;
