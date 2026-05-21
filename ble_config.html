@@ -203,6 +203,7 @@
                 <tr>
                     <th>Tilt Sensor:</th><td>
                         <button onclick="sendCommand(COMMAND_ACCEL_CAL)">Calibrate</button>
+                        <button onclick="sendCommand(COMMAND_SET_ACCEL_DEAD_ZONE, parseInt(prompt('New Dead Zone (0-100):', '60')))">Set Dead Zone</button>
                     </td>
                 </tr>
                 <tr>
@@ -256,6 +257,7 @@
     const COMMAND_SET_SOLENOIDS       = 16  // commandData[1] contains bool for solenoids enabled
     const COMMAND_FIRE_SOLENOID       = 17  // commandData[1] contains isLeft(bool), [2]: isPressed(bool)
     const COMMAND_RESET_PINSIM_ID     = 18
+    const COMMAND_SET_ACCEL_DEAD_ZONE = 19  // commandData[1] contains new dead zone as int percentage (0-100)
 
     // Command response num in commandData[0]
     const COMMAND_RESPONSE_STATUS     = 130  // 4 bytes

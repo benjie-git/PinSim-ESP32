@@ -31,6 +31,7 @@
 #define COMMAND_SET_SOLENOIDS       16
 #define COMMAND_FIRE_SOLENOID       17
 #define COMMAND_RESET_PINSIM_ID     18
+#define COMMAND_SET_ACCEL_DEAD_ZONE 19
 
 // Command response num in commandData[0]
 #define COMMAND_RESPONSE_STATUS     130

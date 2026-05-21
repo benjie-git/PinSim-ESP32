@@ -116,6 +116,9 @@ boolean waitingForDeadzoneSetting = false;
 boolean waitingForAccelSetting = false;
 boolean useKeyboardMode = false;
 boolean controlShuffle = false;         // When enabled, move Tilt to D-Pad, and move plunger to Left Stick, to get around a Pinball FX2 VR bug
+
+float accelDeadZone = 0.6;              // Dead zone for accelerometer (higher = less sensitive)
+
 int16_t nudgeMultiplier = 8000;         // accelerometer multiplier (higher = more sensitive)
 int16_t plungeTrigger = 60;             // threshold to trigger a plunge (lower = more sensitive)
 int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITHOUT FLIP_L/FLIP_R closing to trigger four flipper button mode.
@@ -125,7 +128,7 @@ int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITH
 // Fields: (int)plungerMin, (int)plungerMax, (int)plungerZero,
 //         (int)accelZeroX, (int)accelZeroY, (int)accelOrient,
 //         (bool)controlShuffle, (bool)solenoidEnabled,
-//         (uint8_t)pinsimID, (bool)useKeyboardMode
+//         (float)accelDeadZone, (uint8_t)pinsimID, (bool)useKeyboardMode
 // NOTE: field names have max length of 15 chars!!!
 static Preferences preferences;
 
@@ -731,18 +734,19 @@ void setup()
         buttonUpdate();
     }
 
-    /* Initialise the sensor */
+    /* Initialize the sensor */
     if (!accel.begin()) {
+        // There was a problem detecting the ADXL345 ... check your connections
         printf("Accelerometer setup failed\n");
-        /* There was a problem detecting the ADXL345 ... check your connections */
         accelerometerEnabled = false;
     } else {
+        // Initialization successful, set up the range and pull calibration values from preferences
         accel.setRange(ADXL345_RANGE_2_G);
         delay(100);
+        zeroX = preferences.getInt("accelZeroX", zeroX);
+        zeroY = preferences.getInt("accelZeroY", zeroY);
     }
 
-    zeroX = preferences.getInt("accelZeroX", zeroX);
-    zeroY = preferences.getInt("accelZeroY", zeroY);
     accelOrientation = preferences.getInt("accelOrient", accelOrientation);
 
     if (plungerEnabled) {
@@ -753,6 +757,7 @@ void setup()
 
     controlShuffle = preferences.getBool("controlShuffle", controlShuffle);
     solenoidEnabled = preferences.getBool("solenoidEnabled", solenoidEnabled);
+    accelDeadZone = preferences.getFloat("accelDeadZone", accelDeadZone);
 
     // Hold Back button on boot to enter config mode
     if (buttonStatus[POSBK]) {
@@ -1067,13 +1072,13 @@ void processInputs()
 
         if (millis() > tiltEnableTime) {
             if (controlShuffle || useKeyboardMode) {
-                if (accYcon > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::NORTH;
-                if (accXcon > XBOX_STICK_MAX * 0.6) direction |= XboxDpadFlags::EAST;
-                if (accYcon < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::SOUTH;
-                if (accXcon < XBOX_STICK_MIN * 0.6) direction |= XboxDpadFlags::WEST;
+                if (accYcon > XBOX_STICK_MAX * accelDeadZone) direction |= XboxDpadFlags::NORTH;
+                if (accXcon > XBOX_STICK_MAX * accelDeadZone) direction |= XboxDpadFlags::EAST;
+                if (accYcon < XBOX_STICK_MIN * accelDeadZone) direction |= XboxDpadFlags::SOUTH;
+                if (accXcon < XBOX_STICK_MIN * accelDeadZone) direction |= XboxDpadFlags::WEST;
             } else {
                 // Add a big dead zone for Left-stick analog accelerometer movements
-                if (abs(accXcon) > XBOX_STICK_MAX * 0.6 || abs(accYcon) > XBOX_STICK_MAX * 0.6) {
+                if (abs(accXcon) > XBOX_STICK_MAX * accelDeadZone || abs(accYcon) > XBOX_STICK_MAX * accelDeadZone) {
                     gamepad.setLeftThumb(accXcon, accYcon);
                 } else {
                     gamepad.setLeftThumb(0, 0);
@@ -1422,6 +1427,14 @@ void handlePendingCommand()
             preferences.putBool("useKeyboardMode", useKeyboardMode);
             ESP.restart();
             break; // LOL not needed
+
+        case COMMAND_SET_ACCEL_DEAD_ZONE:
+            if (pendingCommand[1] > 100) pendingCommand[1] = 100;
+            accelDeadZone = pendingCommand[1]/100.0;
+            printf("Command: Set Accel Dead Zone to %d\n", pendingCommand[1]);
+            preferences.putFloat("accelDeadZone", accelDeadZone);
+            runtimeFeedbackBlinks(1);
+            break;
 
         case COMMAND_SET_PINSIM_ID:
             pinsimID = pendingCommand[1];
