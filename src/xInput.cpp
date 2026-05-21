@@ -12,6 +12,10 @@ extern const char* NIMBLE_NVS_NAMESPACE;
 #define MAX_CLIENTS 3
 
 
+#define ANALOG_MOVE_THRESHOLD_PCT 2
+#define THUMBSTICK_THRESHOLD ((65535 * ANALOG_MOVE_THRESHOLD_PCT) / 100)
+
+
 
 ///////////////////////////////////////////
 // Manage persistent Whitelist
@@ -200,8 +204,11 @@ void XInput::startServer(const char *device_name, const char *manufacturer, Comm
     this->_hidOutputCallbacks = new HIDOutputCallbacks(this);
     this->_output->setCallbacks(this->_hidOutputCallbacks);
 
-    this->_inputReportDirty = true;
+    this->_buttonsDirty = true;
+    this->_analogDirty = false;
     this->_dirtySkipCount = 0;
+    this->_analogSkipCount = 0;
+    this->_lastSentInputReport = this->_inputReport;
 
     // Create device UUID
     NimBLEService *service = this->_server->getServiceByUUID(SERVICE_UUID_DEVICE_INFORMATION);
@@ -326,7 +333,7 @@ void XInput::press(uint16_t button)
     // Avoid double presses
     if (!isPressed(button)) {
         _inputReport.buttons |= button;
-        _inputReportDirty = true;
+        _buttonsDirty = true;
     }
 }
 
@@ -335,7 +342,7 @@ void XInput::release(uint16_t button)
     // Avoid double presses
     if (isPressed(button)) {   
         _inputReport.buttons ^= button;
-        _inputReportDirty = true;
+        _buttonsDirty = true;
     }
 }
 
@@ -360,7 +367,7 @@ void XInput::setLeftThumb(int16_t x, int16_t y)
     uint16_t ux = (uint16_t)(x + 0x8000);
     uint16_t uy = (uint16_t)(y + 0x8000);
     if(_inputReport.x != ux || _inputReport.y != uy) {
-        _inputReportDirty = true;
+        _analogDirty = true;
     }
     _inputReport.x = ux;
     _inputReport.y = uy;
@@ -374,7 +381,7 @@ void XInput::setRightThumb(int16_t z, int16_t rZ)
     uint16_t uz = (uint16_t)(z + 0x8000);
     uint16_t urZ = (uint16_t)(rZ + 0x8000);
     if(_inputReport.z != uz || _inputReport.rz != urZ){
-        _inputReportDirty = true;
+        _analogDirty = true;
     }
     _inputReport.z = uz;
     _inputReport.rz = urZ;
@@ -385,7 +392,7 @@ void XInput::setLeftTrigger(uint16_t value)
     value = constrain(value, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
     if (_inputReport.brake != value) {
         _inputReport.brake = value;
-        _inputReportDirty = true;
+        _buttonsDirty = true;
     }
 }
 
@@ -394,7 +401,7 @@ void XInput::setRightTrigger(uint16_t value)
     value = constrain(value, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX);
     if (_inputReport.accelerator != value) {
         _inputReport.accelerator = value;
-        _inputReportDirty = true;
+        _buttonsDirty = true;
     }
 }
 
@@ -405,7 +412,7 @@ void XInput::setTriggers(uint16_t left, uint16_t right)
     if (_inputReport.brake != left || _inputReport.accelerator != right) {
         _inputReport.brake = left;
         _inputReport.accelerator = right;
-        _inputReportDirty = true;
+        _buttonsDirty = true;
     }
 }
 
@@ -436,7 +443,7 @@ void XInput::pressDPadDirectionInternal(uint8_t direction)
     // Avoid double presses
     if (!isDPadPressedInternal(direction))
     {
-        _inputReportDirty = true;
+        _buttonsDirty = true;
     }
 
     _inputReport.hat = direction;
@@ -495,7 +502,7 @@ void XInput::pressShare()
     // Avoid double presses
     if (!(_inputReport.share & XBOX_BUTTON_SHARE)) {
         _inputReport.share |= XBOX_BUTTON_SHARE;
-        _inputReportDirty = true;
+        _buttonsDirty = true;
     }
 }
 
@@ -503,14 +510,15 @@ void XInput::releaseShare()
 {
     if (_inputReport.share & XBOX_BUTTON_SHARE) {
         _inputReport.share ^= XBOX_BUTTON_SHARE;
-        _inputReportDirty = true;
+        _buttonsDirty = true;
     }
 }
 
 void XInput::setDirty()
 {
-    this->_inputReportDirty = true;
+    this->_buttonsDirty = true;
 }
+
 
 void XInput::sendGamepadReport()
 {
@@ -520,12 +528,38 @@ void XInput::sendGamepadReport()
 
     if (++this->_dirtySkipCount >= 30) {
         this->_dirtySkipCount = 0;
-        this->_inputReportDirty = true;
+        this->_buttonsDirty = true;
     }
 
-    if (this->_inputReportDirty) {
+    bool shouldSend = false;
+
+    if (this->_buttonsDirty) {
+        shouldSend = true;
+    } else if (this->_analogDirty) {
+        bool significantChange = 
+            abs((int32_t)_inputReport.x - (int32_t)_lastSentInputReport.x) > THUMBSTICK_THRESHOLD ||
+            abs((int32_t)_inputReport.y - (int32_t)_lastSentInputReport.y) > THUMBSTICK_THRESHOLD ||
+            abs((int32_t)_inputReport.z - (int32_t)_lastSentInputReport.z) > THUMBSTICK_THRESHOLD ||
+            abs((int32_t)_inputReport.rz - (int32_t)_lastSentInputReport.rz) > THUMBSTICK_THRESHOLD;
+
+        if (significantChange) {
+            shouldSend = true;
+        } else {
+            // Rate limit minor analog-only updates to thumbsticks:
+            // Skip up to 1 call (send on the 2nd minor update)
+            if (++this->_analogSkipCount > 1) {
+                shouldSend = true;
+            }
+        }
+    }
+
+    if (shouldSend) {
         this->_input->setValue((uint8_t*)&_inputReport, sizeof(_inputReport));
         this->_input->notify();
-        _inputReportDirty = false;
+        
+        this->_lastSentInputReport = this->_inputReport;
+        this->_buttonsDirty = false;
+        this->_analogDirty = false;
+        this->_analogSkipCount = 0;
     }
 }

@@ -115,13 +115,16 @@ private:
     NimBLECharacteristic *_input;
     NimBLECharacteristic *_output;
     XboxGamepadInputReportData _inputReport;
+    XboxGamepadInputReportData _lastSentInputReport;
     HIDOutputCallbacks *_hidOutputCallbacks;
     CommandHandler *_commandHandler;
     CommandCallback_t _commandCallback;
 
-    bool _inputReportDirty;
+    bool _buttonsDirty;
+    bool _analogDirty;
     bool _allowNewConnections;
     uint _dirtySkipCount;
+    uint8_t _analogSkipCount;
 
     void pressDPadDirectionInternal(uint8_t direction = 0);
     bool isDPadPressedInternal(uint8_t direction = 0);
