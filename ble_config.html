@@ -17,7 +17,7 @@
         .inner-section {
             padding-left: 20px;
         }
-        #conn-status button {
+        #conn-status-enabled button, #conn-status-disabled button {
             position: relative;
             height: 28px;
         }
@@ -418,6 +418,7 @@
     let seenAdvertisements = {}
     let watchingDevices = []
     let shouldAutoconnectToPSID = null
+    let connectingDeviceId = null
 
     // Set up event listeners
     window.addEventListener("gamepadconnected", (event) => { connectGamepadWithPinsimID() })
@@ -428,6 +429,14 @@
         document.getElementById(keyMapButtonOrder[i]).addEventListener("dblclick", (event) => {onClickButton(event, i, 1)})
     }
     window.addEventListener("load", onLoad)
+    
+    window.addEventListener("pagehide", (event) => {
+        if (cmdDevice) {
+            try {
+                cmdDevice.gatt.disconnect()
+            } catch (err) {}
+        }
+    })
 
     function onLoad(event) {
         // console.log("didLoad")
@@ -459,10 +468,15 @@
                             let devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
                             if (devName === null) devName = "Unknown Device"
                             const isConnected = (cmdDevice && device.id === cmdDevice.id)
+                            const isConnecting = (device.id === connectingDeviceId)
                             const seen = isConnected || (seenAdvertisements[device.id] && seenAdvertisements[device.id] > Date.now() - BLE_STALE_TIME)
                             const icon = isConnected ? "🔗" : (seen ? "📶" : "⃠")
                             let buttonHtml = ""
-                            buttonHtml += `<button onclick="connectToDeviceWithId('${device.id}', this)"><span id="icon-${device.id}">${icon}</span> ${devName}</button>`
+                            if (isConnecting) {
+                                buttonHtml += `<button class="disabled" style="pointer-events: none; position: relative;"><span id="icon-${device.id}">🔄</span> ${devName} <div class="loader"></div></button>`
+                            } else {
+                                buttonHtml += `<button onclick="connectToDeviceWithId('${device.id}')"><span id="icon-${device.id}">${icon}</span> ${devName}</button>`
+                            }
                             if (editDevicesMode) {
                                 buttonHtml += `<a href="javascript:0" onclick="forgetDevice('${device.id}')">[X]</a>`
                             }
@@ -477,10 +491,16 @@
                                 device.onadvertisementreceived = onAdvReceived
                                 device.watchAdvertisements()
                             }
+                            if (devName && devName.includes(":")) {
+                                let devPSID = parseInt(devName.split(":")[1].trim())
+                                if (shouldAutoconnectToPSID === devPSID && !cmdDevice && !connectingDeviceId) {
+                                    connectToDevice(device, true)
+                                }
+                            }
                         }
                     }
-                    connStatusEnabledElement.innerHTML = enabledHtml
-                    connStatusDisabledElement.innerHTML = disabledHtml
+                    connStatusEnabledElement.innerHTML = enabledHtml + disabledHtml
+                    connStatusDisabledElement.style.display = "none"
                     if (editDevicesMode) {
                         connStatusEnabledElement.classList.add("disabled")
                     } else {
@@ -488,7 +508,9 @@
                     }
                 }
                 else {
+                    connStatusEnabledElement.innerHTML = ""
                     connStatusDisabledElement.innerHTML = '<span>No Devices Found</span>'
+                    connStatusDisabledElement.style.display = "inline-block"
                 }
             }).catch((error) => {
                 connStatusDisabledElement.innerHTML = '<span>No Devices Found</span>'
@@ -514,9 +536,9 @@
         let devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
         if (devName && devName.includes(":")) {
             let devPSID = parseInt(devName.split(":")[1].trim())
-            if (shouldAutoconnectToPSID === devPSID) {
+            if (shouldAutoconnectToPSID === devPSID && !cmdDevice && !connectingDeviceId) {
                 // console.log(`Attempt to re-connect`)
-                connectToDevice(device)
+                connectToDevice(device, true)
             }
         }
     }
@@ -527,7 +549,7 @@
             optionalServices: [COMMAND_SERVICE_ID]
         }).then(device => {
             if (device) {
-                connectToDevice(device)
+                connectToDevice(device, false)
             }
             else {
                 showAllowedDevices()
@@ -549,21 +571,28 @@
                 if (device.id === deviceId) {
                     if (devices.length === 1)
                         editDevicesMode = false
-                    device.forget()
-                    showAllowedDevices()
+                    device.forget().then(() => {
+                        showAllowedDevices()
+                    }).catch(() => {
+                        showAllowedDevices()
+                    })
+                    break
                 }
             }
         })
     }
 
-    function connectToDevice(device) {
+    async function connectToDevice(device, isAuto = false) {
         // console.log("connectToDevice")
         shouldAutoconnectToPSID = null
 
-        if (cmdDevice === device)
+        if (cmdDevice === device && device.gatt.connected)
             return
 
-        disconnect()
+        connectingDeviceId = device.id
+        showAllowedDevices()
+
+        await disconnect()
 
         const connectGATTWithRetry = async (dev, retries = 3) => {
             for (let i = 0; i < retries; i++) {
@@ -602,6 +631,7 @@
             return cmdCharacteristic.startNotifications()
         }).then(_ => {
             // console.log('Set up Notifications.')
+            connectingDeviceId = null
             if (cmdCharacteristic.properties.notify) {
                 onConnect()
             }
@@ -611,7 +641,24 @@
             }
         }).catch((error) => {
             // console.log(error)
+            connectingDeviceId = null
+            
+            const isNoLongerInRange = error.name === "NetworkError" || error.toString().toLowerCase().includes("no longer in range")
+            
+            if (isNoLongerInRange) {
+                if (isAuto) {
+                    const lastReloadTime = parseInt(sessionStorage.getItem("PinSimReloadedToConnect") || "0")
+                    const now = Date.now()
+                    if (now - lastReloadTime > 10000) {
+                        sessionStorage.setItem("PinSimReloadedToConnect", now.toString())
+                        window.location.reload()
+                        return
+                    }
+                }
+                sessionStorage.removeItem("PinSimReloadedToConnect")
+            }
             showError(`Error Connecting to Device (${error})`)
+            
             if (error.name === "NetworkError" && error.code === 19) {
                 // On "Device is no longer in range" error, do nothing
             } else {
@@ -622,14 +669,12 @@
         })
     }
 
-    function connectToDeviceWithId(id, button) {
+    function connectToDeviceWithId(id) {
         // console.log("connectToDeviceWithId")
         navigator.bluetooth.getDevices().then(devices => {
             for (let device of devices) {
                 if (device.id === id && device !== cmdDevice) {
-                    button.classList.add('disabled')
-                    button.insertAdjacentHTML('beforeend', ' <div class="loader"></div>')
-                    connectToDevice(device)
+                    connectToDevice(device, false)
                     break
                 }
             }
@@ -652,6 +697,7 @@
 
     function onConnect() {
         // console.log("onConnect")
+        sessionStorage.removeItem("PinSimReloadedToConnect")
         showError(null)
         cmdCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
         console.log('Connected to BLE device')
@@ -683,6 +729,10 @@
     function didDisconnect(device) {
         if (device === cmdDevice) {
             // console.log("didDisconnect")
+            device.removeEventListener('gattserverdisconnected', onDisconnect)
+            if (cmdCharacteristic) {
+                cmdCharacteristic.removeEventListener('characteristicvaluechanged', onResponse)
+            }
             seenAdvertisements[device.id] = 0
             cmdCharacteristic = null
             cmdDevice = null
@@ -703,11 +753,42 @@
     }
 
     function disconnect() {
-        if (cmdDevice) {
-            // console.log("disconnect")
-            cmdDevice.gatt.disconnect()
-        }
-        shouldAutoconnectToPSID = null
+        return new Promise((resolve) => {
+            if (cmdDevice && cmdDevice.gatt.connected) {
+                let timeout = setTimeout(() => {
+                    resolve()
+                }, 1000)
+
+                const onDisconnectedLocal = (event) => {
+                    clearTimeout(timeout)
+                    resolve()
+                }
+                cmdDevice.addEventListener('gattserverdisconnected', onDisconnectedLocal, { once: true })
+
+                // Clean up permanent listeners immediately to prevent race conditions
+                cmdDevice.removeEventListener('gattserverdisconnected', onDisconnect)
+                if (cmdCharacteristic) {
+                    cmdCharacteristic.removeEventListener('characteristicvaluechanged', onResponse)
+                }
+
+                try {
+                    cmdDevice.gatt.disconnect()
+                } catch (err) {
+                    // Ignore disconnect errors
+                }
+                didDisconnect(cmdDevice)
+            } else {
+                if (cmdDevice) {
+                    cmdDevice.removeEventListener('gattserverdisconnected', onDisconnect)
+                    if (cmdCharacteristic) {
+                        cmdCharacteristic.removeEventListener('characteristicvaluechanged', onResponse)
+                    }
+                    didDisconnect(cmdDevice)
+                }
+                resolve()
+            }
+            shouldAutoconnectToPSID = null
+        })
     }
 
     function scaleTriggerToInt(v) {
