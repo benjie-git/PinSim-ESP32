@@ -57,7 +57,7 @@
         .disabled {
             color: grey;
         }
-        div.disabled button {
+        div.disabled button, button:disabled, button.disabled {
             opacity: 0.6; /* Make it slightly transparent */
             cursor: not-allowed; /* Change cursor on hover */
             background-color: #ccc; /* Gray background */
@@ -179,10 +179,11 @@
             </div>
             <span id="plunger" style="position: absolute; left: 545px; top: 240px;">Right Stick <span class="key"></span></span>
 
-            <table style="position: absolute; left: 320px; top: 190px;">
+            <table style="position: absolute; left: 320px; top: 160px;">
                 <tr><th align="right">Pairings:</th><td id="gamepad-status-pairings"></td></tr>
                 <tr><th align="right">Plunger Stick:</th><td id="gamepad-status-plunger-stick"></td></tr>
                 <tr><th align="right">Solenoids:</th><td id="gamepad-status-solenoids"></td></tr>
+                <tr><th align="right">Button LEDs:</th><td id="gamepad-status-leds"></td></tr>
             </table>
 
             <div style="height: 220px;"></div>
@@ -221,6 +222,8 @@
             <button onclick="sendCommand(COMMAND_TOGGLE_CONTROL_SWAP)">Swap Plunger Controls</button>
             <button onclick="sendCommand(COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
             <button onclick="sendCommand(COMMAND_TOGGLE_KEYBOARD)">Toggle Keyboard/Gamepad Mode</button>
+            <button id="button-led-start" onclick="toggleStartLED()">Enable Start LED</button>
+            <button id="button-led-others" onclick="toggleOtherLEDs()">Enable Other LEDs</button>
         </div>
 
         <h3>Testing</h3>
@@ -258,6 +261,8 @@
     const COMMAND_FIRE_SOLENOID       = 17  // commandData[1] contains isLeft(bool), [2]: isPressed(bool)
     const COMMAND_RESET_PINSIM_ID     = 18
     const COMMAND_SET_ACCEL_DEAD_ZONE = 19  // commandData[1] contains new dead zone as int percentage (0-100)
+    const COMMAND_SET_LED_START       = 20  // commandData[1] contains bool for start LED enabled
+    const COMMAND_SET_LED_OTHERS      = 21  // commandData[1] contains bool for other LEDs enabled
 
     // Command response num in commandData[0]
     const COMMAND_RESPONSE_STATUS     = 130  // 4-5 bytes
@@ -266,8 +271,10 @@
     const COMMAND_STATUS_PLUNGER_CONTROL_RIGHT    = 1
     const COMMAND_STATUS_SOLENOIDS_ENABLED        = 2
     const COMMAND_STATUS_KEYBOARD_MODE            = 4
+    const COMMAND_STATUS_START_LED_ENABLED        = 8
+    const COMMAND_STATUS_OTHER_LEDS_ENABLED       = 16
 
-    const COMMAND_VERSION                   = [0,2]
+    const COMMAND_VERSION                   = [0,3]
     const COMMAND_SERVICE_ID                = "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
     const COMMAND_CHARACTERISTIC_ID         = "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
     const COMMAND_VERSION_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
@@ -280,6 +287,9 @@
     const pairingsStatusElement = document.getElementById("gamepad-status-pairings")
     const plungerStickStatusElement = document.getElementById("gamepad-status-plunger-stick")
     const solenoidsStatusElement = document.getElementById("gamepad-status-solenoids")
+    const ledsStatusElement = document.getElementById("gamepad-status-leds")
+    const startLEDButtonElement = document.getElementById("button-led-start")
+    const otherLEDsButtonElement = document.getElementById("button-led-others")
     const gamepadSectionElement = document.getElementById("gamepad-controls")
     const bleSectionElement = document.getElementById("ble-section")
     const disconnectButtonElement = document.getElementById("disconnect-button")
@@ -405,9 +415,12 @@
     let gamepadIndex = null  // Index of the currently selected gamepad
     let cmdCharacteristic = null
     let cmdDevice = null
+    let cmdVersion = [0, 0]
     let plungerOnLeftStick = false
     let solenoidEnabled = false
     let keyboardMode = false
+    let startLEDEnabled = true
+    let otherLEDsEnabled = false
     let accelDeadZone = 60
     let lastTimestamp = 0
     let pinsimID = null
@@ -616,9 +629,12 @@
             const characteristic = await service.getCharacteristic(COMMAND_VERSION_CHARACTERISTIC_ID)
             if (characteristic) {
                 const v = await characteristic.readValue()
-                if (v.getUint8(0) !== COMMAND_VERSION[0] || v.getUint8(1) !== COMMAND_VERSION[1]) {
+                const major = v.getUint8(0)
+                const minor = v.getUint8(1)
+                if (major !== 0 || (minor !== 2 && minor !== 3)) {
                     throw Error('Bad PinSim Command Version')
                 }
+                cmdVersion = [major, minor]
             }
             else {
                 throw Error('PinSim Command Version Missing')
@@ -736,10 +752,22 @@
             seenAdvertisements[device.id] = 0
             cmdCharacteristic = null
             cmdDevice = null
+            cmdVersion = [0, 0]
             gamepadIndex = null
+            startLEDEnabled = true
+            otherLEDsEnabled = false
             pairingsStatusElement.innerHTML = ""
             plungerStickStatusElement.innerHTML = ""
             solenoidsStatusElement.innerHTML = ""
+            ledsStatusElement.innerHTML = ""
+            if (startLEDButtonElement) {
+                startLEDButtonElement.disabled = false
+                startLEDButtonElement.innerText = "Enable Start LED"
+            }
+            if (otherLEDsButtonElement) {
+                otherLEDsButtonElement.disabled = false
+                otherLEDsButtonElement.innerText = "Enable Other LEDs"
+            }
             gamepadSectionElement.classList.add("disabled")
             bleSectionElement.classList.add("disabled")
             disconnectButtonElement.classList.add("disabled")
@@ -871,6 +899,39 @@
         }
     }
 
+    function toggleStartLED() {
+        if (cmdVersion[0] === 0 && cmdVersion[1] <= 2) return
+        startLEDEnabled = !startLEDEnabled
+        updateLEDStatusUI()
+        sendCommand(COMMAND_SET_LED_START, startLEDEnabled ? 1 : 0)
+    }
+
+    function toggleOtherLEDs() {
+        if (cmdVersion[0] === 0 && cmdVersion[1] <= 2) return
+        otherLEDsEnabled = !otherLEDsEnabled
+        updateLEDStatusUI()
+        sendCommand(COMMAND_SET_LED_OTHERS, otherLEDsEnabled ? 1 : 0)
+    }
+
+    function updateLEDStatusUI() {
+        let ledsText = "None"
+        if (startLEDEnabled && otherLEDsEnabled) {
+            ledsText = "All"
+        } else if (startLEDEnabled) {
+            ledsText = "Start"
+        } else if (otherLEDsEnabled) {
+            ledsText = "Others"
+        }
+
+        const isVersion02 = (cmdVersion[0] === 0 && cmdVersion[1] === 2)
+        if (startLEDButtonElement) startLEDButtonElement.disabled = isVersion02
+        if (otherLEDsButtonElement) otherLEDsButtonElement.disabled = isVersion02
+
+        if (ledsStatusElement) ledsStatusElement.innerHTML = ledsText
+        if (startLEDButtonElement) startLEDButtonElement.innerText = (startLEDEnabled ? "Disable" : "Enable") + " Start LED"
+        if (otherLEDsButtonElement) otherLEDsButtonElement.innerText = (otherLEDsEnabled ? "Disable" : "Enable") + " Other LEDs"
+    }
+
     function onResponse(event) {
         let value = event.target.value
         if (value.byteLength >= 1) {
@@ -888,10 +949,18 @@
                 plungerOnLeftStick = (flags & COMMAND_STATUS_PLUNGER_CONTROL_RIGHT)
                 solenoidEnabled = (flags & COMMAND_STATUS_SOLENOIDS_ENABLED)
                 keyboardMode = (flags & COMMAND_STATUS_KEYBOARD_MODE)
+                if (cmdVersion[0] === 0 && cmdVersion[1] === 2) {
+                    startLEDEnabled = true
+                    otherLEDsEnabled = false
+                } else {
+                    startLEDEnabled = !!(flags & COMMAND_STATUS_START_LED_ENABLED)
+                    otherLEDsEnabled = !!(flags & COMMAND_STATUS_OTHER_LEDS_ENABLED)
+                }
 
                 pairingsStatusElement.innerHTML = numPairs
                 plungerStickStatusElement.innerHTML = plungerOnLeftStick ? "Left" : "Right"
                 solenoidsStatusElement.innerHTML = solenoidEnabled ? "On" : "Off"
+                updateLEDStatusUI()
 
                 let displayName = `PinSim ${keyboardMode?"Keyboard":"Gamepad"}: ${pinsimID}`
                 localStorage.setItem(`PinSimDisplayName-${cmdDevice.id}`, displayName)

@@ -12,7 +12,7 @@
 #define COMMAND_CHARACTERISTIC_ID "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
 #define COMMAND_VERSION_CHARACTERISTIC_ID "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
 
-#define COMMAND_VERSION             {0, 2}
+#define COMMAND_VERSION             {0, 3}
 
 // Command num goes in commandData[0]
 #define COMMAND_ACCEL_CAL           3
@@ -32,6 +32,8 @@
 #define COMMAND_FIRE_SOLENOID       17
 #define COMMAND_RESET_PINSIM_ID     18
 #define COMMAND_SET_ACCEL_DEAD_ZONE 19
+#define COMMAND_SET_LED_START       20
+#define COMMAND_SET_LED_OTHERS      21
 
 // Command response num in commandData[0]
 #define COMMAND_RESPONSE_STATUS     130
@@ -40,6 +42,8 @@
 #define COMMAND_STATUS_PLUNGER_CONTROL_RIGHT    1
 #define COMMAND_STATUS_SOLENOIDS_ENABLED        2
 #define COMMAND_STATUS_KEYBOARD_MODE            4
+#define COMMAND_STATUS_START_LED_ENABLED        8
+#define COMMAND_STATUS_OTHER_LEDS_ENABLED       16
 
 
 typedef void (*CommandCallback_t)(const uint8_t *args, uint8_t length);

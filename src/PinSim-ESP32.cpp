@@ -116,6 +116,8 @@ boolean waitingForDeadzoneSetting = false;
 boolean waitingForAccelSetting = false;
 boolean useKeyboardMode = false;
 boolean controlShuffle = false;         // When enabled, move Tilt to D-Pad, and move plunger to Left Stick, to get around a Pinball FX2 VR bug
+boolean enableStartLED = true;         // When enabled, the Start button LED will be lit up
+boolean enableOtherLEDs = false;        // When enabled, all the other LEDs will be lit up
 
 float accelDeadZone = 0.6;              // Dead zone for accelerometer (higher = less sensitive)
 
@@ -128,7 +130,8 @@ int16_t fourButtonModeThreshold = 250;  // ms that pins 13/14 need to close WITH
 // Fields: (int)plungerMin, (int)plungerMax, (int)plungerZero,
 //         (int)accelZeroX, (int)accelZeroY, (int)accelOrient,
 //         (bool)controlShuffle, (bool)solenoidEnabled,
-//         (float)accelDeadZone, (uint8_t)pinsimID, (bool)useKeyboardMode
+//         (float)accelDeadZone, (uint8_t)pinsimID, (bool)useKeyboardMode,
+//         (bool)enableStartLED, (bool)enableOtherLEDs
 // NOTE: field names have max length of 15 chars!!!
 static Preferences preferences;
 
@@ -210,7 +213,7 @@ uint8_t pinsimID = 0;
 #define pinPairBtn 0
 
 #elif PCB_VERSION == 5
-// PCB Version 0.5, 0.6, 0.7
+// PCB Version 0.5, 0.6, 0.7, 0.8
 #define pinLEDStart 45  // Start Button LED
 #define pinLEDLR 2      // Left/Right Buttons LED
 #define pinLEDABC 7     // ABC Buttons LED
@@ -450,11 +453,11 @@ void configFeedbackBlinks(int n)
 void runtimeFeedbackBlinks(int n)
 {
     for (int i = 0; i < n; i++) {
-        LED_Set(pinLEDStart, HIGH);
-        if (pinLEDBG) LED_Set(pinLEDBG, HIGH);
+        LED_Set(pinLEDStart, !enableStartLED);
+        if (pinLEDBG) LED_Set(pinLEDBG, !enableOtherLEDs);
         vTaskDelay_ms(300);
-        LED_Set(pinLEDStart, LOW);
-        if (pinLEDBG) LED_Set(pinLEDBG, LOW);
+        LED_Set(pinLEDStart, enableStartLED);
+        if (pinLEDBG) LED_Set(pinLEDBG, enableOtherLEDs);
         if (i == n - 1) break; // Skip the last delay
         vTaskDelay_ms(300);
     }
@@ -707,6 +710,8 @@ void setup()
     printf("PinSim ESP32 Starting up\n");
 
     useKeyboardMode = preferences.getBool("useKeyboardMode", useKeyboardMode);
+    enableStartLED = preferences.getBool("enableStartLED", enableStartLED);
+    enableOtherLEDs = preferences.getBool("enableOtherLEDs", enableOtherLEDs);
 
     uint8_t mac_bytes[6];
     esp_efuse_mac_get_default(mac_bytes);
@@ -1168,7 +1173,7 @@ void ledUpdate()
             useKeyboardMode && !kb.isAdvertisingNewDevices())) {
         // Connected!  So LEDs On Solid
         LED_SetAnalog(pinLEDg, PCB_LED_BRIGHTNESS);
-        LED_Set(pinLEDStart, HIGH);
+        LED_Set(pinLEDStart, enableStartLED);
     } else {
         // BLE Pairing mode -- So Flash LEDs
         static uint8_t blinkCounter = 0;
@@ -1180,6 +1185,10 @@ void ledUpdate()
         LED_SetAnalog(pinLEDg, (ledOn) ? PCB_LED_BRIGHTNESS : 0);
         LED_Set(pinLEDStart, ledOn);
     }
+    LED_Set(pinLEDLR, enableOtherLEDs);
+    LED_Set(pinLEDABC, enableOtherLEDs);
+    LED_Set(pinLEDBG, enableOtherLEDs);
+    LED_Set(pinLEDXYZ, enableOtherLEDs);
 }
 
 
@@ -1313,6 +1322,8 @@ void sendStatus()
     if (controlShuffle) status[3] += COMMAND_STATUS_PLUNGER_CONTROL_RIGHT;
     if (solenoidEnabled) status[3] += COMMAND_STATUS_SOLENOIDS_ENABLED;
     if (useKeyboardMode) status[3] += COMMAND_STATUS_KEYBOARD_MODE;
+    if (enableStartLED) status[3] += COMMAND_STATUS_START_LED_ENABLED;
+    if (enableOtherLEDs) status[3] += COMMAND_STATUS_OTHER_LEDS_ENABLED;
     if (useKeyboardMode) {
         kb.send_command(status, 5);
         vTaskDelay_ms(16);
@@ -1397,6 +1408,20 @@ void handlePendingCommand()
 
         case COMMAND_FIRE_SOLENOID:
             solenoidOverrides[pendingCommand[1] != 0] = (pendingCommand[2] != 0);
+            break;
+
+        case COMMAND_SET_LED_START:
+            enableStartLED = (pendingCommand[1] != 0);
+            printf("Command: Enable Start LED %s\n", (enableStartLED) ? "On" : "Off");
+            preferences.putBool("enableStartLED", enableStartLED);
+            sendStatus();
+            break;
+
+        case COMMAND_SET_LED_OTHERS:
+            enableOtherLEDs = (pendingCommand[1] != 0);
+            printf("Command: Enable Other LEDs %s\n", (enableOtherLEDs) ? "On" : "Off");
+            preferences.putBool("enableOtherLEDs", enableOtherLEDs);
+            sendStatus();
             break;
 
         case COMMAND_PAIR_CLEAR:
