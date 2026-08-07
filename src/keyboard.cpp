@@ -203,7 +203,7 @@ void BLEKeyboard::begin(const std::string& deviceName,
 	NIMBLE_NVS_NAMESPACE = "nim_bond_kb";
 
     NimBLEDevice::init(deviceName);
-    NimBLEDevice::setSecurityAuth(true, true, true);
+    NimBLEDevice::setSecurityAuth(true, false, true);
 
     this->_server = NimBLEDevice::createServer();
     this->_serverCallbacks = new KBServerCallbacks(this);
@@ -222,9 +222,7 @@ void BLEKeyboard::begin(const std::string& deviceName,
 
     this->_hid->setBatteryLevel(100);
 
-    this->_hid->startServices();
     this->_inputReportDirty = true;
-
 
     // Start BLE advertisement
     this->_advertising = this->_server->getAdvertising();

@@ -184,7 +184,7 @@ void XInput::startServer(const char *device_name, const char *manufacturer, Comm
     NIMBLE_NVS_NAMESPACE = "nim_bond_xb";
 
     NimBLEDevice::init(device_name);
-    NimBLEDevice::setSecurityAuth(true, true, true);
+    NimBLEDevice::setSecurityAuth(true, false, true);
 
     this->_server = NimBLEDevice::createServer();
     this->_serverCallbacks = new ServerCallbacks(this);
@@ -235,8 +235,6 @@ void XInput::startServer(const char *device_name, const char *manufacturer, Comm
     this->_hid->setBatteryLevel(100);
 
     this->_commandHandler = new CommandHandler(this->_server, commandCallback);
-
-    this->_hid->startServices();
 
     // Start BLE advertisement
     this->_advertising = this->_server->getAdvertising();
