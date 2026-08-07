@@ -27,8 +27,6 @@ CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback)
     uint8_t versionData[2] = COMMAND_VERSION;
     _versionCharacteristic->setValue((uint8_t*)versionData, 2);
     // cmdService->addCharacteristic(_versionCharacteristic);
-
-    cmdService->start();
 }
 
 void CommandHandler::onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo)
