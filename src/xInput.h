@@ -6,6 +6,7 @@
 #include <NimBLEAdvertising.h>
 #include "xInput_defs.h"
 #include "command.h"
+#include <map>
 
 class HIDOutputCallbacks;
 class ServerCallbacks;
@@ -40,6 +41,18 @@ struct XboxGamepadInputReportData {
     uint8_t  hat = 0x00;        // 4bits for hat switch (Dpad) + 4 bit padding (1 byte) 
     uint16_t buttons = 0x00;    // 15 * 1bit for buttons + 1 bit padding (2 bytes)
     uint8_t  share = 0x00;      // 1 bits for share/menu button + 7 bit padding (1 byte)
+};
+#pragma pack(pop)
+
+
+#pragma pack(push, 1)
+// Button order, starting with bit 0 (0x0001)
+// A, B, X, Y, LB, RB, SELECT, START, LS, RS, HOME, DU, DD, DL, DR
+struct PinSimMinimalReportData {
+    uint16_t lx = 0;            // Left joystick X
+    uint16_t ly = 0;            // Left joystick Y
+    uint16_t ry = 0;            // Right joystick Y
+    uint16_t buttons = 0x00;    // 15 * 1bit for buttons + 1 bit padding (2 bytes)
 };
 #pragma pack(pop)
 
@@ -107,15 +120,19 @@ public:
     void saveWhitelist();
     void clearWhitelistInternal();
 
+    std::map<uint16_t, uint16_t> _minReportSubs;
+
 private:
     NimBLEServer *_server;
     NimBLEAdvertising *_advertising;
     ServerCallbacks *_serverCallbacks;
     NimBLEHIDDevice *_hid;
     NimBLECharacteristic *_input;
+    NimBLECharacteristic *_minimalInput;
     NimBLECharacteristic *_output;
     XboxGamepadInputReportData _inputReport;
     XboxGamepadInputReportData _lastSentInputReport;
+    PinSimMinimalReportData _minimalReport;
     HIDOutputCallbacks *_hidOutputCallbacks;
     CommandHandler *_commandHandler;
     CommandCallback_t _commandCallback;

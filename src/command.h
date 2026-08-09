@@ -8,11 +8,12 @@
 #include <NimBLEServer.h>
 #include <NimBLECharacteristic.h>
 
-#define COMMAND_SERVICE_ID        "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
-#define COMMAND_CHARACTERISTIC_ID "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
+#define COMMAND_SERVICE_ID                "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
+#define COMMAND_CHARACTERISTIC_ID         "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
 #define COMMAND_VERSION_CHARACTERISTIC_ID "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
+#define COMMAND_REPORT_CHARACTERISTIC_ID  "4a761e27-a006-4b89-8d76-1c4b9e2402d7"
 
-#define COMMAND_VERSION             {0, 3}
+#define COMMAND_VERSION             {0, 4}
 
 // Command num goes in commandData[0]
 #define COMMAND_ACCEL_CAL           3
@@ -52,7 +53,7 @@ typedef void (*CommandCallback_t)(const uint8_t *args, uint8_t length);
 class CommandHandler : public NimBLECharacteristicCallbacks
 {
 public:
-    CommandHandler(NimBLEServer *server, CommandCallback_t callback);
+    CommandHandler(NimBLEServer *server, CommandCallback_t callback, NimBLECharacteristic **reportCharacteristic);
     void send_command(const uint8_t* data, uint8_t length);
 
 private:

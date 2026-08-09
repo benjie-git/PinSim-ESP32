@@ -218,7 +218,7 @@ void BLEKeyboard::begin(const std::string& deviceName,
     this->_inputKeyboard = this->_hid->getInputReport(KEYBOARD_ID);
     this->_inputKeyboard->setValue((uint8_t*)&_keyReport, sizeof(_keyReport));
 
-	this->_commandHandler = new CommandHandler(this->_server, commandCallback);
+	this->_commandHandler = new CommandHandler(this->_server, commandCallback, NULL);
 
     this->_hid->setBatteryLevel(100);
 

@@ -274,10 +274,11 @@
     const COMMAND_STATUS_START_LED_ENABLED        = 8
     const COMMAND_STATUS_OTHER_LEDS_ENABLED       = 16
 
-    const COMMAND_VERSION                   = [0,3]
+    const COMMAND_VERSION                   = [0,4]
     const COMMAND_SERVICE_ID                = "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
     const COMMAND_CHARACTERISTIC_ID         = "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
     const COMMAND_VERSION_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
+    const COMMAND_REPORT_CHARACTERISTIC_ID  = "4a761e27-a006-4b89-8d76-1c4b9e2402d7"
     const BLE_STALE_TIME                    = 60000
 
     const connStatusEnabledElement = document.getElementById("conn-status-enabled")
@@ -302,10 +303,9 @@
 
     const buttonMap = [
         "button-status-a", "button-status-b", "button-status-x", "button-status-y",
-        "button-status-l-flipper", "button-status-r-flipper", "", "",
-        "button-status-back", "button-status-start", "button-status-c", "button-status-z",
-        "button-status-dpad-up", "button-status-dpad-down", "button-status-dpad-left", "button-status-dpad-right",
-        "button-status-menu"
+        "button-status-l-flipper", "button-status-r-flipper", "button-status-back", "button-status-start",
+        "button-status-c", "button-status-z", "button-status-menu", "button-status-dpad-up",
+        "button-status-dpad-down", "button-status-dpad-left", "button-status-dpad-right"
     ]
 
     const keyMapButtonOrder = [
@@ -409,11 +409,57 @@
         "CapsLock": "Caps",
     }
 
-    const leftTriggerIndex = 6
-    const rightTriggerIndex = 7
+    class PinSimReport {
+        constructor(dataView) {
+            this.lx = 32768
+            this.ly = 32768
+            this.ry = 32768
+            this.buttons = 0
+            if (dataView) {
+                this.update(dataView)
+            }
+        }
 
-    let gamepadIndex = null  // Index of the currently selected gamepad
+        update(dataView) {
+            if (dataView && dataView.byteLength >= 8) {
+                this.lx = dataView.getUint16(0, true)
+                this.ly = dataView.getUint16(2, true)
+                this.ry = dataView.getUint16(4, true)
+                this.buttons = dataView.getUint16(6, true)
+            }
+        }
+
+        getAxis(name) {
+            let val = 32768
+            if (name === 'lx') val = this.lx
+            else if (name === 'ly') val = this.ly
+            else if (name === 'ry') val = this.ry
+            return (val - 32768) / 32768.0
+        }
+
+        get lxNormalized() {
+            return (this.lx - 32768) / 32768.0
+        }
+
+        get lyNormalized() {
+            return (this.ly - 32768) / 32768.0
+        }
+
+        get ryNormalized() {
+            return (this.ry - 32768) / 32768.0
+        }
+
+        isButtonPressed(indexOrMask) {
+            if (indexOrMask < 16) {
+                return (this.buttons & (1 << indexOrMask)) !== 0
+            }
+            return (this.buttons & indexOrMask) !== 0
+        }
+    }
+
     let cmdCharacteristic = null
+    let reportCharacteristic = null
+    let currentReport = new PinSimReport()
     let cmdDevice = null
     let cmdVersion = [0, 0]
     let plungerOnLeftStick = false
@@ -422,7 +468,6 @@
     let startLEDEnabled = true
     let otherLEDsEnabled = false
     let accelDeadZone = 60
-    let lastTimestamp = 0
     let pinsimID = null
     let kbGetKeyMode = 0  // 0=Idle, 1=GetButton, 2=GetKey, 3=Send&End
     let kbGetKeyData = [null, null]  // Button index, and key code for new mapping
@@ -434,7 +479,6 @@
     let connectingDeviceId = null
 
     // Set up event listeners
-    window.addEventListener("gamepadconnected", (event) => { connectGamepadWithPinsimID() })
     window.addEventListener("keydown", onKeyDown)
     window.addEventListener("keyup", onKeyUp)
     for (let i in keyMapButtonOrder) {
@@ -454,7 +498,6 @@
     function onLoad(event) {
         // console.log("didLoad")
         shouldAutoconnectToPSID = parseInt(localStorage.getItem("PinSimLastConnectedPinSimID"))
-        requestAnimationFrame(updateGamepadState)
         showAllowedDevices()
     }
 
@@ -631,19 +674,34 @@
                 const v = await characteristic.readValue()
                 const major = v.getUint8(0)
                 const minor = v.getUint8(1)
-                if (major !== 0 || (minor !== 2 && minor !== 3)) {
-                    throw Error('Bad PinSim Command Version')
+                if (major !== 0 || minor != 4) {
+                    throw Error('Unsupported PinSim Command Version')
                 }
                 cmdVersion = [major, minor]
             }
             else {
                 throw Error('PinSim Command Version Missing')
             }
+
+            try {
+                reportCharacteristic = await service.getCharacteristic(COMMAND_REPORT_CHARACTERISTIC_ID)
+            } catch (e) {
+                reportCharacteristic = null
+            }
+
             return service.getCharacteristic(COMMAND_CHARACTERISTIC_ID)
-        }).then(characteristic => {
+        }).then(async characteristic => {
             // console.log('Requesting Notifications...')
             cmdCharacteristic = characteristic
             cmdDevice.addEventListener('gattserverdisconnected', onDisconnect)
+            if (reportCharacteristic) {
+                try {
+                    await reportCharacteristic.startNotifications()
+                    reportCharacteristic.addEventListener('characteristicvaluechanged', onReportNotification)
+                } catch (e) {
+                    console.warn('Could not start report notifications:', e)
+                }
+            }
             return cmdCharacteristic.startNotifications()
         }).then(_ => {
             // console.log('Set up Notifications.')
@@ -749,11 +807,16 @@
             if (cmdCharacteristic) {
                 cmdCharacteristic.removeEventListener('characteristicvaluechanged', onResponse)
             }
+            if (reportCharacteristic) {
+                reportCharacteristic.removeEventListener('characteristicvaluechanged', onReportNotification)
+            }
             seenAdvertisements[device.id] = 0
             cmdCharacteristic = null
+            reportCharacteristic = null
             cmdDevice = null
             cmdVersion = [0, 0]
-            gamepadIndex = null
+            currentReport = new PinSimReport()
+            updateReportUI(currentReport)
             startLEDEnabled = true
             otherLEDsEnabled = false
             pairingsStatusElement.innerHTML = ""
@@ -798,6 +861,9 @@
                 if (cmdCharacteristic) {
                     cmdCharacteristic.removeEventListener('characteristicvaluechanged', onResponse)
                 }
+                if (reportCharacteristic) {
+                    reportCharacteristic.removeEventListener('characteristicvaluechanged', onReportNotification)
+                }
 
                 try {
                     cmdDevice.gatt.disconnect()
@@ -817,37 +883,6 @@
             }
             shouldAutoconnectToPSID = null
         })
-    }
-
-    function scaleTriggerToInt(v) {
-        return Math.round(v*1023);
-    }
-
-    // Connect to gamepad to get button states, separate from main BLE connection
-    function connectGamepadWithPinsimID(retries=15) {
-        if (pinsimID === null) return
-
-        const gamepads = navigator.getGamepads()
-        for (let i = 0; i < gamepads.length; i++) {
-            const gamepad = gamepads[i]
-            if (gamepad) {
-                const leftVal = scaleTriggerToInt(gamepad.buttons[leftTriggerIndex].value)
-                const rightVal = scaleTriggerToInt(gamepad.buttons[rightTriggerIndex].value)
-                const gp_pinsimID = ((leftVal & 0b0000111100) << 2) | ((rightVal & 0b0000111100) >> 2)
-                if (pinsimID > 0 && gp_pinsimID === 0) {
-                    console.log("HID PinSimID shows up as 0.  Resetting...")
-                    sendCommand(COMMAND_RESET_PINSIM_ID)
-                }
-                if (gp_pinsimID === pinsimID) {
-                    console.log(`Connected to HID gamepad (${gp_pinsimID})`)
-                    gamepadIndex = i
-                    showAllowedDevices()
-                }
-            }
-        }
-        if (gamepadIndex === null && retries > 0) {
-            setTimeout(() => { connectGamepadWithPinsimID(retries - 1) }, 200)
-        }
     }
 
     /////////////////////////////////////
@@ -975,10 +1010,6 @@
                 else {
                     keyMappingCommandsElement.classList.add("disabled")
                 }
-                
-                if (gamepadIndex === null) {
-                    connectGamepadWithPinsimID()
-                }
             }
             else if (command === COMMAND_RESPONSE_KEYMAP && value.byteLength === 17) {
                 let dataString = ""
@@ -1054,38 +1085,31 @@
         e.preventDefault()
     }
 
-    // There are no events for gamepad button press/release, so poll every animation frame instead
-    function updateGamepadState() {
-        requestAnimationFrame(updateGamepadState);
-        if (gamepadIndex !== null) {
-            let gamepad = null
-            gamepad = navigator.getGamepads()[gamepadIndex]
-            if (gamepad) {
-                const newTimestamp = Math.round(gamepad.timestamp)
-                if (newTimestamp === lastTimestamp) return
-                lastTimestamp = newTimestamp
+    function onReportNotification(event) {
+        let value = event.target.value
+        currentReport.update(value)
+        updateReportUI(currentReport)
+    }
 
-                // Update buttons
-                for (let i = 0; i < buttonMap.length; i++) {
-                    const buttonName = buttonMap[i]
-                    if (buttonName) {
-                        if (gamepad.buttons[i].pressed) {
-                            document.getElementById(buttonName).classList.add("pressed")
-                        } else {
-                            document.getElementById(buttonName).classList.remove("pressed")
-                        }
+    function updateReportUI(report) {
+        if (keyboardMode) return
+
+        for (let i = 0; i < buttonMap.length; i++) {
+            const buttonName = buttonMap[i]
+            if (buttonName) {
+                const el = document.getElementById(buttonName)
+                if (el) {
+                    if (report.isButtonPressed(i)) {
+                        el.classList.add("pressed")
+                    } else {
+                        el.classList.remove("pressed")
                     }
                 }
-
-                // Update Plunger
-                updateStick(leftStickElement, gamepad.axes[0], gamepad.axes[1], 40)
-                updateStick(rightStickElement, 0, gamepad.axes[3], 100)
-            }
-            else if (!keyboardMode) {
-                updateStick(leftStickElement, 0, 0, 40)
-                updateStick(rightStickElement, 0, 0, 100)
             }
         }
+
+        updateStick(leftStickElement, report.getAxis('lx'), report.getAxis('ly'), 40)
+        updateStick(rightStickElement, 0, report.getAxis('ry'), 100)
     }
 
     function onKeyDown(event) {

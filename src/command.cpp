@@ -5,10 +5,9 @@
 #include "command.h"
 #include <NimBLEService.h>
 
-CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback)
+CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback, NimBLECharacteristic **reportCharacteristic)
 {
     NimBLEService *cmdService = server->createService(COMMAND_SERVICE_ID);
-    // server->addService(cmdService);
 
     _commandCharacteristic = cmdService->createCharacteristic(
         COMMAND_CHARACTERISTIC_ID,
@@ -18,7 +17,6 @@ CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback)
     uint8_t commandData[4] = {0, 0, 0, 0};
     _commandCharacteristic->setValue((uint8_t*)commandData, 4);
     _commandCallback = callback;
-    // cmdService->addCharacteristic(_commandCharacteristic);
 
     _versionCharacteristic = cmdService->createCharacteristic(
         COMMAND_VERSION_CHARACTERISTIC_ID,
@@ -26,7 +24,14 @@ CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback)
         2);
     uint8_t versionData[2] = COMMAND_VERSION;
     _versionCharacteristic->setValue((uint8_t*)versionData, 2);
-    // cmdService->addCharacteristic(_versionCharacteristic);
+
+    // Only used for gamepad mode.  Sends button and axis states.
+    if (reportCharacteristic) {
+        *reportCharacteristic = cmdService->createCharacteristic(
+            COMMAND_REPORT_CHARACTERISTIC_ID,
+            NIMBLE_PROPERTY::NOTIFY,
+            8);
+    }
 }
 
 void CommandHandler::onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo)

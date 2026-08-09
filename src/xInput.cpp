@@ -103,6 +103,23 @@ private:
 };
 
 
+class MinReportCharCallbacks : public NimBLECharacteristicCallbacks
+{
+public:
+    MinReportCharCallbacks(XInput* xInput) : _xInput(xInput) {}
+
+    void onSubscribe(NimBLECharacteristic* pChar, NimBLEConnInfo& connInfo, uint16_t subValue) override {
+        if (subValue == 0) {
+            this->_xInput->_minReportSubs.erase(connInfo.getConnHandle());
+        } else {
+            this->_xInput->_minReportSubs[connInfo.getConnHandle()] = subValue; // 1=notify,2=indicate,3=both
+        }
+    }
+private:
+    XInput *_xInput = nullptr;
+};
+
+
 class ServerCallbacks : public NimBLEServerCallbacks
 {
 public:
@@ -162,6 +179,8 @@ public:
 
     void onDisconnect(NimBLEServer *server, NimBLEConnInfo& connInfo, int reason) override
     {
+        this->_xInput->_minReportSubs.erase(connInfo.getConnHandle());
+
         if (server->getConnectedCount() == 0) {
             this->is_connected = false;
         }
@@ -234,7 +253,9 @@ void XInput::startServer(const char *device_name, const char *manufacturer, Comm
 
     this->_hid->setBatteryLevel(100);
 
-    this->_commandHandler = new CommandHandler(this->_server, commandCallback);
+    this->_commandHandler = new CommandHandler(this->_server, commandCallback, &this->_minimalInput);
+    this->_minimalInput->setValue((uint8_t*)&_minimalReport, sizeof(_minimalReport));
+    this->_minimalInput->setCallbacks(new MinReportCharCallbacks(this));
 
     // Start BLE advertisement
     this->_advertising = this->_server->getAdvertising();
@@ -540,7 +561,7 @@ void XInput::sendGamepadReport()
             abs((int32_t)_inputReport.z - (int32_t)_lastSentInputReport.z) > THUMBSTICK_THRESHOLD ||
             abs((int32_t)_inputReport.rz - (int32_t)_lastSentInputReport.rz) > THUMBSTICK_THRESHOLD;
 
-        if (significantChange) {
+        if (significantChange && this->_minReportSubs.empty()) {
             shouldSend = true;
         } else {
             // Rate limit minor analog-only updates to thumbsticks:
@@ -554,6 +575,30 @@ void XInput::sendGamepadReport()
     if (shouldSend) {
         this->_input->setValue((uint8_t*)&_inputReport, sizeof(_inputReport));
         this->_input->notify();
+        
+        if (this->_minimalInput && !this->_minReportSubs.empty()) {
+            this->_minimalReport.lx = _inputReport.x;
+            this->_minimalReport.ly = _inputReport.y;
+            this->_minimalReport.ry = _inputReport.rz;
+
+            uint16_t b = 0;
+            if (_inputReport.buttons & XBOX_BUTTON_A)      b |= (1 << 0);
+            if (_inputReport.buttons & XBOX_BUTTON_B)      b |= (1 << 1);
+            if (_inputReport.buttons & XBOX_BUTTON_X)      b |= (1 << 2);
+            if (_inputReport.buttons & XBOX_BUTTON_Y)      b |= (1 << 3);
+            if (_inputReport.buttons & XBOX_BUTTON_LB)     b |= (1 << 4);
+            if (_inputReport.buttons & XBOX_BUTTON_RB)     b |= (1 << 5);
+            if (_inputReport.buttons & XBOX_BUTTON_SELECT) b |= (1 << 6);
+            if (_inputReport.buttons & XBOX_BUTTON_START)  b |= (1 << 7);
+            if (_inputReport.buttons & XBOX_BUTTON_LS)     b |= (1 << 8);
+            if (_inputReport.buttons & XBOX_BUTTON_RS)     b |= (1 << 9);
+            if (_inputReport.buttons & XBOX_BUTTON_HOME)   b |= (1 << 10);
+            b |= _inputReport.hat << 11;
+            this->_minimalReport.buttons = b;
+
+            this->_minimalInput->setValue((uint8_t*)&_minimalReport, sizeof(_minimalReport));
+            this->_minimalInput->notify();
+        }
         
         this->_lastSentInputReport = this->_inputReport;
         this->_buttonsDirty = false;
