@@ -1101,10 +1101,10 @@ void processInputs()
             } else if (currentDistance <= plungerMinDistance + 250) {
                 // pulled full -- cap min and pause tilt sensing
                 tiltEnableTime = millis() + 800;
-                currentDistance = plungerMinDistance;
+                distanceBuffer = plungerMinDistance;
             } else if (currentDistance > plungerMaxDistance) {
                 // at rest -- cap max
-                currentDistance = plungerMaxDistance;
+                distanceBuffer = plungerMaxDistance;
             }
         }
 
