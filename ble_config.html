@@ -131,6 +131,7 @@
 <h1>PinSim Web Configurator</h1>
 
 <div class="outer-section">
+    <a href="https://hardwaretester.com/gamepad" target="_blank" rel="noopener noreferrer" style="float: right; margin-top: 20px;">[Test in Gamepad Tester]</a>
     <h2 style="display: inline-block">
         PinSim Devices:
         <button id="scan-button" onclick="scanForDevices()">Scan...</button>
@@ -145,7 +146,7 @@
     <div id="gamepad-controls" class="inner-section disabled">
         <h2>
             PinSim Controls <span id="gamepad-label-pinsimID"></span>
-            <button id="disconnect-button" onclick="disconnect()">Disconnect</button>
+            <button id="disconnect-button" onclick="userDisconnect()">Disconnect</button>
         </h2>
         <div class="pinsim-box">
             <div id="button-status-l-flipper" class="button" style="left: 20px; top: 120px;">L<div class="key"></div></div>
@@ -497,8 +498,14 @@
 
     function onLoad(event) {
         // console.log("didLoad")
-        shouldAutoconnectToPSID = parseInt(localStorage.getItem("PinSimLastConnectedPinSimID"))
-        showAllowedDevices()
+        const storedVal = localStorage.getItem("PinSimLastConnectedPinSimID")
+        shouldAutoconnectToPSID = (storedVal !== null && storedVal !== "") ? parseInt(storedVal) : null
+        if (isNaN(shouldAutoconnectToPSID)) shouldAutoconnectToPSID = null
+
+        // Add delay to allow the disconnect to finish from closing the page during a reload before trying to connect again
+        setTimeout(() => {
+            showAllowedDevices()
+        }, 500)
     }
 
 
@@ -547,9 +554,9 @@
                                 device.onadvertisementreceived = onAdvReceived
                                 device.watchAdvertisements()
                             }
-                            if (devName && devName.includes(":")) {
+                            if (seen && devName && devName.includes(":")) {
                                 let devPSID = parseInt(devName.split(":")[1].trim())
-                                if (shouldAutoconnectToPSID === devPSID && !cmdDevice && !connectingDeviceId) {
+                                if (shouldAutoconnectToPSID !== null && !isNaN(shouldAutoconnectToPSID) && !isNaN(devPSID) && shouldAutoconnectToPSID === devPSID && !cmdDevice && !connectingDeviceId) {
                                     connectToDevice(device, true)
                                 }
                             }
@@ -592,7 +599,7 @@
         let devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
         if (devName && devName.includes(":")) {
             let devPSID = parseInt(devName.split(":")[1].trim())
-            if (shouldAutoconnectToPSID === devPSID && !cmdDevice && !connectingDeviceId) {
+            if (shouldAutoconnectToPSID !== null && !isNaN(shouldAutoconnectToPSID) && !isNaN(devPSID) && shouldAutoconnectToPSID === devPSID && !cmdDevice && !connectingDeviceId) {
                 // console.log(`Attempt to re-connect`)
                 connectToDevice(device, true)
             }
@@ -640,7 +647,13 @@
 
     async function connectToDevice(device, isAuto = false) {
         // console.log("connectToDevice")
-        shouldAutoconnectToPSID = null
+        if (!isAuto) {
+            const devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
+            if (devName && devName.includes(":")) {
+                let devPSID = parseInt(devName.split(":")[1].trim())
+                if (!isNaN(devPSID)) shouldAutoconnectToPSID = devPSID
+            }
+        }
 
         if (cmdDevice === device && device.gatt.connected)
             return
@@ -716,6 +729,9 @@
         }).catch((error) => {
             // console.log(error)
             connectingDeviceId = null
+            const storedVal = localStorage.getItem("PinSimLastConnectedPinSimID")
+            shouldAutoconnectToPSID = (storedVal !== null && storedVal !== "") ? parseInt(storedVal) : null
+            if (isNaN(shouldAutoconnectToPSID)) shouldAutoconnectToPSID = null
             
             const isNoLongerInRange = error.name === "NetworkError" || error.toString().toLowerCase().includes("no longer in range")
             
@@ -795,22 +811,40 @@
     function onDisconnect(event) {
         // console.log("onDisconnect")
         if (cmdDevice === null || cmdDevice === event.target) {
-            shouldAutoconnectToPSID = parseInt(localStorage.getItem("PinSimLastConnectedPinSimID"))
+            const storedVal = localStorage.getItem("PinSimLastConnectedPinSimID")
+            shouldAutoconnectToPSID = (storedVal !== null && storedVal !== "") ? parseInt(storedVal) : null
+            if (isNaN(shouldAutoconnectToPSID)) shouldAutoconnectToPSID = null
         }
         didDisconnect(event.target)
     }
 
     function didDisconnect(device) {
-        if (device === cmdDevice) {
+        if (device) {
+            seenAdvertisements[device.id] = 0
+            const devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
+            if (devName && devName.includes(":")) {
+                const psidStr = devName.split(":")[1].trim()
+                navigator.bluetooth.getDevices().then(devices => {
+                    for (let d of devices) {
+                        const dName = localStorage.getItem(`PinSimDisplayName-${d.id}`)
+                        if (dName && dName.includes(":") && dName.split(":")[1].trim() === psidStr) {
+                            seenAdvertisements[d.id] = 0
+                        }
+                    }
+                }).catch(() => {})
+            }
+        }
+        if (device === cmdDevice || cmdDevice === null) {
             // console.log("didDisconnect")
-            device.removeEventListener('gattserverdisconnected', onDisconnect)
+            if (cmdDevice) {
+                cmdDevice.removeEventListener('gattserverdisconnected', onDisconnect)
+            }
             if (cmdCharacteristic) {
                 cmdCharacteristic.removeEventListener('characteristicvaluechanged', onResponse)
             }
             if (reportCharacteristic) {
                 reportCharacteristic.removeEventListener('characteristicvaluechanged', onReportNotification)
             }
-            seenAdvertisements[device.id] = 0
             cmdCharacteristic = null
             reportCharacteristic = null
             cmdDevice = null
@@ -841,6 +875,11 @@
             updateStick(rightStickElement, 0, 0, 100)
             showAllowedDevices()
         }
+    }
+
+    function userDisconnect() {
+        shouldAutoconnectToPSID = null
+        return disconnect()
     }
 
     function disconnect() {
@@ -881,7 +920,6 @@
                 }
                 resolve()
             }
-            shouldAutoconnectToPSID = null
         })
     }
 
@@ -902,7 +940,7 @@
                     oldPinsimID = parseInt(oldName.split(":")[1].trim())
                 }
 
-                if (oldPinsimID !== null && oldPinsimID !== newPSID) {
+                if (oldPinsimID !== null && !isNaN(oldPinsimID) && oldPinsimID !== newPSID) {
                     let counterpartPrefix = `PinSim ${keyboardMode?"Gamepad":"Keyboard"}: ${oldPinsimID}`
                     let newCounterpartName = `PinSim ${keyboardMode?"Gamepad":"Keyboard"}: ${newPSID}`
                     for (let i = 0; i < localStorage.length; i++) {
@@ -1000,6 +1038,7 @@
                 let displayName = `PinSim ${keyboardMode?"Keyboard":"Gamepad"}: ${pinsimID}`
                 localStorage.setItem(`PinSimDisplayName-${cmdDevice.id}`, displayName)
                 localStorage.setItem("PinSimLastConnectedPinSimID", pinsimID)
+                shouldAutoconnectToPSID = pinsimID
                 pinsimLabelElement.innerHTML = ` (${displayName})`
 
                 showAllowedDevices()

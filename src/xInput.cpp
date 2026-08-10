@@ -1,5 +1,6 @@
 #include "xInput.h"
 #include <string>
+// #include <esp_mac.h>
 #include <Preferences.h>
 #include <NimBLEDevice.h>
 
@@ -51,6 +52,8 @@ void XInput::saveWhitelist()
 {
     // Keep within MAX_ADDRESSES addresses
     while (pairedAddresses.size() > MAX_ADDRESSES) {
+        uint64_t oldAddrInt = pairedAddresses.front();
+        NimBLEDevice::deleteBond(NimBLEAddress(oldAddrInt, BLE_ADDR_PUBLIC));
         pairedAddresses.erase(pairedAddresses.begin());
     }
 
@@ -264,6 +267,18 @@ void XInput::startServer(const char *device_name, const char *manufacturer, Comm
     this->_advertising->setAdvertisementData(ad);
     this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
     this->_advertising->setAppearance(HID_GAMEPAD);
+
+	// TODO: This doesn't seem to advertise the manufacturer data correctly, and breaks HID support.
+    // NimBLEAdvertisementData srd = this->_advertising->getScanData();
+    // uint8_t mfgData[6];
+    // esp_efuse_mac_get_default(mfgData);
+    // // Company ID  0x0006 (Microsoft's Manufacturer ID)
+    // mfgData[0] = 0x06; 
+    // mfgData[1] = 0x00;
+    // srd.setManufacturerData(mfgData, sizeof(mfgData));
+    // srd.setAppearance(HID_GAMEPAD);
+    // srd.addServiceUUID(this->_hid->getHidService()->getUUID());
+    // this->_advertising->setScanResponseData(srd);
 
     this->_advertising->enableScanResponse(true);
     this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });

@@ -3,6 +3,7 @@
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
 #include <Preferences.h>
+// #include <esp_mac.h>
 #include "HIDTypes.h"
 
 // Changed NimBLE-Arduino/src/nimble/nimble/host/store/config/src/ble_store_nvs.c
@@ -232,9 +233,15 @@ void BLEKeyboard::begin(const std::string& deviceName,
     this->_advertising->addServiceUUID(this->_hid->getHidService()->getUUID());
     this->_advertising->setAppearance(HID_KEYBOARD);
 
-    this->_advertising->enableScanResponse(true);
-    this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });
-    this->_allowNewConnections = false;
+	// TODO: This doesn't seem to advertise the manufacturer data correctly, and breaks HID support.
+    // NimBLEAdvertisementData srd = this->_advertising->getScanData();
+    // uint8_t mfgData[6];
+    // esp_efuse_mac_get_default(mfgData);
+    // // Company ID  0x0006 (Microsoft's Manufacturer ID)
+    // mfgData[0] = 0x06; 
+    // mfgData[1] = 0x00;
+    // srd.setManufacturerData(mfgData, sizeof(mfgData));
+    // this->_advertising->setScanResponseData(srd);
 
     this->_advertising->enableScanResponse(true);
     this->_advertising->setAdvertisingCompleteCallback([&](NimBLEAdvertising *advertising) { this->onAdvComplete(advertising); });
