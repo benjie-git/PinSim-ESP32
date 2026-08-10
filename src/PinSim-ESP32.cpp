@@ -154,10 +154,10 @@ void buttonUpdate();
 TaskHandle_t mainTaskHandle = NULL;
 void handle_main_task(void *arg);
 
-int16_t plungerMin = 780;           // default min plunger analog sensor value
-int16_t plungerZeroValue = 780;     // zero value for the plunger, to set the deadzone (don't show movement between min and zero)
+int16_t plungerMin = 500;           // default min plunger analog sensor value
+int16_t plungerZeroValue = 3250;    // zero value for the plunger, to set the deadzone (don't show movement between min and zero)
 int16_t plungerMinOffset = 50;      // add this to the measured min value, to give wiggle room for vibrations to not start a pliunge
-int16_t plungerMax = 2700;          // default max plunger analog sensor value
+int16_t plungerMax = 3200;          // default max plunger analog sensor value
 int16_t plungerMaxDistance = 0;     // sensor value converted to actual distance
 int16_t plungerMinDistance = 0;
 uint32_t plungerEnableTime = 0;
@@ -740,16 +740,21 @@ void setup()
     }
 
     /* Initialize the sensor */
-    if (!accel.begin()) {
-        // There was a problem detecting the ADXL345 ... check your connections
-        printf("Accelerometer setup failed\n");
-        accelerometerEnabled = false;
-    } else {
-        // Initialization successful, set up the range and pull calibration values from preferences
-        accel.setRange(ADXL345_RANGE_2_G);
-        delay(100);
-        zeroX = preferences.getInt("accelZeroX", zeroX);
-        zeroY = preferences.getInt("accelZeroY", zeroY);
+    int beginAttempts = 3;
+    while (--beginAttempts >= 0) {
+        if (!accel.begin()) {
+            // There was a problem detecting the ADXL345 ... check your connections
+            printf("Accelerometer setup failed\n");
+            accelerometerEnabled = false;
+        } else {
+            // Initialization successful, set up the range and pull calibration values from preferences
+            accel.setRange(ADXL345_RANGE_2_G);
+            delay(100);
+            zeroX = preferences.getInt("accelZeroX", zeroX);
+            zeroY = preferences.getInt("accelZeroY", zeroY);
+            break;
+        }
+        delay(200);
     }
 
     accelOrientation = preferences.getInt("accelOrient", accelOrientation);
@@ -954,8 +959,9 @@ void accelOrientEvent(sensors_event_t &event)
         case 4:
         case 5:
             // vertical mount, antenna right
-            accX = event.acceleration.z * nudgeMultiplier;
-            accY = event.acceleration.y * nudgeMultiplier * -1;
+            accX = event.acceleration.y * nudgeMultiplier * -1;
+            accY = event.acceleration.z * nudgeMultiplier * -1;
+
             break;
     }
     if (accelOrientation & 1) {
@@ -1052,6 +1058,73 @@ void processInputs()
     }
     setButton(XBOX_BUTTON_SELECT, POSBK, buttonStatus[POSBK]);
 
+
+    // Plunger
+    // This is based on the Sharp GP2Y0A51SK0F Analog Distance Sensor 2-15cm
+    if (plungerEnabled) {
+        getPlungerSamples();
+
+        // // Automatically move the plunger, for testing without a plunger
+        // static int16_t pCnt = 0;
+        // pCnt = (++pCnt)%1024;
+        // plungerAverage = (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128;
+        // gamepad.setRightThumb(0, plungerAverage);
+
+        int16_t currentDistance = readingToDistance(plungerAverage);
+        distanceBuffer = currentDistance;
+        if (plungerEnableTime > millis()) {
+            distanceBuffer = plungerMaxDistance;
+        } else {
+            if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance) {
+                // Attempt to detect plunge
+                int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance,
+                                                    plungeTrigger / 2, plungeTrigger);
+                if (currentDistance - lastDistance >= adjustedPlungeTrigger && currentDistance > plungerMaxDistance - (plungerMaxDistance - plungerMinDistance) / 8) {
+                    // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
+                    if (!useKeyboardMode) {
+                        if (controlShuffle) {
+                            gamepad.setLeftThumb(center[0], center[1]);
+                            gamepad.setRightThumb(center[0], center[1]);
+                        } else {
+                            gamepad.setRightThumb(center[0], center[1]);
+                        }
+                    } else {
+                        kb.release(kbMap[POSPLUNGER]);
+                    }
+                    distanceBuffer = plungerMaxDistance;
+                    lastDistance = plungerMaxDistance;
+                    plungerEnableTime = millis() + 400;
+                    tiltEnableTime = millis() + 800;
+                    return;
+                }
+                lastDistance = currentDistance;
+            } else if (currentDistance <= plungerMinDistance + 250) {
+                // pulled full -- cap min and pause tilt sensing
+                tiltEnableTime = millis() + 800;
+                currentDistance = plungerMinDistance;
+            } else if (currentDistance > plungerMaxDistance) {
+                // at rest -- cap max
+                currentDistance = plungerMaxDistance;
+            }
+        }
+
+        if (!useKeyboardMode) {
+            if (controlShuffle) {
+                gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance,
+                                                    plungerZeroValue, XBOX_STICK_MAX));
+            } else {
+                gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance,
+                                                     plungerZeroValue, XBOX_STICK_MAX));
+            }
+        } else {
+            kb.set(kbMap[POSPLUNGER], distanceBuffer < plungerMaxDistance - 20);
+        }
+    }
+    if (controlShuffle && !useKeyboardMode) {
+        gamepad.setRightThumb(center[0], center[1]);
+    }
+
+
     // Tilt
     if (accelerometerEnabled) {
         /* Get a new sensor event */
@@ -1095,74 +1168,6 @@ void processInputs()
         } else {
             sendKbDPad(direction);
         }
-    }
-
-    // Plunger
-    // This is based on the Sharp GP2Y0A51SK0F Analog Distance Sensor 2-15cm
-    if (plungerEnabled) {
-        getPlungerSamples();
-
-        // // Automatically move the plunger, for testing without a plunger
-        // static int16_t pCnt = 0;
-        // pCnt = (++pCnt)%1024;
-        // plungerAverage = (((pCnt >= 512) ? (1024-pCnt) : pCnt)-256)*128;
-        // gamepad.setRightThumb(0, plungerAverage);
-
-        int16_t currentDistance = readingToDistance(plungerAverage);
-        distanceBuffer = currentDistance;
-        if (plungerEnableTime > millis()) {
-            distanceBuffer = plungerMaxDistance;
-        } else {
-            if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance) {
-                // Attempt to detect plunge
-                int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance,
-                                                    plungeTrigger / 2, plungeTrigger);
-                if (currentDistance - lastDistance >= adjustedPlungeTrigger && currentDistance > plungerMaxDistance - (plungerMaxDistance - plungerMinDistance) / 8) {
-                    // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
-                    if (!useKeyboardMode) {
-                        if (controlShuffle) {
-                            gamepad.setLeftThumb(center[0], center[1]);
-                            gamepad.setRightThumb(center[0], center[1]);
-                        } else {
-                            gamepad.setRightThumb(center[0], center[1]);
-                        }
-                    } else {
-                        kb.release(kbMap[POSPLUNGER]);
-                    }
-                    distanceBuffer = plungerMaxDistance;
-                    lastDistance = plungerMaxDistance;
-                    plungerEnableTime = millis() + 400;
-                    return;
-                }
-                lastDistance = currentDistance;
-
-                // Disable accelerometer while plunging and for 0.8 second afterwards.
-                if (currentDistance < plungerMaxDistance - 20)
-                    tiltEnableTime = millis() + 800;
-            } else if (currentDistance <= plungerMinDistance) {
-                // cap max
-                tiltEnableTime = millis() + 800;
-                distanceBuffer = plungerMinDistance;
-            } else if (currentDistance > plungerMaxDistance) {
-                // cap min
-                distanceBuffer = plungerMaxDistance;
-            }
-        }
-
-        if (!useKeyboardMode) {
-            if (controlShuffle) {
-                gamepad.setLeftThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance,
-                                                    plungerZeroValue, XBOX_STICK_MAX));
-            } else {
-                gamepad.setRightThumb(center[0], map(distanceBuffer, plungerMaxDistance, plungerMinDistance,
-                                                     plungerZeroValue, XBOX_STICK_MAX));
-            }
-        } else {
-            kb.set(kbMap[POSPLUNGER], distanceBuffer < plungerMaxDistance - 20);
-        }
-    }
-    if (controlShuffle && !useKeyboardMode) {
-        gamepad.setRightThumb(center[0], center[1]);
     }
 }
 
@@ -1357,8 +1362,8 @@ void handlePendingCommand()
             break;
 
         case COMMAND_PLUNGER_SET_MIN:
-            printf("Command: Plunger Set Min\n");
             plungerMin = plungerAverage;
+            printf("Command: Plunger Set Min - %d\n", plungerMin);
             plungerMaxDistance = readingToDistance(plungerMin);
             if (plungerMaxDistance == plungerMinDistance) plungerMaxDistance = plungerMinDistance + 1; // Avoid divide by zero later
             preferences.putInt("plungerMin", plungerMin);
@@ -1366,8 +1371,8 @@ void handlePendingCommand()
             break;
 
         case COMMAND_PLUNGER_SET_MAX:
-            printf("Command: Plunger Set Max\n");
             plungerMax = plungerAverage;
+            printf("Command: Plunger Set Max - %d\n", plungerMax);
             plungerMinDistance = readingToDistance(plungerMax);
             if (plungerMinDistance == plungerMaxDistance) plungerMinDistance = plungerMaxDistance - 1; // Avoid divide by zero later
             preferences.putInt("plungerMax", plungerMax);
@@ -1375,9 +1380,9 @@ void handlePendingCommand()
             break;
 
         case COMMAND_PLUNGER_SET_ZERO:
-            printf("Command: Plunger Set Zero\n");
             plungerZeroValue = map(distanceBuffer, plungerMaxDistance, plungerMinDistance, 0, XBOX_STICK_MAX) - 10;
             if (plungerZeroValue < 0) plungerZeroValue = 0;
+            printf("Command: Plunger Set Zero - %d\n", plungerZeroValue);
             preferences.putInt("plungerZero", plungerZeroValue);
             runtimeFeedbackBlinks(1);
             break;
