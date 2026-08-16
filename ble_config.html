@@ -278,12 +278,13 @@
     const COMMAND_STATUS_START_LED_ENABLED        = 8
     const COMMAND_STATUS_OTHER_LEDS_ENABLED       = 16
 
-    const COMMAND_VERSION                   = [0,4]
-    const COMMAND_SERVICE_ID                = "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
-    const COMMAND_CHARACTERISTIC_ID         = "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
-    const COMMAND_VERSION_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
-    const COMMAND_REPORT_CHARACTERISTIC_ID  = "4a761e27-a006-4b89-8d76-1c4b9e2402d7"
-    const BLE_STALE_TIME                    = 60000
+    const COMMAND_VERSION                      = [0,4]
+    const COMMAND_SERVICE_ID                   = "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
+    const COMMAND_CHARACTERISTIC_ID            = "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
+    const COMMAND_VERSION_CHARACTERISTIC_ID    = "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
+    const COMMAND_REPORT_CHARACTERISTIC_ID     = "4a761e27-a006-4b89-8d76-1c4b9e2402d7"
+    const COMMAND_FW_VERSION_CHARACTERISTIC_ID = "4a761e27-a006-4b89-8d76-1c4b9e2402d8"
+    const BLE_STALE_TIME                       = 60000
 
     const connStatusEnabledElement = document.getElementById("conn-status-enabled")
     const connStatusDisabledElement = document.getElementById("conn-status-disabled")
@@ -466,6 +467,7 @@
     let currentReport = new PinSimReport()
     let cmdDevice = null
     let cmdVersion = [0, 0]
+    let fwVersion = "Unknown"
     let plungerOnLeftStick = false
     let solenoidEnabled = false
     let keyboardMode = false
@@ -685,6 +687,15 @@
             return gatt.getPrimaryService(COMMAND_SERVICE_ID)
         }).then(async service => {
             // console.log('Getting Characteristics...')
+            const fwCharacteristic = await service.getCharacteristic(COMMAND_FW_VERSION_CHARACTERISTIC_ID)
+            if (fwCharacteristic) {
+                const v = await fwCharacteristic.readValue()
+                if (v) {
+                    const textDecoder = new TextDecoder('utf-8');
+                    fwVersion = textDecoder.decode(v);
+                }
+            }
+
             const characteristic = await service.getCharacteristic(COMMAND_VERSION_CHARACTERISTIC_ID)
             if (characteristic) {
                 const v = await characteristic.readValue()
@@ -1042,7 +1053,7 @@
                 localStorage.setItem(`PinSimDisplayName-${cmdDevice.id}`, displayName)
                 localStorage.setItem("PinSimLastConnectedPinSimID", pinsimID)
                 shouldAutoconnectToPSID = pinsimID
-                pinsimLabelElement.innerHTML = ` (${displayName})`
+                pinsimLabelElement.innerHTML = ` (${displayName} [FW v${fwVersion}])`
 
                 showAllowedDevices()
                 

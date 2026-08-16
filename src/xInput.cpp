@@ -8,6 +8,14 @@
 // to make this an external string, defined here, so we can change it!
 // After reinstalling nimble, need to replace first NIMBLE_NVS_NAMESPACE line in ble_store_nvs.c with:
 // const char* NIMBLE_NVS_NAMESPACE               = "nimble_bond";
+//
+// Also edit NimBLE-Arduino/src/nimconfig.h to change:
+// #undef CONFIG_BT_NIMBLE_MAX_BONDS
+// #define CONFIG_BT_NIMBLE_MAX_BONDS 4
+//
+// #undef CONFIG_BT_NIMBLE_MAX_CCCDS
+// #define CONFIG_BT_NIMBLE_MAX_CCCDS 20
+
 extern const char* NIMBLE_NVS_NAMESPACE;
 
 #define MAX_CLIENTS 3

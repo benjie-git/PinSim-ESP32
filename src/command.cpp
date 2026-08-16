@@ -25,6 +25,13 @@ CommandHandler::CommandHandler(NimBLEServer *server, CommandCallback_t callback,
     uint8_t versionData[2] = COMMAND_VERSION;
     _versionCharacteristic->setValue((uint8_t*)versionData, 2);
 
+    char fwVersionData[12] = COMMAND_FW_VERSION;
+    _fwVersionCharacteristic = cmdService->createCharacteristic(
+        COMMAND_FW_VERSION_CHARACTERISTIC_ID,
+        NIMBLE_PROPERTY::READ,
+        strlen(fwVersionData));
+    _fwVersionCharacteristic->setValue((uint8_t*)fwVersionData, strlen(fwVersionData));
+    
     // Only used for gamepad mode.  Sends button and axis states.
     if (reportCharacteristic) {
         *reportCharacteristic = cmdService->createCharacteristic(

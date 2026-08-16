@@ -11,6 +11,8 @@
 
     Uses the ESP32-S3, as built into the PinSim-ESP32 PCB
 
+    Note that the constant COMMAND_FW_VERSION holds the PinSim FW version, and is defined in command.h.
+
     IMPORTANT PLUNGER NOTE:
     You MUST calibrate the plunger range at least once by holding down "A"
     when plugging in the USB cable. LED-1 should flash rapidly, and then you should

@@ -8,12 +8,15 @@
 #include <NimBLEServer.h>
 #include <NimBLECharacteristic.h>
 
-#define COMMAND_SERVICE_ID                "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
-#define COMMAND_CHARACTERISTIC_ID         "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
-#define COMMAND_VERSION_CHARACTERISTIC_ID "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
-#define COMMAND_REPORT_CHARACTERISTIC_ID  "4a761e27-a006-4b89-8d76-1c4b9e2402d7"
+#define COMMAND_SERVICE_ID                   "4a761e27-a006-4b89-8d76-1c4b9e2402d4"
+#define COMMAND_CHARACTERISTIC_ID            "4a761e27-a006-4b89-8d76-1c4b9e2402d5"
+#define COMMAND_VERSION_CHARACTERISTIC_ID    "4a761e27-a006-4b89-8d76-1c4b9e2402d6"
+#define COMMAND_REPORT_CHARACTERISTIC_ID     "4a761e27-a006-4b89-8d76-1c4b9e2402d7"
+#define COMMAND_FW_VERSION_CHARACTERISTIC_ID "4a761e27-a006-4b89-8d76-1c4b9e2402d8"
 
-#define COMMAND_VERSION             {0, 4}
+#define COMMAND_VERSION             {0, 4}  // Version of the command protocol
+#define COMMAND_FW_VERSION          "1.0.2" // Version of the PinSim firmware
+
 
 // Command num goes in commandData[0]
 #define COMMAND_ACCEL_CAL           3
@@ -60,6 +63,7 @@ private:
     void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override;
     NimBLECharacteristic *_commandCharacteristic = nullptr;
     NimBLECharacteristic *_versionCharacteristic = nullptr;
+    NimBLECharacteristic *_fwVersionCharacteristic = nullptr;
     CommandCallback_t _commandCallback = nullptr;
 };
 
