@@ -12,6 +12,9 @@ cp ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app
 cp .pio/build/release_PCB3/firmware.bin $TOOL_DIR/
 mv PinSim_FW_updater PinSim_FW_updater_PCB3_$CUR_DATE
 zip -r dist/PinSim_FW_updater_PCB3_$CUR_DATE.zip PinSim_FW_updater_PCB3_$CUR_DATE
+cd PinSim_FW_updater_PCB3_$CUR_DATE/data
+zip -r ../../dist/PinSim_FW_data_PCB3_$CUR_DATE.zip *.bin
+cd ../..
 mv PinSim_FW_updater_PCB3_$CUR_DATE PinSim_FW_updater
 
 venv/bin/pio run -e release_PCB5
@@ -21,8 +24,7 @@ cp ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app
 cp .pio/build/release_PCB5/firmware.bin $TOOL_DIR/
 mv PinSim_FW_updater PinSim_FW_updater_PCB5_$CUR_DATE
 zip -r dist/PinSim_FW_updater_PCB5_$CUR_DATE.zip PinSim_FW_updater_PCB5_$CUR_DATE
+cd PinSim_FW_updater_PCB5_$CUR_DATE/data
+zip -r ../../dist/PinSim_FW_data_PCB5_$CUR_DATE.zip *.bin
+cd ../..
 mv PinSim_FW_updater_PCB5_$CUR_DATE PinSim_FW_updater
-
-scp dist/PinSim_FW_updater_PCB3_$CUR_DATE.zip dist/PinSim_FW_updater_PCB5_$CUR_DATE.zip $1:www/lavendrome.net/files/pinsim/
-echo "https://$1/files/pinsim/PinSim_FW_updater_PCB3_$CUR_DATE.zip"
-echo "https://$1/files/pinsim/PinSim_FW_updater_PCB5_$CUR_DATE.zip"
