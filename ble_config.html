@@ -148,7 +148,7 @@
 <div class="outer-section">
     <div id="gamepad-controls" class="inner-section disabled">
         <h2>
-            PinSim Controls <span id="gamepad-label-pinsimID"></span>
+            <span id="gamepad-label-pinsimID">PinSim Controller</span>
             <button id="disconnect-button" onclick="userDisconnect()">Disconnect</button>
         </h2>
         <div class="pinsim-box">
@@ -1053,7 +1053,7 @@
                 localStorage.setItem(`PinSimDisplayName-${cmdDevice.id}`, displayName)
                 localStorage.setItem("PinSimLastConnectedPinSimID", pinsimID)
                 shouldAutoconnectToPSID = pinsimID
-                pinsimLabelElement.innerHTML = ` (${displayName} [FW v${fwVersion}])`
+                pinsimLabelElement.innerHTML = `${displayName} (fw v${fwVersion})`
 
                 showAllowedDevices()
                 
