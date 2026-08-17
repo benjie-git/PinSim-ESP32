@@ -15,7 +15,7 @@
 #define COMMAND_FW_VERSION_CHARACTERISTIC_ID "4a761e27-a006-4b89-8d76-1c4b9e2402d8"
 
 #define COMMAND_VERSION             {0, 4}  // Version of the command protocol
-#define COMMAND_FW_VERSION          "1.0.2" // Version of the PinSim firmware
+#define COMMAND_FW_VERSION          "1.0.3" // Version of the PinSim firmware
 
 
 // Command num goes in commandData[0]
@@ -38,6 +38,7 @@
 #define COMMAND_SET_ACCEL_DEAD_ZONE 19
 #define COMMAND_SET_LED_START       20
 #define COMMAND_SET_LED_OTHERS      21
+#define COMMAND_PLUNGER_SET_DEFAULTS 22
 
 // Command response num in commandData[0]
 #define COMMAND_RESPONSE_STATUS     130

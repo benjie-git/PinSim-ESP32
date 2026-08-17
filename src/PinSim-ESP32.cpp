@@ -156,11 +156,15 @@ void buttonUpdate();
 TaskHandle_t mainTaskHandle = NULL;
 void handle_main_task(void *arg);
 
-int16_t plungerMin = 500;           // default min plunger analog sensor value
-int16_t plungerZeroValue = 3250;    // zero value for the plunger, to set the deadzone (don't show movement between min and zero)
-int16_t plungerMinOffset = 50;      // add this to the measured min value, to give wiggle room for vibrations to not start a pliunge
-int16_t plungerMax = 3200;          // default max plunger analog sensor value
-int16_t plungerMaxDistance = 0;     // sensor value converted to actual distance
+#define PLUNGER_DEFAULT_MIN 500
+#define PLUNGER_DEFAULT_MAX 3200
+#define PLUNGER_DEFAULT_ZERO 3250
+
+int16_t plungerMin = PLUNGER_DEFAULT_MIN;       // default min plunger analog sensor value
+int16_t plungerZeroValue = PLUNGER_DEFAULT_ZERO;// zero value for the plunger, to set the deadzone (don't show movement between min and zero)
+int16_t plungerMinOffset = 50;                  // add this to the measured min value, to give wiggle room for vibrations to not start a pliunge
+int16_t plungerMax = PLUNGER_DEFAULT_MAX;       // default max plunger analog sensor value
+int16_t plungerMaxDistance = 0;                 // sensor value converted to actual distance
 int16_t plungerMinDistance = 0;
 uint32_t plungerEnableTime = 0;
 uint32_t tiltEnableTime = 0;
@@ -1386,6 +1390,18 @@ void handlePendingCommand()
             if (plungerZeroValue < 0) plungerZeroValue = 0;
             printf("Command: Plunger Set Zero - %d\n", plungerZeroValue);
             preferences.putInt("plungerZero", plungerZeroValue);
+            runtimeFeedbackBlinks(1);
+            break;
+
+        case COMMAND_PLUNGER_SET_DEFAULTS:
+            plungerMin = PLUNGER_DEFAULT_MIN;
+            plungerMax = PLUNGER_DEFAULT_MAX;
+            plungerZeroValue = PLUNGER_DEFAULT_ZERO;
+            preferences.putInt("plungerMin", plungerMin);
+            preferences.putInt("plungerMax", plungerMax);
+            preferences.putInt("plungerZero", plungerZeroValue);
+            plungerMaxDistance = readingToDistance(plungerMin);
+            plungerMinDistance = readingToDistance(plungerMax);
             runtimeFeedbackBlinks(1);
             break;
 

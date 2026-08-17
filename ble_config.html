@@ -133,7 +133,7 @@
 <div class="outer-section">
     <div style="float: right; margin-top: 20px;">
     <a href="https://hardwaretester.com/gamepad" target="_blank" rel="noopener noreferrer">Test in Gamepad Tester ➡</a><br/>
-    <a href="ble_config_old.html" target="_blank" rel="noopener noreferrer">[Configure old PinSim FW]</a>
+    <a href="./config_old" target="_blank" rel="noopener noreferrer">[Configure old PinSim FW]</a>
     </div>
     <h2 style="display: inline-block">
         PinSim Devices:
@@ -216,6 +216,7 @@
                         <button id="button-plunger-min" onclick="sendCommand(COMMAND_PLUNGER_SET_MIN); document.getElementById('button-plunger-max').focus();">Set Min</button>
                         <button id="button-plunger-max" onclick="sendCommand(COMMAND_PLUNGER_SET_MAX); document.getElementById('button-plunger-zero').focus();">Set Max</button>
                         <button id="button-plunger-zero" onclick="sendCommand(COMMAND_PLUNGER_SET_ZERO); document.getElementById('button-plunger-min').focus();">Set Zero (Dead Zone)</button>
+                        <button id="button-plunger-defaults" onclick="sendCommand(COMMAND_PLUNGER_SET_DEFAULTS)">Reset to Defaults</button>
                     </td>
                 </tr>
             </table>
@@ -252,6 +253,7 @@
     const COMMAND_PLUNGER_SET_MIN     = 4
     const COMMAND_PLUNGER_SET_MAX     = 5
     const COMMAND_PLUNGER_SET_ZERO    = 6
+    const COMMAND_PLUNGER_SET_DEFAULTS= 22
     const COMMAND_TOGGLE_CONTROL_SWAP = 7
     const COMMAND_TOGGLE_SOLENOIDS    = 8
     const COMMAND_PAIR_CLEAR          = 9
