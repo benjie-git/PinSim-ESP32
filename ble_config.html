@@ -1,39 +1,94 @@
 <!DOCTYPE html>
-<html lang="en-US">
+<html lang="en">
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <title>PinSim Web Configurator</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PinSim Web Configurator | PinSim Firmware Hub</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
+        :root {
+            --ps-primary: #0d6efd;
+            --ps-dark: #0f172a;
+            --ps-accent: #06b6d4;
+            --ps-card-bg: #ffffff;
+        }
         body {
-            background: #EDC;
+            background-color: #f8fafc;
+            color: #1e293b;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
-        .outer-section {
-            background: #BDF;
-            border: solid 1px;
-            border-radius: 5px;
-            padding: 0 20px 20px 10px;
-            margin-bottom: 10px;
+        .navbar-brand {
+            font-weight: 700;
+            letter-spacing: -0.5px;
         }
-        .inner-section {
-            padding-left: 20px;
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.65rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background-color: #e2e8f0;
+            color: #334155;
+            margin-right: 0.35rem;
+            margin-bottom: 0.35rem;
         }
-        #conn-status-enabled button, #conn-status-disabled button {
-            position: relative;
-            height: 28px;
+        .chip-primary {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
         }
-        #conn-error {
-            color: #BB2222;
-            font-weight: bold;
-            padding-top: 6px;
+        footer {
+            margin-top: auto;
+            border-top: 1px solid #e2e8f0;
+            background-color: #ffffff;
+        }
+
+        /* Inactive / Disabled section styling */
+        .disabled {
+            opacity: 0.55;
+        }
+        #gamepad-controls.disabled,
+        #ble-section.disabled,
+        #key-mapping-commands.disabled {
+            opacity: 0.75;
+            pointer-events: none;
+            user-select: none;
+        }
+        div.disabled button, button:disabled, button.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* Controller Visualizer */
+        .pinsim-visualizer-container {
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
+            padding: 0.5rem 0;
         }
         .pinsim-box {
             position: relative;
-            margin-top: 20px;
-            border: solid 2px #000;
-            border-radius: 10px;
-            background: #FFF;
-            height: 260px;
+            border: 2px solid #334155;
+            border-radius: 12px;
+            background: #0f172a;
+            height: 270px;
             width: 650px;
+            min-width: 650px;
+            user-select: none;
+        }
+
+        @media (min-width: 768px) and (max-width: 991.98px) {
+            .container {
+                max-width: 860px;
+            }
         }
         div.button {
             display: flex;
@@ -41,60 +96,104 @@
             align-items: center;
             flex-direction: column;
             position: absolute;
-            background: #FFF;
-            border: solid 3px #000;
+            background: #1e293b;
+            border: 2px solid #475569;
+            color: #e2e8f0;
             border-radius: 40px;
             width: 45px;
-            height: 43px;
+            height: 45px;
             padding-top: 2px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+            transition: background-color 0.1s ease, border-color 0.1s ease, box-shadow 0.1s ease, transform 0.05s ease;
+        }
+        div.button:hover {
+            border-color: #38bdf8;
         }
         div.button.pressed {
-            background: #38F;
+            background: #0284c7;
+            border-color: #38bdf8;
+            color: #ffffff;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
+            transform: scale(0.95);
         }
         div.button.keyMap {
-            border-color: #F00;
+            border-color: #ef4444;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+            animation: pulse-red 1.2s infinite ease-in-out;
         }
-        .disabled {
-            color: grey;
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 14px rgba(239, 68, 68, 0.9); }
+            100% { box-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
         }
-        div.disabled button, button:disabled, button.disabled {
-            opacity: 0.6; /* Make it slightly transparent */
-            cursor: not-allowed; /* Change cursor on hover */
-            background-color: #ccc; /* Gray background */
-            color: #222; /* Lighter text color */
-            pointer-events: none; /* Prevent click events */
+        .key {
+            font-size: 0.65rem;
+            color: #38bdf8;
+            font-weight: 700;
+            line-height: 1;
+            margin-top: 1px;
         }
         .vbar-container {
             position: absolute;
-            border: solid 2px #555;
-            width: 16px;
+            border: 2px solid #475569;
+            width: 18px;
             height: 115px;
-            background-color: #ddd;
-            border-radius: 3px;
+            background-color: #1e293b;
+            border-radius: 5px;
             overflow: hidden;
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
         }
         .stick-visual {
             position: absolute;
             width: 100px;
             height: 100px;
-            border: 2px solid #555;
+            border: 2px solid #475569;
             border-radius: 50%;
             margin: 10px auto;
-            background-color: #ddd;
+            background-color: #1e293b;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6);
         }
         .thumbstick {
             position: absolute;
             width: 16px;
             height: 16px;
-            background-color: red;
+            background-color: #ef4444;
             border-radius: 50%;
             top: 42px;
             left: 42px;
             transform: translate(0, 0);
             transition: background-color 0.1s;
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+        }
+        .stick-label {
+            color: #94a3b8;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .pinsim-status-table {
+            position: absolute;
+            left: 310px;
+            top: 155px;
+            font-size: 0.85rem;
+        }
+        .pinsim-status-table th {
+            text-align: right;
+            color: #94a3b8;
+            font-weight: 500;
+            padding: 2px 8px 2px 0;
+        }
+        .pinsim-status-table td {
+            color: #38bdf8;
+            font-weight: 600;
+            padding: 2px 0;
         }
 
-        /* Connecting... animation */
+        /* Connecting Loader Animation */
         .loader {
             position: absolute;
             left: 80%;
@@ -128,126 +227,298 @@
 </head>
 
 <body>
-<h1>PinSim Web Configurator</h1>
-
-<div class="outer-section">
-    <div style="float: right; margin-top: 20px;">
-    <a href="https://hardwaretester.com/gamepad" target="_blank" rel="noopener noreferrer">Test in Gamepad Tester ➡</a><br/>
-    <a href="./config_old" target="_blank" rel="noopener noreferrer">[Configure old PinSim FW]</a>
-    </div>
-    <h2 style="display: inline-block">
-        PinSim Devices:
-        <button id="scan-button" onclick="scanForDevices()">Scan...</button>
-    </h2>
-    <a href="javascript:0" id="edit-link" onclick="editDevicesMode = !editDevicesMode; showAllowedDevices()">[Edit]</a><br/>
-    <div id="conn-status-enabled" style="display: inline-block; position: relative"></div>
-    <div id="conn-status-disabled" class="disabled" style="display: inline-block; position: relative"><span>No Devices Found</span></div>
-    <div id="conn-error"></div>
-</div>
-
-<div class="outer-section">
-    <div id="gamepad-controls" class="inner-section disabled">
-        <h2>
-            <span id="gamepad-label-pinsimID">PinSim Controller</span>
-            <button id="disconnect-button" onclick="userDisconnect()">Disconnect</button>
-        </h2>
-        <div class="pinsim-box">
-            <div id="button-status-l-flipper" class="button" style="left: 20px; top: 120px;">L<div class="key"></div></div>
-            <div id="button-status-r-flipper" class="button" style="left: 585px; top: 120px;">R<div class="key"></div></div>
-
-            <div id="button-status-back" class="button" style="left: 80px; top: 20px;">Back<div class="key"></div></div>
-            <div id="button-status-menu" class="button" style="left: 130px; top: 20px;">Menu<div class="key"></div></div>
-            <div id="button-status-start" class="button" style="left: 65px; top: 195px;">Start<div class="key"></div></div>
-
-            <div id="button-status-dpad-up" class="button" style="left: 270px; top: 25px;">Up<div class="key"></div></div>
-            <div id="button-status-dpad-down" class="button" style="left: 270px; top: 95px;">Down<div class="key"></div></div>
-            <div id="button-status-dpad-left" class="button" style="left: 235px; top: 60px;">Left<div class="key"></div></div>
-            <div id="button-status-dpad-right" class="button" style="left: 305px; top: 60px;">Right<div class="key"></div></div>
-
-            <div id="button-status-x" class="button" style="left: 400px; top: 20px;">X<div class="key"></div></div>
-            <div id="button-status-y" class="button" style="left: 450px; top: 20px;">Y<div class="key"></div></div>
-            <div id="button-status-z" class="button" style="left: 500px; top: 20px;">Z<div class="key"></div></div>
-            <div id="button-status-a" class="button" style="left: 400px; top: 70px;">A<div class="key"></div></div>
-            <div id="button-status-b" class="button" style="left: 450px; top: 70px;">B<div class="key"></div></div>
-            <div id="button-status-c" class="button" style="left: 500px; top: 70px;">C<div class="key"></div></div>
-
-            <button id="end-mapping" onclick="setKeyMapUI(0)" style="left: 575px; top: 15px; display: none; position: absolute;">Done</button>
-
-            <div class="stick-visual" style="left: 150px; top: 120px;">
-                <div id="left-stick" class="thumbstick"></div>
-            </div>
-            <span style="position: absolute; left: 170px; top: 240px;">Left Stick</span>
-
-            <div class="vbar-container" style="left: 520px; top: 143px;">
-                <div id="right-stick" class="thumbstick" style="left: 0; top: 0;"></div>
-            </div>
-            <span id="plunger" style="position: absolute; left: 545px; top: 240px;">Right Stick <span class="key"></span></span>
-
-            <table style="position: absolute; left: 320px; top: 160px;">
-                <tr><th align="right">Pairings:</th><td id="gamepad-status-pairings"></td></tr>
-                <tr><th align="right">Plunger Stick:</th><td id="gamepad-status-plunger-stick"></td></tr>
-                <tr><th align="right">Solenoids:</th><td id="gamepad-status-solenoids"></td></tr>
-                <tr><th align="right">Button LEDs:</th><td id="gamepad-status-leds"></td></tr>
-            </table>
-
-            <div style="height: 220px;"></div>
-        </div>
-    </div>
-
-    <div id="ble-section" class="inner-section disabled">
-        <h3>Bluetooth Pairing</h3>
-        <div class="inner-section">
-            <button onclick="let input = prompt('New PinSim ID (0-255)'); if (input !== null && input.trim() !== '') { sendCommand(COMMAND_SET_PINSIM_ID, Math.max(0, Math.min(255, parseInt(input)))); }">Set PinSim ID...</button>
-            <button onclick="sendCommand(COMMAND_PAIR_START)">Start Pairing Mode</button>
-            <button onclick="sendCommand(COMMAND_PAIR_CLEAR)">Clear All Pairing Info</button>
-        </div>
-
-        <h3>Calibration</h3>
-        <div class="inner-section">
-            <table>
-                <tr>
-                    <th>Tilt Sensor:</th><td>
-                        <button onclick="sendCommand(COMMAND_ACCEL_CAL)">Calibrate</button>
-                        <button onclick="sendCommand(COMMAND_SET_ACCEL_DEAD_ZONE, parseInt(prompt('New Dead Zone (0-100):', accelDeadZone)))">Set Dead Zone</button>
-                    </td>
-                </tr>
-                <tr>
-                    <th>Plunger:</th><td>
-                        <button id="button-plunger-min" onclick="sendCommand(COMMAND_PLUNGER_SET_MIN); document.getElementById('button-plunger-max').focus();">Set Min</button>
-                        <button id="button-plunger-max" onclick="sendCommand(COMMAND_PLUNGER_SET_MAX); document.getElementById('button-plunger-zero').focus();">Set Max</button>
-                        <button id="button-plunger-zero" onclick="sendCommand(COMMAND_PLUNGER_SET_ZERO); document.getElementById('button-plunger-min').focus();">Set Zero (Dead Zone)</button>
-                        <button id="button-plunger-defaults" onclick="sendCommand(COMMAND_PLUNGER_SET_DEFAULTS)">Reset to Defaults</button>
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <h3>Control Toggles</h3>
-        <div class="inner-section">
-            <button onclick="sendCommand(COMMAND_TOGGLE_CONTROL_SWAP)">Swap Plunger Controls</button>
-            <button onclick="sendCommand(COMMAND_TOGGLE_SOLENOIDS)">Toggle Solenoids</button>
-            <button onclick="sendCommand(COMMAND_TOGGLE_KEYBOARD)">Toggle Keyboard/Gamepad Mode</button>
-            <button id="button-led-start" onclick="toggleStartLED()">Enable Start LED</button>
-            <button id="button-led-others" onclick="toggleOtherLEDs()">Enable Other LEDs</button>
-        </div>
-
-        <h3>Testing</h3>
-        <div class="inner-section">
-            <button onmousedown="sendCommand(COMMAND_FIRE_SOLENOID,0,1)" onmouseup="sendCommand(COMMAND_FIRE_SOLENOID,0,0)">Test Left Solenoid</button>
-            <button onmousedown="sendCommand(COMMAND_FIRE_SOLENOID,1,1)" onmouseup="sendCommand(COMMAND_FIRE_SOLENOID,1,0)">Test Right Solenoid</button>
-        </div>
-
-        <div id="key-mapping-commands" class="disabled">
-            <h3>Key Mapping</h3>
-            <div class="inner-section">
-                <button onclick="sendCommand(COMMAND_RESET_KEY_MAPPING)">Reset to Default Key Map</button>
-                <button id="start-mapping" onclick="setKeyMapUI(1)">Start Mapping Keys...</button>
+    <!-- Navbar matching site base template -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+                <i class="bi bi-cpu-fill text-info fs-4"></i>
+                <span>PinSim Firmware Manager</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarMain">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-3">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="bi bi-house-door me-1"></i> Home
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/versions/">
+                            <i class="bi bi-collection me-1"></i> All Releases
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active fw-semibold" href="/config">
+                            <i class="bi bi-sliders me-1"></i> Configure
+                        </a>
+                    </li>
+                </ul>
             </div>
         </div>
-    </div>
-</div>
+    </nav>
 
-<script type="application/javascript">
+    <!-- Main Container -->
+    <main class="container my-4 flex-grow-1">
+        <div class="row g-4">
+            <!-- Hero / Web Configurator Section -->
+            <div class="col-12">
+                <div class="p-4 p-md-5 rounded-4 text-white shadow-sm" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0369a1 100%);">
+                    <div class="row g-4 align-items-center">
+                        <div class="col-lg-8">
+                            <h1 class="display-5 fw-bold mb-2">PinSim Web Configurator</h1>
+                            <p class="lead text-light text-opacity-75 mb-0">
+                                Configure tilt & plunger sensor calibration, button mappings, and BLE pairing.
+                            </p>
+                        </div>
+                        <div class="col-lg-4 text-lg-end">
+                            <div class="d-flex flex-column gap-2 align-items-lg-end">
+                                <a href="https://hardwaretester.com/gamepad" target="_blank" rel="noopener noreferrer" class="text-light text-opacity-75 small text-decoration-none">
+                                    <i class="bi bi-controller me-1"></i> Test in Gamepad Tester <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                                </a>
+                                <a href="./config_old" target="_blank" rel="noopener noreferrer" class="text-light text-opacity-75 small text-decoration-none">
+                                    <i class="bi bi-clock-history me-1"></i> Legacy PinSim Configurator
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bluetooth Devices Connection Card -->
+            <div class="col-12">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="card-title fw-bold mb-0 d-flex align-items-center">
+                            <i class="bi bi-broadcast text-primary me-2"></i> Bluetooth Devices
+                        </h5>
+                        <div class="d-flex gap-2 align-items-center">
+                            <button id="scan-button" class="btn btn-primary btn-sm px-3 shadow-sm" onclick="scanForDevices()">
+                                <i class="bi bi-search me-1"></i> Scan for Devices
+                            </button>
+                            <button id="edit-link" class="btn btn-outline-secondary btn-sm px-3" onclick="editDevicesMode = !editDevicesMode; showAllowedDevices()">
+                                Edit
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body py-3">
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <div id="conn-status-enabled" class="d-flex flex-wrap align-items-center gap-2"></div>
+                            <div id="conn-status-disabled" class="text-muted small fst-italic"><span>No Devices Found</span></div>
+                        </div>
+                        <div id="conn-error" class="mt-2" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controller Visualizer & Status -->
+            <div class="col-12">
+                <div id="gamepad-controls" class="card shadow-sm border-0 disabled">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="card-title fw-bold mb-0 d-flex align-items-center">
+                            <i class="bi bi-controller text-primary me-2"></i>
+                            <span id="gamepad-label-pinsimID">PinSim Controller (Not Connected)</span>
+                        </h5>
+                        <button id="disconnect-button" class="btn btn-outline-danger btn-sm px-3 disabled" onclick="userDisconnect()">
+                            <i class="bi bi-x-circle me-1"></i> Disconnect
+                        </button>
+                    </div>
+                    <div class="card-body p-3 p-md-4">
+                        <div class="pinsim-visualizer-container">
+                            <div class="pinsim-box">
+                                <div id="button-status-l-flipper" class="button" style="left: 7px; top: 120px;">L<div class="key"></div></div>
+                                <div id="button-status-r-flipper" class="button" style="left: 593px; top: 120px;">R<div class="key"></div></div>
+
+                                <div id="button-status-back" class="button" style="left: 80px; top: 20px;">Back<div class="key"></div></div>
+                                <div id="button-status-menu" class="button" style="left: 130px; top: 20px;">Menu<div class="key"></div></div>
+                                <div id="button-status-start" class="button" style="left: 65px; top: 195px;">Start<div class="key"></div></div>
+
+                                <div id="button-status-dpad-up" class="button" style="left: 270px; top: 25px;">Up<div class="key"></div></div>
+                                <div id="button-status-dpad-down" class="button" style="left: 270px; top: 95px;">Down<div class="key"></div></div>
+                                <div id="button-status-dpad-left" class="button" style="left: 235px; top: 60px;">Left<div class="key"></div></div>
+                                <div id="button-status-dpad-right" class="button" style="left: 305px; top: 60px;">Right<div class="key"></div></div>
+
+                                <div id="button-status-x" class="button" style="left: 400px; top: 20px;">X<div class="key"></div></div>
+                                <div id="button-status-y" class="button" style="left: 450px; top: 20px;">Y<div class="key"></div></div>
+                                <div id="button-status-z" class="button" style="left: 500px; top: 20px;">Z<div class="key"></div></div>
+                                <div id="button-status-a" class="button" style="left: 400px; top: 70px;">A<div class="key"></div></div>
+                                <div id="button-status-b" class="button" style="left: 450px; top: 70px;">B<div class="key"></div></div>
+                                <div id="button-status-c" class="button" style="left: 500px; top: 70px;">C<div class="key"></div></div>
+
+                                <button id="end-mapping" onclick="setKeyMapUI(0)" class="btn btn-sm btn-info fw-semibold shadow" style="left: 565px; top: 18px; display: none; position: absolute; z-index: 10;">Done</button>
+
+                                <div class="stick-visual" style="left: 150px; top: 120px;">
+                                    <div id="left-stick" class="thumbstick"></div>
+                                </div>
+                                <span class="stick-label" style="position: absolute; left: 165px; top: 240px;">Left Stick</span>
+
+                                <div class="vbar-container" style="left: 520px; top: 143px;">
+                                    <div id="right-stick" class="thumbstick" style="left: 0; top: 0;"></div>
+                                </div>
+                                <span id="plunger" class="stick-label" style="position: absolute; left: 545px; top: 240px;">Right Stick <span class="key"></span></span>
+
+                                <table class="pinsim-status-table">
+                                    <tr><th>Pairings:</th><td id="gamepad-status-pairings">-</td></tr>
+                                    <tr><th>Plunger Stick:</th><td id="gamepad-status-plunger-stick">-</td></tr>
+                                    <tr><th>Solenoids:</th><td id="gamepad-status-solenoids">-</td></tr>
+                                    <tr><th>Button LEDs:</th><td id="gamepad-status-leds">-</td></tr>
+                                </table>
+
+                                <div style="height: 220px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration & Calibration Options -->
+            <div id="ble-section" class="col-12 disabled">
+                <div class="row g-4">
+                    <!-- Bluetooth Pairing Card -->
+                    <div class="col-lg-6">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-header bg-white py-3">
+                                <h5 class="card-title fw-bold mb-0">
+                                    <i class="bi bi-bluetooth text-primary me-2"></i> Bluetooth Pairing
+                                </h5>
+                            </div>
+                            <div class="card-body d-flex flex-column gap-3">
+                                <p class="text-muted small mb-0">Manage controller Bluetooth identifier and clear existing paired host device records.</p>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button class="btn btn-outline-primary btn-sm" onclick="let input = prompt('New PinSim ID (0-255)'); if (input !== null && input.trim() !== '') { sendCommand(COMMAND_SET_PINSIM_ID, Math.max(0, Math.min(255, parseInt(input)))); }">
+                                        <i class="bi bi-hash me-1"></i> Set PinSim ID...
+                                    </button>
+                                    <button class="btn btn-outline-primary btn-sm" onclick="sendCommand(COMMAND_PAIR_START)">
+                                        <i class="bi bi-arrow-repeat me-1"></i> Start Pairing Mode
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" onclick="sendCommand(COMMAND_PAIR_CLEAR)">
+                                        <i class="bi bi-trash3 me-1"></i> Clear All Pairing Info
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sensor Calibration Card -->
+                    <div class="col-lg-6">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-header bg-white py-3">
+                                <h5 class="card-title fw-bold mb-0">
+                                    <i class="bi bi-sliders text-primary me-2"></i> Sensor Calibration
+                                </h5>
+                            </div>
+                            <div class="card-body d-flex flex-column gap-3">
+                                <div>
+                                    <label class="form-label fw-semibold small text-muted text-uppercase mb-2 d-block">Tilt Sensor (Accelerometer)</label>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="sendCommand(COMMAND_ACCEL_CAL)">
+                                            <i class="bi bi-compass me-1"></i> Calibrate
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="sendCommand(COMMAND_SET_ACCEL_DEAD_ZONE, parseInt(prompt('New Dead Zone (0-100):', accelDeadZone)))">
+                                            <i class="bi bi-bullseye me-1"></i> Set Dead Zone
+                                        </button>
+                                    </div>
+                                </div>
+                                <hr class="my-1 text-muted opacity-25">
+                                <div>
+                                    <label class="form-label fw-semibold small text-muted text-uppercase mb-2 d-block">Plunger Sensor</label>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button id="button-plunger-min" class="btn btn-outline-primary btn-sm" onclick="sendCommand(COMMAND_PLUNGER_SET_MIN); document.getElementById('button-plunger-max').focus();">Set Min</button>
+                                        <button id="button-plunger-max" class="btn btn-outline-primary btn-sm" onclick="sendCommand(COMMAND_PLUNGER_SET_MAX); document.getElementById('button-plunger-zero').focus();">Set Max</button>
+                                        <button id="button-plunger-zero" class="btn btn-outline-primary btn-sm" onclick="sendCommand(COMMAND_PLUNGER_SET_ZERO); document.getElementById('button-plunger-min').focus();">Set Zero (Dead Zone)</button>
+                                        <button id="button-plunger-defaults" class="btn btn-outline-secondary btn-sm" onclick="sendCommand(COMMAND_PLUNGER_SET_DEFAULTS)">Reset Defaults</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Control Toggles & Testing Card -->
+                    <div class="col-lg-6">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-header bg-white py-3">
+                                <h5 class="card-title fw-bold mb-0">
+                                    <i class="bi bi-toggles text-primary me-2"></i> Controls & Hardware Toggles
+                                </h5>
+                            </div>
+                            <div class="card-body d-flex flex-column gap-3">
+                                <div>
+                                    <label class="form-label fw-semibold small text-muted text-uppercase mb-2 d-block">Mode & Features</label>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="sendCommand(COMMAND_TOGGLE_CONTROL_SWAP)">
+                                            <i class="bi bi-arrow-left-right me-1"></i> Swap Plunger Controls
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="sendCommand(COMMAND_TOGGLE_SOLENOIDS)">
+                                            <i class="bi bi-power me-1"></i> Toggle Solenoids
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="sendCommand(COMMAND_TOGGLE_KEYBOARD)">
+                                            <i class="bi bi-keyboard me-1"></i> Toggle KB / Gamepad Mode
+                                        </button>
+                                    </div>
+                                </div>
+                                <hr class="my-1 text-muted opacity-25">
+                                <div>
+                                    <label class="form-label fw-semibold small text-muted text-uppercase mb-2 d-block">LED Controls</label>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button id="button-led-start" class="btn btn-outline-primary btn-sm" onclick="toggleStartLED()">Enable Start LED</button>
+                                        <button id="button-led-others" class="btn btn-outline-primary btn-sm" onclick="toggleOtherLEDs()">Enable Other LEDs</button>
+                                    </div>
+                                </div>
+                                <hr class="my-1 text-muted opacity-25">
+                                <div>
+                                    <label class="form-label fw-semibold small text-muted text-uppercase mb-2 d-block">Solenoid Testing (Hold to Fire)</label>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button class="btn btn-outline-warning text-dark btn-sm" onmousedown="sendCommand(COMMAND_FIRE_SOLENOID,0,1)" onmouseup="sendCommand(COMMAND_FIRE_SOLENOID,0,0)">
+                                            <i class="bi bi-lightning-charge me-1"></i> Test Left Solenoid
+                                        </button>
+                                        <button class="btn btn-outline-warning text-dark btn-sm" onmousedown="sendCommand(COMMAND_FIRE_SOLENOID,1,1)" onmouseup="sendCommand(COMMAND_FIRE_SOLENOID,1,0)">
+                                            <i class="bi bi-lightning-charge me-1"></i> Test Right Solenoid
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Key Mapping Card -->
+                    <div class="col-lg-6">
+                        <div id="key-mapping-commands" class="card shadow-sm border-0 h-100 disabled">
+                            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                                <h5 class="card-title fw-bold mb-0">
+                                    <i class="bi bi-keyboard text-primary me-2"></i> Key Mapping
+                                </h5>
+                                <span class="badge bg-secondary">Keyboard Mode Only</span>
+                            </div>
+                            <div class="card-body d-flex flex-column gap-3">
+                                <p class="text-muted small mb-0">Customize mapped keyboard keys for each PinSim button. Double-click any button on the controller diagram to rebind it individually, or click Start Mapping Keys to rebind sequentially.</p>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button id="start-mapping" class="btn btn-primary btn-sm" onclick="setKeyMapUI(1)">
+                                        <i class="bi bi-pencil-square me-1"></i> Start Mapping Keys...
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="sendCommand(COMMAND_RESET_KEY_MAPPING)">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i> Reset to Default Key Map
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-4 mt-auto">
+        <div class="container text-center text-muted small">
+            <span>PinSim Firmware Hub &bull; Web Bluetooth Configurator</span>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+    <script type="application/javascript">
     // Command num goes in commandData[0]
     const COMMAND_ACCEL_CAL           = 3
     const COMMAND_PLUNGER_SET_MIN     = 4
@@ -504,7 +775,6 @@
     })
 
     function onLoad(event) {
-        // console.log("didLoad")
         const storedVal = localStorage.getItem("PinSimLastConnectedPinSimID")
         shouldAutoconnectToPSID = (storedVal !== null && storedVal !== "") ? parseInt(storedVal) : null
         if (isNaN(shouldAutoconnectToPSID)) shouldAutoconnectToPSID = null
@@ -515,21 +785,28 @@
         }, 500)
     }
 
-
     /////////////////////////////////////
     // Connection-related functions
 
     function showAllowedDevices() {
         connStatusEnabledElement.classList.remove('disabled')
         if (navigator.bluetooth.getDevices === undefined) {
-            connStatusEnabledElement.innerHTML = 'To use the PinSim web config tool, please enable the Chrome flags:<br/>\n\
-  <b>chrome://flags#enable-experimental-web-platform-features</b> <a href="javascript:0" onclick="navigator.clipboard.writeText(\'chrome://flags#enable-experimental-web-platform-features\');">[Copy Link]</a><br/>\n\
-  <b>chrome://flags#enable-web-bluetooth-new-permissions-backend</b> <a href="javascript:0" onclick="navigator.clipboard.writeText(\'chrome://flags#enable-web-bluetooth-new-permissions-backend\');">[Copy Link]</a>'
+            connStatusEnabledElement.innerHTML = `
+                <div class="alert alert-warning mb-0 w-100">
+                    <h6 class="alert-heading fw-bold mb-2"><i class="bi bi-exclamation-triangle-fill me-2"></i>Web Bluetooth Chrome Flags Required</h6>
+                    <p class="small mb-2">To use the PinSim web configuration tool, please enable the following flags in Chrome:</p>
+                    <div class="mb-2">
+                        <code>chrome://flags#enable-experimental-web-platform-features</code>
+                        <a href="javascript:0" class="badge bg-secondary text-decoration-none ms-2" onclick="navigator.clipboard.writeText('chrome://flags#enable-experimental-web-platform-features');"><i class="bi bi-clipboard me-1"></i>Copy Link</a>
+                    </div>
+                    <div>
+                        <code>chrome://flags#enable-web-bluetooth-new-permissions-backend</code>
+                        <a href="javascript:0" class="badge bg-secondary text-decoration-none ms-2" onclick="navigator.clipboard.writeText('chrome://flags#enable-web-bluetooth-new-permissions-backend');"><i class="bi bi-clipboard me-1"></i>Copy Link</a>
+                    </div>
+                </div>`
         }
         else {
-            // console.log('showAllowedDevices')
             navigator.bluetooth.getDevices().then(devices => {
-                // console.log(`Found ${devices.length} BLE Device/s.`)
                 let enabledHtml = ""
                 let disabledHtml = ""
                 if (devices.length >= 1) {
@@ -543,12 +820,12 @@
                             const icon = isConnected ? "🔗" : (seen ? "📶" : "⃠")
                             let buttonHtml = ""
                             if (isConnecting) {
-                                buttonHtml += `<button class="disabled" style="pointer-events: none; position: relative;"><span id="icon-${device.id}">🔄</span> ${devName} <div class="loader"></div></button>`
+                                buttonHtml += `<button class="btn btn-outline-primary btn-sm disabled me-2 mb-2 position-relative" style="pointer-events: none;"><span id="icon-${device.id}">🔄</span> ${devName} <span class="spinner-border spinner-border-sm ms-1" role="status" aria-hidden="true"></span></button>`
                             } else {
-                                buttonHtml += `<button onclick="connectToDeviceWithId('${device.id}')"><span id="icon-${device.id}">${icon}</span> ${devName}</button>`
+                                buttonHtml += `<button class="btn ${isConnected ? 'btn-success text-white' : (seen ? 'btn-outline-primary' : 'btn-outline-secondary')} btn-sm me-2 mb-2" onclick="connectToDeviceWithId('${device.id}')"><span id="icon-${device.id}">${icon}</span> ${devName}</button>`
                             }
                             if (editDevicesMode) {
-                                buttonHtml += `<a href="javascript:0" onclick="forgetDevice('${device.id}')">[X]</a>`
+                                buttonHtml += `<a href="javascript:0" class="btn btn-outline-danger btn-sm me-2 mb-2" onclick="forgetDevice('${device.id}')" title="Forget Device"><i class="bi bi-trash3-fill"></i></a>`
                             }
                             buttonHtml += " "
                             if (seen) {
@@ -579,20 +856,19 @@
                 }
                 else {
                     connStatusEnabledElement.innerHTML = ""
-                    connStatusDisabledElement.innerHTML = '<span>No Devices Found</span>'
+                    connStatusDisabledElement.innerHTML = '<span class="text-muted small fst-italic"><i class="bi bi-broadcast me-1"></i>No Paired Bluetooth Devices Found</span>'
                     connStatusDisabledElement.style.display = "inline-block"
                 }
             }).catch((error) => {
-                connStatusDisabledElement.innerHTML = '<span>No Devices Found</span>'
+                connStatusDisabledElement.innerHTML = '<span class="text-muted small fst-italic"><i class="bi bi-broadcast me-1"></i>No Paired Bluetooth Devices Found</span>'
                 showError(`Error Listing Devices (${error})`)
             })
         }
-        editLinkElement.innerText = (editDevicesMode) ? "[Done]" : "[Edit]"
+        editLinkElement.innerText = (editDevicesMode) ? "Done" : "Edit"
     }
 
     function onAdvReceived(event) {
         let device = event.device
-        // console.log(`onAdvReceived: ${device.id}`)
         const oldSeen = (seenAdvertisements[device.id] && seenAdvertisements[device.id] > Date.now() - BLE_STALE_TIME)
         seenAdvertisements[device.id] = Date.now()
         if (!oldSeen) {
@@ -607,14 +883,12 @@
         if (devName && devName.includes(":")) {
             let devPSID = parseInt(devName.split(":")[1].trim())
             if (shouldAutoconnectToPSID !== null && !isNaN(shouldAutoconnectToPSID) && !isNaN(devPSID) && shouldAutoconnectToPSID === devPSID && !cmdDevice && !connectingDeviceId) {
-                // console.log(`Attempt to re-connect`)
                 connectToDevice(device, true)
             }
         }
     }
 
     function scanForDevices() {
-        // console.log('scanForDevices')
         navigator.bluetooth.requestDevice({ acceptAllDevices: true,
             optionalServices: [COMMAND_SERVICE_ID]
         }).then(device => {
@@ -625,7 +899,6 @@
                 showAllowedDevices()
             }
         }).catch((error) => {
-            // console.log(error)
             if (error.name === "NotFoundError" && error.code === 8) {
                 // skip "User cancelled the requestDevice() chooser" error
             } else {
@@ -653,7 +926,6 @@
     }
 
     async function connectToDevice(device, isAuto = false) {
-        // console.log("connectToDevice")
         if (!isAuto) {
             const devName = localStorage.getItem(`PinSimDisplayName-${device.id}`)
             if (devName && devName.includes(":")) {
@@ -684,11 +956,9 @@
         }
 
         connectGATTWithRetry(device).then(gatt => {
-            // console.log('Getting Service...')
             cmdDevice = gatt.device
             return gatt.getPrimaryService(COMMAND_SERVICE_ID)
         }).then(async service => {
-            // console.log('Getting Characteristics...')
             const fwCharacteristic = await service.getCharacteristic(COMMAND_FW_VERSION_CHARACTERISTIC_ID)
             if (fwCharacteristic) {
                 const v = await fwCharacteristic.readValue()
@@ -720,7 +990,6 @@
 
             return service.getCharacteristic(COMMAND_CHARACTERISTIC_ID)
         }).then(async characteristic => {
-            // console.log('Requesting Notifications...')
             cmdCharacteristic = characteristic
             cmdDevice.addEventListener('gattserverdisconnected', onDisconnect)
             if (reportCharacteristic) {
@@ -733,17 +1002,14 @@
             }
             return cmdCharacteristic.startNotifications()
         }).then(_ => {
-            // console.log('Set up Notifications.')
             connectingDeviceId = null
             if (cmdCharacteristic.properties.notify) {
                 onConnect()
             }
             else {
-                // console.log('Notifications not available.')
                 didDisconnect(cmdDevice)
             }
         }).catch((error) => {
-            // console.log(error)
             connectingDeviceId = null
             const storedVal = localStorage.getItem("PinSimLastConnectedPinSimID")
             shouldAutoconnectToPSID = (storedVal !== null && storedVal !== "") ? parseInt(storedVal) : null
@@ -765,18 +1031,12 @@
             }
             showError(`Error Connecting to Device (${error})`)
             
-            if (error.name === "NetworkError" && error.code === 19) {
-                // On "Device is no longer in range" error, do nothing
-            } else {
-                // Removed forgetDevice(device.id) to avoid losing permissions on transient connection errors
-            }
             didDisconnect(device)
             showAllowedDevices()
         })
     }
 
     function connectToDeviceWithId(id) {
-        // console.log("connectToDeviceWithId")
         navigator.bluetooth.getDevices().then(devices => {
             for (let device of devices) {
                 if (device.id === id && device !== cmdDevice) {
@@ -790,19 +1050,21 @@
     function showError(err) {
         if (err === null) {
             connErrorElement.innerHTML = ""
+            connErrorElement.style.display = "none"
             connErrTimer = null
         } else {
-            connErrorElement.innerHTML = err
+            connErrorElement.innerHTML = `<div class="alert alert-danger py-2 px-3 mb-0 small"><i class="bi bi-exclamation-triangle-fill me-2"></i>${err}</div>`
+            connErrorElement.style.display = "block"
             if (connErrTimer !== null) clearTimeout(connErrTimer)
             connErrTimer = setTimeout(() => {
                 connErrorElement.innerHTML = ""
+                connErrorElement.style.display = "none"
                 connErrTimer = null
             }, 5000)
         }
     }
 
     function onConnect() {
-        // console.log("onConnect")
         sessionStorage.removeItem("PinSimReloadedToConnect")
         showError(null)
         cmdCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
@@ -825,7 +1087,6 @@
     }
 
     function onDisconnect(event) {
-        // console.log("onDisconnect")
         if (cmdDevice === null || cmdDevice === event.target) {
             const storedVal = localStorage.getItem("PinSimLastConnectedPinSimID")
             shouldAutoconnectToPSID = (storedVal !== null && storedVal !== "") ? parseInt(storedVal) : null
@@ -851,7 +1112,6 @@
             }
         }
         if (device === cmdDevice || cmdDevice === null) {
-            // console.log("didDisconnect")
             if (cmdDevice) {
                 cmdDevice.removeEventListener('gattserverdisconnected', onDisconnect)
             }
@@ -869,10 +1129,11 @@
             updateReportUI(currentReport)
             startLEDEnabled = true
             otherLEDsEnabled = false
-            pairingsStatusElement.innerHTML = ""
-            plungerStickStatusElement.innerHTML = ""
-            solenoidsStatusElement.innerHTML = ""
-            ledsStatusElement.innerHTML = ""
+            pairingsStatusElement.innerHTML = "-"
+            plungerStickStatusElement.innerHTML = "-"
+            solenoidsStatusElement.innerHTML = "-"
+            ledsStatusElement.innerHTML = "-"
+            pinsimLabelElement.innerHTML = "PinSim Controller (Not Connected)"
             if (startLEDButtonElement) {
                 startLEDButtonElement.disabled = false
                 startLEDButtonElement.innerText = "Enable Start LED"
@@ -944,7 +1205,6 @@
 
     function sendCommand(b0, b1=null, b2=null) {
         if (cmdCharacteristic) {
-            // console.log(`Sending Command ${b0} (${b1}, ${b2})`)
             if (b0 === COMMAND_SET_PINSIM_ID) {
                 // Change the cached PSID for this device, _and_ for its counterpart
                 let newPSID = b1
@@ -1027,8 +1287,6 @@
             const command = value.getUint8(0)
 
             if (command === COMMAND_RESPONSE_STATUS && (value.byteLength === 4 || value.byteLength === 5)) {
-                // console.log(`Command Response: ${command} ${value.getUint8(1)} ${value.getUint8(2)} ${value.getUint8(3)}`)
-                // Extract PinSim Status data from command
                 pinsimID = value.getUint8(1)
                 const numPairs = value.getUint8(2)
                 const flags = value.getUint8(3)
@@ -1055,7 +1313,7 @@
                 localStorage.setItem(`PinSimDisplayName-${cmdDevice.id}`, displayName)
                 localStorage.setItem("PinSimLastConnectedPinSimID", pinsimID)
                 shouldAutoconnectToPSID = pinsimID
-                pinsimLabelElement.innerHTML = `${displayName} (fw v${fwVersion})`
+                pinsimLabelElement.innerHTML = `${displayName} <span class="badge bg-secondary ms-2">fw v${fwVersion}</span>`
 
                 showAllowedDevices()
                 
@@ -1069,7 +1327,6 @@
             else if (command === COMMAND_RESPONSE_KEYMAP && value.byteLength === 17) {
                 let dataString = ""
                 for (let i = 0; i < 16; i++) { dataString += value.getUint8(i+1) + " " }
-                // console.log(`Command Response: ${command} ${dataString}`)
                 for (let i = 0; i < 16; i++) {
                     let substitution = keyCodeMap[value.getUint8(i+1)]
                     if (substitution) {
@@ -1124,7 +1381,6 @@
             setKeyMapUI(1)
         }
     }
-
 
     function onClickButton(e, b, isDouble) {
         if (keyboardMode && isDouble) {
@@ -1235,11 +1491,10 @@
     }
 
     function updateStick(stickElement, x, y, m) {
-        // Map the -1.0 to 1.0 range to a -40 to 40 pixel movement for centering the 20px circle in 100px box
         const xOffset = x * m;
         const yOffset = y * m;
         stickElement.style.transform = `translate(${xOffset}px, ${yOffset}px)`;
     }
-</script>
+    </script>
 </body>
 </html>
