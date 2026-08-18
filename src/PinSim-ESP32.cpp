@@ -1088,8 +1088,9 @@ void processInputs()
             // Attempt to detect plunge
             int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance,
                                                 plungeTrigger / 2, plungeTrigger);
-            if (currentDistance - lastDistance >= adjustedPlungeTrigger && lastDistance > plungerMaxDistance - (plungerMaxDistance - plungerMinDistance) / 2) {
-                // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
+            if (currentDistance - lastDistance >= adjustedPlungeTrigger && lastDistance < plungerMinDistance + (plungerMaxDistance - plungerMinDistance) / 3) {
+                // When plunging fast, starting from > 2/3 pulled-out, we throw the controller stick instantly to
+                // 0 to better simulate the physical behavior of a real analog stick.
                 if (!useKeyboardMode) {
                     if (controlShuffle) {
                         gamepad.setLeftThumb(center[0], center[1]);
