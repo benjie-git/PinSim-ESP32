@@ -166,7 +166,6 @@ int16_t plungerMinOffset = 50;                  // add this to the measured min 
 int16_t plungerMax = PLUNGER_DEFAULT_MAX;       // default max plunger analog sensor value
 int16_t plungerMaxDistance = 0;                 // sensor value converted to actual distance
 int16_t plungerMinDistance = 0;
-uint32_t plungerEnableTime = 0;
 uint32_t tiltEnableTime = 0;
 int16_t lastDistance = 0;
 int16_t distanceBuffer = 0;
@@ -1078,40 +1077,39 @@ void processInputs()
 
         int16_t currentDistance = readingToDistance(plungerAverage);
         distanceBuffer = currentDistance;
-        if (plungerEnableTime > millis()) {
+
+        if (currentDistance <= plungerMinDistance) {
+            // fully pulled out -- cap minDistance
+            distanceBuffer = plungerMinDistance;
+        } else if (currentDistance > plungerMaxDistance - 20) {
+            // at rest -- cap maxDistance
             distanceBuffer = plungerMaxDistance;
         } else {
-            if (currentDistance < plungerMaxDistance - 20 && currentDistance > plungerMinDistance) {
-                // Attempt to detect plunge
-                int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance,
-                                                    plungeTrigger / 2, plungeTrigger);
-                if (currentDistance - lastDistance >= adjustedPlungeTrigger && currentDistance > plungerMaxDistance - (plungerMaxDistance - plungerMinDistance) / 8) {
-                    // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
-                    if (!useKeyboardMode) {
-                        if (controlShuffle) {
-                            gamepad.setLeftThumb(center[0], center[1]);
-                            gamepad.setRightThumb(center[0], center[1]);
-                        } else {
-                            gamepad.setRightThumb(center[0], center[1]);
-                        }
+            // Attempt to detect plunge
+            int16_t adjustedPlungeTrigger = map(currentDistance, plungerMaxDistance, plungerMinDistance,
+                                                plungeTrigger / 2, plungeTrigger);
+            if (currentDistance - lastDistance >= adjustedPlungeTrigger && lastDistance > plungerMaxDistance - (plungerMaxDistance - plungerMinDistance) / 2) {
+                // we throw STICK_RIGHT to 0 to better simulate the physical behavior of a real analog stick
+                if (!useKeyboardMode) {
+                    if (controlShuffle) {
+                        gamepad.setLeftThumb(center[0], center[1]);
+                        gamepad.setRightThumb(center[0], center[1]);
                     } else {
-                        kb.release(kbMap[POSPLUNGER]);
+                        gamepad.setRightThumb(center[0], center[1]);
                     }
-                    distanceBuffer = plungerMaxDistance;
-                    lastDistance = plungerMaxDistance;
-                    plungerEnableTime = millis() + 400;
-                    tiltEnableTime = millis() + 800;
-                    return;
+                } else {
+                    kb.release(kbMap[POSPLUNGER]);
                 }
-                lastDistance = currentDistance;
-            } else if (currentDistance <= (plungerMinDistance + plungerMaxDistance) / 2) {
-                // pulled out -- cap min and pause tilt sensing
-                tiltEnableTime = millis() + 800;
-                distanceBuffer = plungerMinDistance;
-            } else if (currentDistance > plungerMaxDistance) {
-                // at rest -- cap max
                 distanceBuffer = plungerMaxDistance;
+                lastDistance = plungerMaxDistance;
+                // Disable tilt for a short time after a plunge, to avoid accidental tilt detection
+                // Center the acelerometer values for now as well
+                tiltEnableTime = millis() + 800;
+                accX = zeroX;
+                accY = zeroY;
+                return;
             }
+            lastDistance = currentDistance;
         }
 
         if (!useKeyboardMode) {
@@ -1133,46 +1131,47 @@ void processInputs()
 
     // Tilt
     if (accelerometerEnabled) {
-        /* Get a new sensor event */
-        sensors_event_t event;
-        accel.getEvent(&event);
+        if (millis() > tiltEnableTime) {
+            /* Get a new sensor event */
+            sensors_event_t event;
+            accel.getEvent(&event);
 
-        // Re-calibrate accelerometer if we're waiting for Accel setting, and Start is pressed
-        if (waitingForAccelSetting && buttonStatus[POSST]) {
-            accelDetermineOrientation(event);
-        }
+            // Re-calibrate accelerometer if we're waiting for Accel setting, and Start is pressed
+            if (waitingForAccelSetting && buttonStatus[POSST]) {
+                accelDetermineOrientation(event);
+            }
 
-        accelOrientEvent(event);
+            accelOrientEvent(event);
 
-        // Re-calibrate accelerometer if we're waiting for Accel setting, and Start is pressed
-        if (waitingForAccelSetting && buttonStatus[POSST]) {
-            accelSetCalibration();
-            configFeedbackBlinks(1);
-            waitingForAccelSetting = false;
+            // Re-calibrate accelerometer if we're waiting for Accel setting, and Start is pressed
+            if (waitingForAccelSetting && buttonStatus[POSST]) {
+                accelSetCalibration();
+                configFeedbackBlinks(1);
+                waitingForAccelSetting = false;
+            }
         }
 
         int32_t accXcon = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
         int32_t accYcon = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
 
-        if (millis() > tiltEnableTime) {
-            if (controlShuffle || useKeyboardMode) {
-                if (accYcon > XBOX_STICK_MAX * accelDeadZone) direction |= XboxDpadFlags::NORTH;
-                if (accXcon > XBOX_STICK_MAX * accelDeadZone) direction |= XboxDpadFlags::EAST;
-                if (accYcon < XBOX_STICK_MIN * accelDeadZone) direction |= XboxDpadFlags::SOUTH;
-                if (accXcon < XBOX_STICK_MIN * accelDeadZone) direction |= XboxDpadFlags::WEST;
-            } else {
-                // Add a big dead zone for Left-stick analog accelerometer movements
-                if (abs(accXcon) > XBOX_STICK_MAX * accelDeadZone || abs(accYcon) > XBOX_STICK_MAX * accelDeadZone) {
-                    gamepad.setLeftThumb(accXcon, accYcon);
-                } else {
-                    gamepad.setLeftThumb(0, 0);
-                }
-            }
-        }
         if (!useKeyboardMode) {
             gamepad.pressDPadDirection(XboxDpadFlags(direction));
         } else {
             sendKbDPad(direction);
+        }
+
+        if (controlShuffle || useKeyboardMode) {
+            if (accYcon > XBOX_STICK_MAX * accelDeadZone) direction |= XboxDpadFlags::NORTH;
+            if (accXcon > XBOX_STICK_MAX * accelDeadZone) direction |= XboxDpadFlags::EAST;
+            if (accYcon < XBOX_STICK_MIN * accelDeadZone) direction |= XboxDpadFlags::SOUTH;
+            if (accXcon < XBOX_STICK_MIN * accelDeadZone) direction |= XboxDpadFlags::WEST;
+        } else {
+            // Add a big dead zone for Left-stick analog accelerometer movements
+            if (abs(accXcon) > XBOX_STICK_MAX * accelDeadZone || abs(accYcon) > XBOX_STICK_MAX * accelDeadZone) {
+                gamepad.setLeftThumb(accXcon, accYcon);
+            } else {
+                gamepad.setLeftThumb(0, 0);
+            }
         }
     }
 }
