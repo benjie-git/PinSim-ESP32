@@ -28,3 +28,17 @@ cd PinSim_FW_updater_PCB5_$CUR_DATE/data
 zip -r ../../dist/PinSim_FW_data_PCB5_$CUR_DATE.zip *.bin
 cd ../..
 mv PinSim_FW_updater_PCB5_$CUR_DATE PinSim_FW_updater
+
+# Upload to fw server
+echo "../PinSim-fw-server/.venv/bin/python ../PinSim-fw-server/uploader.py \
+dist/PinSim_FW_data_PCB3_$CUR_DATE.zip \
+dist/PinSim_FW_updater_PCB3_$CUR_DATE.zip \
+dist/PinSim_FW_data_PCB5_$CUR_DATE.zip \
+dist/PinSim_FW_updater_PCB5_$CUR_DATE.zip
+"
+
+../PinSim-fw-server/.venv/bin/python ../PinSim-fw-server/uploader.py \
+dist/PinSim_FW_data_PCB3_$CUR_DATE.zip \
+dist/PinSim_FW_updater_PCB3_$CUR_DATE.zip \
+dist/PinSim_FW_data_PCB5_$CUR_DATE.zip \
+dist/PinSim_FW_updater_PCB5_$CUR_DATE.zip
