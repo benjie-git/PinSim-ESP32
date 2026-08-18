@@ -29,8 +29,12 @@ zip -r ../../dist/PinSim_FW_data_PCB5_$CUR_DATE.zip *.bin
 cd ../..
 mv PinSim_FW_updater_PCB5_$CUR_DATE PinSim_FW_updater
 
+file="src/command.h"
+version=$(sed -nE 's/^[[:space:]]*#[[:space:]]*define[[:space:]]+COMMAND_FW_VERSION[[:space:]]+"([^"]+)".*/\1/p' "$file")
+
 # Upload to fw server
 echo "../PinSim-fw-server/.venv/bin/python ../PinSim-fw-server/uploader.py \
+$version \
 dist/PinSim_FW_data_PCB3_$CUR_DATE.zip \
 dist/PinSim_FW_updater_PCB3_$CUR_DATE.zip \
 dist/PinSim_FW_data_PCB5_$CUR_DATE.zip \
@@ -38,6 +42,7 @@ dist/PinSim_FW_updater_PCB5_$CUR_DATE.zip
 "
 
 ../PinSim-fw-server/.venv/bin/python ../PinSim-fw-server/uploader.py \
+$version \
 dist/PinSim_FW_data_PCB3_$CUR_DATE.zip \
 dist/PinSim_FW_updater_PCB3_$CUR_DATE.zip \
 dist/PinSim_FW_data_PCB5_$CUR_DATE.zip \
