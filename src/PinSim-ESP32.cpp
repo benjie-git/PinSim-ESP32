@@ -151,7 +151,9 @@ void OnVibrateEvent(XboxGamepadOutputReportData data);
 void updateTriggerStatus();
 void rxCommand(const uint8_t *commandData, const uint8_t length);
 void handlePendingCommand();
-void buttonUpdate();
+bool buttonUpdate();
+uint8_t processButtons();
+void applyDPad(uint8_t direction);
 
 TaskHandle_t mainTaskHandle = NULL;
 void handle_main_task(void *arg);
@@ -324,6 +326,16 @@ void sendKbDPad(uint8_t direction)
 }
 
 uint8_t buttonStatus[NUM_BUTTONS];  // array Holds a "Snapshot" of the button status to parse and manipulate
+
+// ---- Two-rate main loop ----
+// Buttons are polled every FAST_TICK_MS and a report goes out as soon as one changes (latency).
+// Everything else (commands, solenoids, LEDs, plunger, tilt, keepalive) stays on the SLOW_TICK_MS cadence,
+// exactly as before.
+#define FAST_TICK_MS        2
+#define SLOW_TICK_MS        16
+#define BUTTON_LOCKOUT_MS   12   // after an accepted edge, ignore further edges on that input (switch bounce)
+uint32_t buttonLastEdge[NUM_BUTTONS];      // millis() of the last accepted edge per button
+uint8_t  slowButtonStatus[NUM_BUTTONS];    // buttonStatus as of the previous slow tick (keeps solenoid timing unchanged)
 
 // Setup Button Debouncing
 Button2 dpadUP = Button2(pinDpadU);
@@ -815,8 +827,10 @@ void setup()
 void loop() {}
 
 
-// Update the debounced button statuses
-void buttonUpdate()
+// Poll the buttons. A new level is accepted on its first edge (no added latency), then that input is
+// locked out for BUTTON_LOCKOUT_MS so switch bounce can't produce extra edges at the fast poll rate.
+// Returns true if any buttonStatus[] entry changed.
+bool buttonUpdate()
 {
     dpadUP.loop();
     dpadDOWN.loop();
@@ -854,21 +868,33 @@ void buttonUpdate()
     buttonXBOX.loop();
     LED_Set(pinLEDBG, LED_states[pinLEDBG]);
 
-    buttonStatus[POSUP] = dpadUP.isPressed();
-    buttonStatus[POSDN] = dpadDOWN.isPressed();
-    buttonStatus[POSLT] = dpadLEFT.isPressed();
-    buttonStatus[POSRT] = dpadRIGHT.isPressed();
-    buttonStatus[POSB1] = button1.isPressed();
-    buttonStatus[POSB2] = button2.isPressed();
-    buttonStatus[POSB3] = button3.isPressed();
-    buttonStatus[POSB4] = button4.isPressed();
-    buttonStatus[POSL1] = buttonLT.isPressed();
-    buttonStatus[POSR1] = buttonRT.isPressed();
-    buttonStatus[POSST] = buttonSTART.isPressed();
-    buttonStatus[POSBK] = buttonBACK.isPressed();
-    buttonStatus[POSXB] = buttonXBOX.isPressed();
-    buttonStatus[POSB9] = button9.isPressed();
-    buttonStatus[POSB10] = button10.isPressed();
+    const bool raw[NUM_BUTTONS] = {
+        dpadUP.isPressed(),      // POSUP
+        dpadDOWN.isPressed(),    // POSDN
+        dpadLEFT.isPressed(),    // POSLT
+        dpadRIGHT.isPressed(),   // POSRT
+        button1.isPressed(),     // POSB1
+        button2.isPressed(),     // POSB2
+        button3.isPressed(),     // POSB3
+        button4.isPressed(),     // POSB4
+        buttonLT.isPressed(),    // POSL1
+        buttonRT.isPressed(),    // POSR1
+        buttonSTART.isPressed(), // POSST
+        buttonBACK.isPressed(),  // POSBK
+        buttonXBOX.isPressed(),  // POSXB
+        button9.isPressed(),     // POSB9
+        button10.isPressed(),    // POSB10
+    };
+    const uint32_t now = millis();
+    bool changed = false;
+    for (int i = 0; i < NUM_BUTTONS; i++) {
+        if (raw[i] != (bool)buttonStatus[i] && (uint32_t)(now - buttonLastEdge[i]) >= BUTTON_LOCKOUT_MS) {
+            buttonStatus[i] = raw[i];
+            buttonLastEdge[i] = now;
+            changed = true;
+        }
+    }
+    return changed;
 }
 
 
@@ -997,15 +1023,12 @@ void accelCalibrate()
 
 
 // ProcessInputs
-void processInputs()
+// The button half of processInputs(): map buttonStatus[] onto gamepad/keyboard buttons.
+// Called from the fast path on every button change, and from processInputs() on the slow tick.
+// Returns the d-pad direction bits derived from the d-pad buttons.
+uint8_t processButtons()
 {
     uint8_t direction = XboxDpadFlags::NONE;
-
-    // Use -1 instead of 0 for non-moving thumb/stick axes to fix right stick stuck to top-left
-    // Some hosts need to see negative values or else they assume that 0 is the lowest value.
-    int8_t center[2];
-    center[0] = -1;
-    center[1] = -1;
 
     // Update the DPAD
     if (buttonStatus[POSUP]) direction |= XboxDpadFlags::NORTH;
@@ -1022,6 +1045,45 @@ void processInputs()
         setButton(XBOX_BUTTON_LS, POSB9, buttonStatus[POSB9]);
         setButton(XBOX_BUTTON_RS, POSB10, buttonStatus[POSB10]);
     }
+
+    // Bumpers
+    setButton(XBOX_BUTTON_LB, POSL1, buttonStatus[POSL1]);
+    setButton(XBOX_BUTTON_RB, POSR1, buttonStatus[POSR1]);
+
+    // Middle Buttons: Start, Select, Home
+    if (useKeyboardMode) {
+        setButton(XBOX_BUTTON_HOME, POSXB, buttonStatus[POSXB]);
+        setButton(XBOX_BUTTON_START, POSST, buttonStatus[POSST]);
+    }
+    else {
+        pressHome(buttonStatus[POSXB]);
+        pressStart(buttonStatus[POSST]);
+    }
+    setButton(XBOX_BUTTON_SELECT, POSBK, buttonStatus[POSBK]);
+
+    return direction;
+}
+
+// Apply a d-pad direction. Same gating as before: the d-pad is only driven when the accelerometer is enabled.
+void applyDPad(uint8_t direction)
+{
+    if (!accelerometerEnabled) return;
+    if (!useKeyboardMode) {
+        gamepad.pressDPadDirection(XboxDpadFlags(direction));
+    } else {
+        sendKbDPad(direction);
+    }
+}
+
+void processInputs()
+{
+    // Use -1 instead of 0 for non-moving thumb/stick axes to fix right stick stuck to top-left
+    // Some hosts need to see negative values or else they assume that 0 is the lowest value.
+    int8_t center[2];
+    center[0] = -1;
+    center[1] = -1;
+
+    uint8_t direction = processButtons();
 
     if (pinPairBtn && digitalRead(pinPairBtn) == LOW) {
         printf("Button: Start Pairing\n");
@@ -1047,22 +1109,6 @@ void processInputs()
         printf("Calibrated Plunger Dead Zone\n");
         waitingForDeadzoneSetting = false;
     }
-
-    // Bumpers
-    setButton(XBOX_BUTTON_LB, POSL1, buttonStatus[POSL1]);
-    setButton(XBOX_BUTTON_RB, POSR1, buttonStatus[POSR1]);
-
-    // Middle Buttons: Start, Select, Home
-    if (useKeyboardMode) {
-        setButton(XBOX_BUTTON_HOME, POSXB, buttonStatus[POSXB]);
-        setButton(XBOX_BUTTON_START, POSST, buttonStatus[POSST]);
-    }
-    else {
-        pressHome(buttonStatus[POSXB]);
-        pressStart(buttonStatus[POSST]);
-    }
-    setButton(XBOX_BUTTON_SELECT, POSBK, buttonStatus[POSBK]);
-
 
     // Plunger
     // This is based on the Sharp GP2Y0A51SK0F Analog Distance Sensor 2-15cm
@@ -1155,11 +1201,7 @@ void processInputs()
         int32_t accXcon = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
         int32_t accYcon = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
 
-        if (!useKeyboardMode) {
-            gamepad.pressDPadDirection(XboxDpadFlags(direction));
-        } else {
-            sendKbDPad(direction);
-        }
+        applyDPad(direction);
 
         if (controlShuffle || useKeyboardMode) {
             if (accYcon > XBOX_STICK_MAX * accelDeadZone) direction |= XboxDpadFlags::NORTH;
@@ -1208,8 +1250,8 @@ void solenoidUpdate()
     // Last state is the previous button state, to help notice state changes
     static bool lastStateLeft = false;
     static bool lastStateRight = false;
-    const bool newStateLeft = buttonStatus[POSL1] || solenoidOverrides[0];
-    const bool newStateRight = buttonStatus[POSR1] || solenoidOverrides[1];
+    const bool newStateLeft = slowButtonStatus[POSL1] || solenoidOverrides[0];
+    const bool newStateRight = slowButtonStatus[POSR1] || solenoidOverrides[1];
 
     if (newStateLeft && !lastStateLeft) {
         // Left was just pressed
@@ -1247,11 +1289,14 @@ void delay_since_last_delay(uint32_t ms_since_last_delay)
     static uint32_t last_target = 0;
     uint32_t now = millis();
     uint32_t new_target = last_target + ms_since_last_delay;
-    if (new_target <= now) {
+    if ((int32_t)(now - new_target) >= 50) {
+        // Far behind (e.g. a blocking command/calibration ran): resync instead of bursting to catch up
         new_target = now;
-    } else {
+    } else if ((int32_t)(new_target - now) > 0) {
         vTaskDelay_ms(new_target - now);
     }
+    // else: slightly late (a tick's work overran the period) - don't delay, and keep the target on the
+    // fixed grid so the period stays exact on average (no drift of the slow tick / keepalive)
     last_target = new_target;
 }
 
@@ -1259,24 +1304,45 @@ void delay_since_last_delay(uint32_t ms_since_last_delay)
 // Main Task runs forever, yielding during vTaskDelay() calls
 void handle_main_task(void *arg)
 {
+    uint8_t fastTicks = 0;
+
     while (true) {
-        delay_since_last_delay(16);
+        delay_since_last_delay(FAST_TICK_MS);
+
+        const bool connected = (!useKeyboardMode && gamepad.isConnected()) || (useKeyboardMode && kb.isConnected());
+
+        // ---- Fast path (every FAST_TICK_MS): poll buttons, send right away if one changed ----
+        // sendGamepadReport()/sendReport() only notify when the report is dirty, and are only called here on a
+        // change, so this adds no BLE traffic and leaves the keepalive / analog rate-limiting on the slow cadence.
+        bool changed = buttonUpdate();
+        if (changed && connected) {
+            applyDPad(processButtons());
+            if (useKeyboardMode) {
+                kb.sendReport();
+            } else {
+                gamepad.sendGamepadReport();
+            }
+        }
+
+        if (++fastTicks < SLOW_TICK_MS / FAST_TICK_MS) {
+            continue;
+        }
+        fastTicks = 0;
+
+        // ---- Slow path (every SLOW_TICK_MS): unchanged from the original loop ----
         handlePendingCommand();
 
-        // Update Solenoids
-        // Doing this before buttonUpdate() effectively adds a 16ms delay
+        // Update Solenoids from the previous slow tick's button snapshot (same 16ms relationship as before)
         if (solenoidEnabled || solenoidOverrides[0] || solenoidOverrides[1]) {
             solenoidUpdate();
         }
-
-        // Poll Buttons
-        buttonUpdate();
+        memcpy(slowButtonStatus, buttonStatus, sizeof(buttonStatus));
 
         // Update LEDs
         ledUpdate();
 
-        if ((!useKeyboardMode && gamepad.isConnected()) || (useKeyboardMode && kb.isConnected())) {
-            // Process all inputs and load up the usbData registers correctly
+        if (connected) {
+            // Process all inputs (plunger, tilt, buttons again - no-op if unchanged) and load up the report
             processInputs();
 
             if (useKeyboardMode) {
@@ -1286,7 +1352,7 @@ void handle_main_task(void *arg)
                 // Add status data into trigger values as small movements
                 updateTriggerStatus();
 
-                // Send controller
+                // Send controller (also carries the 30-call keepalive)
                 gamepad.sendGamepadReport();
             }
         }
