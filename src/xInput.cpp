@@ -480,6 +480,30 @@ static uint8_t dPadDirectionToValue(XboxDpadFlags direction)
     return XBOX_BUTTON_DPAD_NONE;
 }
 
+static XboxDpadFlags dPadValueToDirection(uint8_t value)
+{
+    switch (value) {
+        case XBOX_BUTTON_DPAD_NORTH:
+            return XboxDpadFlags::NORTH;
+        case XBOX_BUTTON_DPAD_NORTHEAST:
+            return (XboxDpadFlags)(XboxDpadFlags::EAST | XboxDpadFlags::NORTH);
+        case XBOX_BUTTON_DPAD_EAST:
+            return XboxDpadFlags::EAST;
+        case XBOX_BUTTON_DPAD_SOUTHEAST:
+            return (XboxDpadFlags)(XboxDpadFlags::EAST | XboxDpadFlags::SOUTH);
+        case XBOX_BUTTON_DPAD_SOUTH:
+            return XboxDpadFlags::SOUTH;
+        case XBOX_BUTTON_DPAD_SOUTHWEST:
+            return (XboxDpadFlags)(XboxDpadFlags::WEST | XboxDpadFlags::SOUTH);
+        case XBOX_BUTTON_DPAD_WEST:
+            return XboxDpadFlags::WEST;
+        case XBOX_BUTTON_DPAD_NORTHWEST:
+            return (XboxDpadFlags)(XboxDpadFlags::WEST | XboxDpadFlags::NORTH);
+    }
+    return XboxDpadFlags::NONE;
+}
+
+
 void XInput::pressDPadDirectionInternal(uint8_t direction)
 {
     // Avoid double presses
@@ -616,7 +640,7 @@ void XInput::sendGamepadReport()
             if (_inputReport.buttons & XBOX_BUTTON_LS)     b |= (1 << 8);
             if (_inputReport.buttons & XBOX_BUTTON_RS)     b |= (1 << 9);
             if (_inputReport.buttons & XBOX_BUTTON_HOME)   b |= (1 << 10);
-            b |= _inputReport.hat << 11;
+            b |= dPadValueToDirection(_inputReport.hat) << 11;
             this->_minimalReport.buttons = b;
 
             this->_minimalInput->setValue((uint8_t*)&_minimalReport, sizeof(_minimalReport));
