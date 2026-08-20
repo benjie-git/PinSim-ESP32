@@ -112,8 +112,9 @@ public:
     void pressShare();
     void releaseShare();
     void setDirty();
+    bool getButtonsDirty();
     
-    void sendGamepadReport();
+    bool sendGamepadReport();
     void send_command(const uint8_t* data, uint8_t length);
 
     void loadWhitelist();

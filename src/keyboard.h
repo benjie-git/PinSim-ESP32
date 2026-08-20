@@ -112,7 +112,8 @@ public:
     void releaseAll();
 
     void setDirty();
-    void sendReport();
+    bool getDirty();
+    bool sendReport();
     void send_command(const uint8_t* data, uint8_t length);
 
     void loadWhitelist();

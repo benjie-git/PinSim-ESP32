@@ -86,7 +86,7 @@ public:
 
     void onConnect(NimBLEServer *server, NimBLEConnInfo& connInfo) override
     {
-        server->updateConnParams(connInfo.getConnHandle(), 6, 12, 0, 160);
+        server->updateConnParams(connInfo.getConnHandle(), 9, 12, 0, 160);
         NimBLEDevice::startSecurity(connInfo.getConnHandle());
         printf("Connected %d                  (%s)\n", server->getConnectedCount(),
                                                        connInfo.getIdAddress().toString().c_str());
@@ -574,12 +574,19 @@ void BLEKeyboard::setDirty()
     this->_inputReportDirty = true;
 }
 
+bool BLEKeyboard::getDirty()
+{
+    return this->_inputReportDirty;
+}
 
-void BLEKeyboard::sendReport()
+
+bool BLEKeyboard::sendReport()
 {
 	if (this->isConnected() && _inputReportDirty) {
 		this->_inputKeyboard->setValue((uint8_t*)&_keyReport, sizeof(KeyReport));
 		this->_inputKeyboard->notify();
 		_inputReportDirty = false;
+		return true;
 	}
+	return false;
 }

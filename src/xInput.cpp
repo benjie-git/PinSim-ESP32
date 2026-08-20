@@ -140,7 +140,7 @@ public:
 
     void onConnect(NimBLEServer *server, NimBLEConnInfo& connInfo) override
     {
-        server->updateConnParams(connInfo.getConnHandle(), 6, 12, 0, 160);
+        server->updateConnParams(connInfo.getConnHandle(), 9, 12, 0, 160);
         NimBLEDevice::startSecurity(connInfo.getConnHandle());
         printf("Connected %d                  (%s)\n", server->getConnectedCount(),
                                                        connInfo.getIdAddress().toString().c_str());
@@ -585,11 +585,16 @@ void XInput::setDirty()
     this->_buttonsDirty = true;
 }
 
+bool XInput::getButtonsDirty()
+{
+    return this->_buttonsDirty;
+}
 
-void XInput::sendGamepadReport()
+
+bool XInput::sendGamepadReport()
 {
     if (!this->_input || !this->isConnected()) {
-        return;
+        return false;
     }
 
     if (++this->_dirtySkipCount >= 30) {
@@ -651,5 +656,8 @@ void XInput::sendGamepadReport()
         this->_buttonsDirty = false;
         this->_analogDirty = false;
         this->_analogSkipCount = 0;
+
+        return true;
     }
+    return false;
 }

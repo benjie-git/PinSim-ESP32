@@ -148,7 +148,6 @@ BLEKeyboard kb;
 uint8_t pendingCommand[18];
 
 void OnVibrateEvent(XboxGamepadOutputReportData data);
-void updateTriggerStatus();
 void rxCommand(const uint8_t *commandData, const uint8_t length);
 void handlePendingCommand();
 void buttonUpdate();
@@ -997,7 +996,7 @@ void accelCalibrate()
 
 
 // ProcessInputs
-void processInputs()
+void processInputs(bool buttonsOnly)
 {
     uint8_t direction = XboxDpadFlags::NONE;
 
@@ -1013,6 +1012,10 @@ void processInputs()
     if (buttonStatus[POSDN]) direction |= XboxDpadFlags::SOUTH;
     if (buttonStatus[POSLT]) direction |= XboxDpadFlags::WEST;
 
+    if (!useKeyboardMode && !controlShuffle) {
+        gamepad.pressDPadDirection(XboxDpadFlags(direction));
+    }
+
     // Buttons
     setButton(XBOX_BUTTON_A, POSB1, buttonStatus[POSB1]);
     setButton(XBOX_BUTTON_B, POSB2, buttonStatus[POSB2]);
@@ -1022,6 +1025,26 @@ void processInputs()
         setButton(XBOX_BUTTON_LS, POSB9, buttonStatus[POSB9]);
         setButton(XBOX_BUTTON_RS, POSB10, buttonStatus[POSB10]);
     }
+
+    // Bumpers
+    setButton(XBOX_BUTTON_LB, POSL1, buttonStatus[POSL1]);
+    setButton(XBOX_BUTTON_RB, POSR1, buttonStatus[POSR1]);
+
+    // Middle Buttons: Start, Select, Home
+    if (useKeyboardMode) {
+        setButton(XBOX_BUTTON_HOME, POSXB, buttonStatus[POSXB]);
+        setButton(XBOX_BUTTON_START, POSST, buttonStatus[POSST]);
+    }
+    else {
+        pressHome(buttonStatus[POSXB]);
+        pressStart(buttonStatus[POSST]);
+    }
+    setButton(XBOX_BUTTON_SELECT, POSBK, buttonStatus[POSBK]);
+
+    if (buttonsOnly) {
+        return;
+    }
+
 
     if (pinPairBtn && digitalRead(pinPairBtn) == LOW) {
         printf("Button: Start Pairing\n");
@@ -1047,22 +1070,6 @@ void processInputs()
         printf("Calibrated Plunger Dead Zone\n");
         waitingForDeadzoneSetting = false;
     }
-
-    // Bumpers
-    setButton(XBOX_BUTTON_LB, POSL1, buttonStatus[POSL1]);
-    setButton(XBOX_BUTTON_RB, POSR1, buttonStatus[POSR1]);
-
-    // Middle Buttons: Start, Select, Home
-    if (useKeyboardMode) {
-        setButton(XBOX_BUTTON_HOME, POSXB, buttonStatus[POSXB]);
-        setButton(XBOX_BUTTON_START, POSST, buttonStatus[POSST]);
-    }
-    else {
-        pressHome(buttonStatus[POSXB]);
-        pressStart(buttonStatus[POSST]);
-    }
-    setButton(XBOX_BUTTON_SELECT, POSBK, buttonStatus[POSBK]);
-
 
     // Plunger
     // This is based on the Sharp GP2Y0A51SK0F Analog Distance Sensor 2-15cm
@@ -1155,17 +1162,16 @@ void processInputs()
         int32_t accXcon = constrain(accX-zeroX, XBOX_STICK_MIN, XBOX_STICK_MAX);
         int32_t accYcon = constrain(accY-zeroY, XBOX_STICK_MIN, XBOX_STICK_MAX);
 
-        if (!useKeyboardMode) {
-            gamepad.pressDPadDirection(XboxDpadFlags(direction));
-        } else {
-            sendKbDPad(direction);
-        }
-
         if (controlShuffle || useKeyboardMode) {
             if (accYcon > XBOX_STICK_MAX * accelDeadZone) direction |= XboxDpadFlags::NORTH;
             if (accXcon > XBOX_STICK_MAX * accelDeadZone) direction |= XboxDpadFlags::EAST;
             if (accYcon < XBOX_STICK_MIN * accelDeadZone) direction |= XboxDpadFlags::SOUTH;
             if (accXcon < XBOX_STICK_MIN * accelDeadZone) direction |= XboxDpadFlags::WEST;
+            if (!useKeyboardMode) {
+                gamepad.pressDPadDirection(XboxDpadFlags(direction));
+            } else {
+                sendKbDPad(direction);
+            }
         } else {
             // Add a big dead zone for Left-stick analog accelerometer movements
             if (abs(accXcon) > XBOX_STICK_MAX * accelDeadZone || abs(accYcon) > XBOX_STICK_MAX * accelDeadZone) {
@@ -1259,35 +1265,58 @@ void delay_since_last_delay(uint32_t ms_since_last_delay)
 // Main Task runs forever, yielding during vTaskDelay() calls
 void handle_main_task(void *arg)
 {
-    while (true) {
-        delay_since_last_delay(16);
-        handlePendingCommand();
+    uint8_t msSinceLastButtonSend = 0;
+    uint8_t msSinceLastFullSend = 0;
 
-        // Update Solenoids
-        // Doing this before buttonUpdate() effectively adds a 16ms delay
-        if (solenoidEnabled || solenoidOverrides[0] || solenoidOverrides[1]) {
-            solenoidUpdate();
-        }
+    while (true) {
+        delay_since_last_delay(2);
+        if (msSinceLastFullSend<32) msSinceLastFullSend += 2;
+        if (msSinceLastButtonSend<32) msSinceLastButtonSend += 2;
 
         // Poll Buttons
         buttonUpdate();
 
-        // Update LEDs
-        ledUpdate();
-
         if ((!useKeyboardMode && gamepad.isConnected()) || (useKeyboardMode && kb.isConnected())) {
-            // Process all inputs and load up the usbData registers correctly
-            processInputs();
+            if (msSinceLastFullSend >= 16) {
+                handlePendingCommand();
 
-            if (useKeyboardMode) {
-                // Send keyboard state
-                kb.sendReport();
-            } else {
-                // Add status data into trigger values as small movements
-                updateTriggerStatus();
+                // Update Solenoids
+                // Doing this before buttonUpdate() effectively adds a 16ms delay
+                if (solenoidEnabled || solenoidOverrides[0] || solenoidOverrides[1]) {
+                    solenoidUpdate();
+                }
 
-                // Send controller
-                gamepad.sendGamepadReport();
+                // Update LEDs
+                ledUpdate();
+
+                // Process all inputs, and update the BLE HID reports
+                processInputs(false);
+                if (useKeyboardMode) {
+                    // Send keyboard state
+                    kb.sendReport();
+                    msSinceLastFullSend = 0;
+                } else {
+                    // Send controller
+                    gamepad.sendGamepadReport();
+                    msSinceLastFullSend = 0;
+                }
+            }
+            else if (msSinceLastButtonSend >= 8) {
+                // Process just button inputs, and update the BLE HID reports
+                processInputs(true);
+                if (useKeyboardMode && kb.getDirty()) {
+                    // Send keyboard state
+                    kb.sendReport();
+                    msSinceLastButtonSend = 0;
+                    msSinceLastFullSend = 0;
+                } else if (!useKeyboardMode && gamepad.getButtonsDirty()) {
+                    // Send controller
+                    gamepad.sendGamepadReport();
+                    msSinceLastButtonSend = 0;
+                    msSinceLastFullSend = 0;
+                }
+            }
+            else if (msSinceLastFullSend >= 16) {
             }
         }
     }
@@ -1300,15 +1329,6 @@ void OnVibrateEvent(XboxGamepadOutputReportData data)
     printf("Rumble: %d, %d\n", data.weakMotorMagnitude, data.strongMotorMagnitude);
     analogWrite(rumbleSmall, data.weakMotorMagnitude);
     analogWrite(rumbleLarge, data.strongMotorMagnitude);
-}
-
-void updateTriggerStatus()
-{
-    uint16_t leftStatus = (pinsimID & 0b11110000) >> 2;
-    gamepad.setLeftTrigger(leftStatus); // Using bits 0b0000XXXX00
-
-    uint16_t rightStatus = (pinsimID & 0b00001111) << 2;
-    gamepad.setRightTrigger(rightStatus); // Using bits 0b0000XXXX00
 }
 
 void sendKeymap()
@@ -1491,7 +1511,6 @@ void handlePendingCommand()
             printf("Command: Set PinSim ID to %d\n", pinsimID);
             preferences.putUChar("pinsimID", pinsimID);
             if (!useKeyboardMode) {
-                updateTriggerStatus();
                 gamepad.sendGamepadReport();
                 vTaskDelay_ms(16);
             }
@@ -1504,11 +1523,9 @@ void handlePendingCommand()
             if (!useKeyboardMode) {
                 int oldID = pinsimID;
                 pinsimID = 0;
-                updateTriggerStatus();
                 gamepad.sendGamepadReport();
                 vTaskDelay_ms(100);
                 pinsimID = oldID;
-                updateTriggerStatus();
                 gamepad.sendGamepadReport();
                 vTaskDelay_ms(16);
             }
@@ -1516,7 +1533,6 @@ void handlePendingCommand()
         
         case COMMAND_SEND_STATUS:
             printf("Command: Send Status\n");
-            updateTriggerStatus();
             gamepad.sendGamepadReport();
             sendStatus();
             break;
