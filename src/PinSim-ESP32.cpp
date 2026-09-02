@@ -738,8 +738,8 @@ void setup()
         kb.begin("PinSim KB Controller", "Octopilot", rxCommand);
     }
 
-    for (int i = 0; i < 6; i++) {
-        delay(16);
+    for (int i = 0; i < 20; i++) {
+        delay(2);
         buttonUpdate();
     }
 
@@ -1195,7 +1195,7 @@ void ledUpdate()
         // BLE Pairing mode -- So Flash LEDs
         static uint8_t blinkCounter = 0;
         static bool ledOn = false;
-        if (blinkCounter++ >= 30) {
+        if (blinkCounter++ >= 240) {
             ledOn = !ledOn;
             blinkCounter = 0;
         }
@@ -1286,9 +1286,6 @@ void handle_main_task(void *arg)
                     solenoidUpdate();
                 }
 
-                // Update LEDs
-                ledUpdate();
-
                 // Process all inputs, and update the BLE HID reports
                 processInputs(false);
                 if (useKeyboardMode) {
@@ -1319,6 +1316,9 @@ void handle_main_task(void *arg)
             else if (msSinceLastFullSend >= 16) {
             }
         }
+
+        // Update LEDs
+        ledUpdate();
     }
 }
 
