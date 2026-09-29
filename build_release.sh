@@ -5,6 +5,10 @@ CUR_DATE=$(date +"%Y%m%d")
 
 mkdir dist
 
+# NimBLE must be patched (MAX_BONDS > MAX_ADDRESSES) before building, otherwise
+# the compile-time guard in src/xInput.cpp / src/keyboard.cpp fails the build.
+./patch_nimble.sh
+
 venv/bin/pio run -e release_PCB3
 cp .pio/build/release_PCB3/bootloader.bin $TOOL_DIR/
 cp .pio/build/release_PCB3/partitions.bin $TOOL_DIR/

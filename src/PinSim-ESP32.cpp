@@ -151,6 +151,7 @@ void OnVibrateEvent(XboxGamepadOutputReportData data);
 void rxCommand(const uint8_t *commandData, const uint8_t length);
 void handlePendingCommand();
 void buttonUpdate();
+void handlePairButton();
 
 TaskHandle_t mainTaskHandle = NULL;
 void handle_main_task(void *arg);
@@ -995,6 +996,30 @@ void accelCalibrate()
 }
 
 
+// Handle the pairing button. Runs regardless of connection state so pairing can
+// be started even when no client is connected (and therefore processInputs()
+// is not being called).
+void handlePairButton()
+{
+    if (!pinPairBtn) {
+        return;
+    }
+    static bool wasDown = false;
+    bool isDown = (digitalRead(pinPairBtn) == LOW);
+    if (isDown && !wasDown) {
+        printf("Button: Start Pairing\n");
+        if (useKeyboardMode) {
+            kb.allowNewConnections(true);
+            kb.startAdvertising();
+        } else {
+            gamepad.allowNewConnections(true);
+            gamepad.startAdvertising();
+        }
+    }
+    wasDown = isDown;
+}
+
+
 // ProcessInputs
 void processInputs(bool buttonsOnly)
 {
@@ -1045,21 +1070,6 @@ void processInputs(bool buttonsOnly)
         return;
     }
 
-
-    if (pinPairBtn && digitalRead(pinPairBtn) == LOW) {
-        printf("Button: Start Pairing\n");
-        if (useKeyboardMode) {
-            kb.allowNewConnections(true);
-            kb.startAdvertising();
-        } else {
-            gamepad.allowNewConnections(true);
-            gamepad.startAdvertising();
-        }
-        while (digitalRead(pinPairBtn) == LOW) {
-            // Wait for button release
-            delay(16);
-        }
-    }
 
     // If we're still waiting for DeadZone calibration, and Start is pressed, set new plunger dead zone
     // Compensates for games where the in-game plunger doesn't begin pulling back until
@@ -1275,6 +1285,9 @@ void handle_main_task(void *arg)
 
         // Poll Buttons
         buttonUpdate();
+
+        // Pairing button works regardless of connection state
+        handlePairButton();
 
         if ((!useKeyboardMode && gamepad.isConnected()) || (useKeyboardMode && kb.isConnected())) {
             if (msSinceLastFullSend >= 16) {

@@ -11,10 +11,12 @@
 //
 // Also edit NimBLE-Arduino/src/nimconfig.h to change:
 // #undef CONFIG_BT_NIMBLE_MAX_BONDS
-// #define CONFIG_BT_NIMBLE_MAX_BONDS 4
+// #define CONFIG_BT_NIMBLE_MAX_BONDS 5   // must be > MAX_ADDRESSES (one spare slot)
 //
 // #undef CONFIG_BT_NIMBLE_MAX_CCCDS
 // #define CONFIG_BT_NIMBLE_MAX_CCCDS 20
+//
+// Run patch_nimble.sh to apply these changes to the installed NimBLE library.
 
 extern const char* NIMBLE_NVS_NAMESPACE;
 
@@ -33,6 +35,12 @@ extern const char* NIMBLE_NVS_NAMESPACE;
 static Preferences preferences;
 #define MAX_ADDRESSES 4
 static std::vector<uint64_t> pairedAddresses;
+
+// The NimBLE bond store must hold at least one more bond than we remember, so a
+// new device can always complete bonding before we evict the oldest address.
+#if !defined(CONFIG_BT_NIMBLE_MAX_BONDS) || (CONFIG_BT_NIMBLE_MAX_BONDS <= MAX_ADDRESSES)
+#error "NimBLE bond store too small: CONFIG_BT_NIMBLE_MAX_BONDS must be > MAX_ADDRESSES. Run ./patch_nimble.sh"
+#endif
 
 void XInput::loadWhitelist()
 {
@@ -61,7 +69,10 @@ void XInput::saveWhitelist()
     // Keep within MAX_ADDRESSES addresses
     while (pairedAddresses.size() > MAX_ADDRESSES) {
         uint64_t oldAddrInt = pairedAddresses.front();
-        NimBLEDevice::deleteBond(NimBLEAddress(oldAddrInt, BLE_ADDR_PUBLIC));
+        NimBLEAddress oldAddr(oldAddrInt, BLE_ADDR_PUBLIC);
+        NimBLEDevice::deleteBond(oldAddr);
+        NimBLEDevice::whiteListRemove(oldAddr);
+        printf("Evicted oldest paired address (%s)\n", oldAddr.toString().c_str());
         pairedAddresses.erase(pairedAddresses.begin());
     }
 
@@ -313,9 +324,10 @@ bool XInput::isAdvertisingNewDevices()
 void XInput::startAdvertising()
 {
     if (this->_server->getConnectedCount() >= MAX_CLIENTS) {
-        printf("Skip Starting Advertising - already connected to MAX_CLIENTS\n");
+        printf("Skip Starting Advertising - already connected to %d clients\n", this->_server->getConnectedCount());
         return;
     }
+    printf("startAdvertising() - already connected to %d clients\n", this->_server->getConnectedCount());
     
     uint cnt = pairedAddresses.size();
     if (this->_allowNewConnections == false && cnt == 0) {
